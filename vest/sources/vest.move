@@ -10,7 +10,7 @@ module suiDouBashiVest::vest{
 
 
     use suiDouBashiVest::err;
-    use suiDouBashiVest::point::{Point};
+    use suiDouBashiVest::point::{Self, Point};
     use suiDouBashiVest::sdb::{Self, SDB};
     use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashi::i128;
@@ -21,7 +21,7 @@ module suiDouBashiVest::vest{
 
     const WEEK: u256 = { 7 * 86400 };
     const YEAR: u256 = { 365 * 86400 };
-    const SCLAE_FACTOR: u256 = 1_000_000_000_000_000_000;
+    const MULTIPLIER: u256 = 1_000_000_000_000_000_000;
 
     // # 1 +        /
     // #   |      /
@@ -45,8 +45,8 @@ module suiDouBashiVest::vest{
 
         /// this epoch is different differrent from POS
         epoch: u256,
-        point_history: Table<u256, Point>,
-        slope_changes: Table<u256, u256>
+        point_history: Table<u256, Point>, //epoch -> Point
+        slope_changes: Table<u256, u256> // epoch -> slope
     }
 
 
@@ -88,57 +88,54 @@ module suiDouBashiVest::vest{
     /// None -> update global checkpoint
     /// Some -> update both global & player's checkpoint
     fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &mut Option<VSDB>){
-        let old_dslope = i128::zero();
-        let new_dslope = i128::zero();
+        // let old_dslope = i128::zero();
+        // let new_dslope = i128::zero();
 
+        // let slope_0 = 0;
+        // let bias_0 = 0;
+        // let slope_1 = 0;
+        // let bias_1 = 0;
 
-        let slope_0 = 0;
-        let bias_0 = 0;
-        let slope_1 = 0;
-        let bias_1 = 0;
-
-        let time_stamp = ( fake_time::ts() as u256 );
-        let block_num = ( fake_time::block_num() as u256);
+        let time_stamp =  fake_time::ts();
+        let block_num =  fake_time::bn();
         let epoch = reg.epoch;
 
-        // update calculate repsecitve slope & bias
-        if(option::is_some(vsdb)){
-            if(locked_0.end > time_stamp && balance::value(&locked_0.balance) > 0){
-                slope_0 = locked_0.end /  (balance::value(&locked_0.balance) as u256);
-                bias_0 = slope_0 * (locked_0.end -( fake_time::ts() as u256)); // i256
-            };
+        // // update calculate repsecitve slope & bias
+        // if(option::is_some(vsdb)){
+        //     if(locked_0.end > time_stamp && balance::value(&locked_0.balance) > 0){
+        //         slope_0 = locked_0.end /  (balance::value(&locked_0.balance) as u256);
+        //         bias_0 = slope_0 * (locked_0.end -( fake_time::ts() as u256)); // i256
+        //     };
 
-            if(locked_1.end > time_stamp && balance::value(&locked_1.balance) > 0){
-                slope_1 = locked_1.end /  (balance::value(&locked_1.balance) as u256);
-                bias_1 = slope_0 * (locked_1.end - (fake_time::ts() as u256)); //i256
-            };
+        //     if(locked_1.end > time_stamp && balance::value(&locked_1.balance) > 0){
+        //         slope_1 = locked_1.end /  (balance::value(&locked_1.balance) as u256);
+        //         bias_1 = slope_0 * (locked_1.end - (fake_time::ts() as u256)); //i256
+        //     };
 
-            dslope_0 = *table::borrow(&reg.slope_per_ts, locked_0.end);
-            if(locked_1.end != 0){
-                if(locked_1.end == locked_0.end){
-                    dslope_1 = dslope_0;
-                }else{
-                    dslope_1 = *table::borrow(&reg.slope_per_ts, locked_1.end);
-                }
-            };
-        };
+        //     dslope_0 = *table::borrow(&reg.slope_per_ts, locked_0.end);
+        //     if(locked_1.end != 0){
+        //         if(locked_1.end == locked_0.end){
+        //             dslope_1 = dslope_0;
+        //         }else{
+        //             dslope_1 = *table::borrow(&reg.slope_per_ts, locked_1.end);
+        //         }
+        //     };
+        // };
 
 
-        let latest_point = if(time_stamp > 1){
-            *table::borrow(&reg.point_per_epoch, epoch)
+        let last_point = if(reg.epoch > 0){
+            // copy the value in table
+            *table::borrow_mut(&mut reg.point_history, reg.epoch)
         }else{
-            Point {
-                bias: 0,
-                slope: 0,
-                ts: time_stamp,
-                blk: block_num
-            }
+            point::empty()
         };
 
-        let init_latest_point = latest_point;
+        let last_checkpoint = point::ts(&last_point);
+        let initial_last_point = last_point;
+
         //calculate created_block / time
-        let block_slope = if(time_stamp > latest_point.ts){
-            SCLAE_FACTOR * (block_num - latest_point.blk) / ( time_stamp - latest_point.ts) // i256
+        let block_slope = if(time_stamp > point::ts(&last_point)){
+            MULTIPLIER * ((block_num - point::blk(&last_point)) as u256) / (( time_stamp - point::ts(&last_point)) as u256)
         }else{
             0
         };
@@ -184,49 +181,49 @@ module suiDouBashiVest::vest{
         reg.epoch = epoch;
         // Now point_history is filled until t=now
 
-        if (option::is_some(&token_id)) {
-            // If last point was in this block, the slope change has been applied already
-            // But in such case we have 0 slope(s)
-            latest_point.slope = latest_point.slope + (slope_1 - slope_0);
-            latest_point.bias = latest_point.bias + (bias_1 - bias_0);
-            if (latest_point.slope < 0) {
-                latest_point.slope = 0;
-            };
-            if (latest_point.bias < 0) {
-                latest_point.bias = 0;
-            };
-        };
+        // if (option::is_some(&token_id)) {
+        //     // If last point was in this block, the slope change has been applied already
+        //     // But in such case we have 0 slope(s)
+        //     latest_point.slope = latest_point.slope + (slope_1 - slope_0);
+        //     latest_point.bias = latest_point.bias + (bias_1 - bias_0);
+        //     if (latest_point.slope < 0) {
+        //         latest_point.slope = 0;
+        //     };
+        //     if (latest_point.bias < 0) {
+        //         latest_point.bias = 0;
+        //     };
+        // };
 
-        if(option::is_some(&token_id)){
-            // Schedule the slope changes (slope is going down)
-            // We subtract new_user_slope from [new_locked.end]
-            // and add old_user_slope to [old_locked.end]
-            if (locked_0.end > time_stamp) {
-                // old_dslope was <something> - u_old.slope, so we cancel that
-                dslope_0 = dslope_0 + slope_0;
-                if (locked_1.end == locked_0.end) {
-                    dslope_0 = dslope_0 - slope_1; // It was a new deposit, not extension
-                };
-                let slope = table::borrow_mut(&mut reg.slope_per_ts, locked_0.end);
-                *slope = dslope_0;
-            };
+        // if(option::is_some(&token_id)){
+        //     // Schedule the slope changes (slope is going down)
+        //     // We subtract new_user_slope from [new_locked.end]
+        //     // and add old_user_slope to [old_locked.end]
+        //     if (locked_0.end > time_stamp) {
+        //         // old_dslope was <something> - u_old.slope, so we cancel that
+        //         dslope_0 = dslope_0 + slope_0;
+        //         if (locked_1.end == locked_0.end) {
+        //             dslope_0 = dslope_0 - slope_1; // It was a new deposit, not extension
+        //         };
+        //         let slope = table::borrow_mut(&mut reg.slope_per_ts, locked_0.end);
+        //         *slope = dslope_0;
+        //     };
 
-            if (locked_1.end > time_stamp) {
-                if (locked_1.end > locked_0.end) {
-                    dslope_1 = dslope_1 - slope_1; // old slope disappeared at this point
-                    let slope = table::borrow_mut(&mut reg.slope_per_ts, locked_1.end);
-                    *slope = dslope_1;
-                };
-                // else: we recorded it already in old_dslope
-            };
-            // Now handle user history
-            let user_epoch = table::borrow_mut(&mut reg.user_point_epoch, option::extract(&mut token_id));
+        //     if (locked_1.end > time_stamp) {
+        //         if (locked_1.end > locked_0.end) {
+        //             dslope_1 = dslope_1 - slope_1; // old slope disappeared at this point
+        //             let slope = table::borrow_mut(&mut reg.slope_per_ts, locked_1.end);
+        //             *slope = dslope_1;
+        //         };
+        //         // else: we recorded it already in old_dslope
+        //     };
+        //     // Now handle user history
+        //     let user_epoch = table::borrow_mut(&mut reg.user_point_epoch, option::extract(&mut token_id));
 
 
-            user_point_epoch[_tokenId] = user_epoch;
-            u_new.ts = block.timestamp;
-            u_new.blk = block.number;
-            user_point_history[_tokenId][user_epoch] = u_new;
-        };
+        //     user_point_epoch[_tokenId] = user_epoch;
+        //     u_new.ts = block.timestamp;
+        //     u_new.blk = block.number;
+        //     user_point_history[_tokenId][user_epoch] = u_new;
+        // };
     }
 }
