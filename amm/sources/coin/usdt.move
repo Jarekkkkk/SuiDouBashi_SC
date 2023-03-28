@@ -23,14 +23,14 @@ module suiDouBashi::usdt{
         );
         let coin = coin::mint<USDT>(&mut treasury, 10000*math::pow(10,6), ctx);
 
-        transfer::transfer(coin, tx_context::sender(ctx));
-        transfer::freeze_object(metadata);
-        transfer::share_object(treasury)
+        transfer::public_transfer(coin, tx_context::sender(ctx));
+        transfer::public_freeze_object(metadata);
+        transfer::public_share_object(treasury)
     }
 
         entry fun mint (cap: &mut coin::TreasuryCap<USDT>, value:u64, ctx: &mut TxContext){
         let coin = coin::mint<USDT>(cap, value, ctx);
-        transfer::transfer(
+        transfer::public_transfer(
             coin,
             tx_context::sender(ctx)
         )

@@ -103,7 +103,7 @@ module suiDouBashi::amm_v1{
         let coin = coin::split(&mut base, amount, ctx);
 
         if (coin::value(&base) > 0) {
-                transfer::transfer(base, tx_context::sender(ctx));
+                transfer::public_transfer(base, tx_context::sender(ctx));
         } else {
                 coin::destroy_zero(base);
         };
@@ -244,7 +244,7 @@ module suiDouBashi::amm_v1{
         let (output_lp_coin, lp_output, deposit_x, deposit_y) = add_liquidity_(pool, coin_x, coin_y, deposit_x_min, deposit_y_min
         , /*clock,*/ ctx);
 
-        transfer::transfer(
+        transfer::public_transfer(
             output_lp_coin,
             tx_context::sender(ctx)
         );
@@ -280,11 +280,11 @@ module suiDouBashi::amm_v1{
         let withdrawl_value_x = coin::value(&withdrawl_x);
         let withdrawl_value_y = coin::value(&withdrawl_y);
 
-        transfer::transfer(
+        transfer::public_transfer(
             withdrawl_x,
             tx_context::sender(ctx)
         );
-        transfer::transfer(
+        transfer::public_transfer(
             withdrawl_y,
             tx_context::sender(ctx)
         );
@@ -317,7 +317,7 @@ module suiDouBashi::amm_v1{
 
         let (coin_y, input, output) = swap_for_y_(pool, coin_x, metadata_x, metadata_y, output_y_min,/*clock*/ ctx);
 
-        transfer::transfer(coin_y, tx_context::sender(ctx));
+        transfer::public_transfer(coin_y, tx_context::sender(ctx));
 
         event::swap<V,X,Y>(input, output);
     }
@@ -347,7 +347,7 @@ module suiDouBashi::amm_v1{
 
         let (coin_x, input, output) = swap_for_x_(pool, coin_y, metadata_x, metadata_y, output_x_min,/*clock*/ctx);
 
-        transfer::transfer(
+        transfer::public_transfer(
             coin_x,
             tx_context::sender(ctx)
         );
@@ -526,7 +526,7 @@ module suiDouBashi::amm_v1{
                 assert!(opt_y >= deposit_y_min, err::insufficient_input());
 
                 let take = coin::take<Y>(coin::balance_mut<Y>(&mut coin_y), opt_y, ctx);
-                transfer::transfer(coin_y, tx_context::sender(ctx));
+                transfer::public_transfer(coin_y, tx_context::sender(ctx));
 
                 (value_x, opt_y, coin_x, take)
             }else{
@@ -535,7 +535,7 @@ module suiDouBashi::amm_v1{
                 assert!(opt_x >= deposit_x_min, err::below_minimum());
 
                 let take = coin::take<X>(coin::balance_mut<X>(&mut coin_x), opt_x, ctx);
-                transfer::transfer(coin_x, tx_context::sender(ctx));
+                transfer::public_transfer(coin_x, tx_context::sender(ctx));
 
                 (opt_x, value_y, take, coin_y)
             }
@@ -544,7 +544,7 @@ module suiDouBashi::amm_v1{
         let lp_output = if( balance::supply_value<LP_TOKEN<V,X,Y>>(&pool.lp_supply) == 0){
             let amount = (amm_math::mul_sqrt(deposit_x, deposit_y) - MINIMUM_LIQUIDITY);
             let min = balance::increase_supply<LP_TOKEN<V, X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
-            transfer::transfer(coin::from_balance(min,ctx), sui::address::from_u256(0));
+            transfer::public_transfer(coin::from_balance(min,ctx), sui::address::from_u256(0));
             amount
         }else{
             math::min(
@@ -645,7 +645,7 @@ module suiDouBashi::amm_v1{
                 let liquidity = ((numerator / denominator) as u64 );
                 if(liquidity > 0){
                     let lp_balance = balance::increase_supply<LP_TOKEN<V, X, Y>>(&mut pool.lp_supply, liquidity);
-                    transfer::transfer(coin::from_balance<LP_TOKEN<V,X,Y>>(lp_balance,ctx),tx_context::sender(ctx));
+                    transfer::public_transfer(coin::from_balance<LP_TOKEN<V,X,Y>>(lp_balance,ctx),tx_context::sender(ctx));
                 }
             }
         }else if(pool.fee.k_last != 0){
@@ -841,7 +841,7 @@ module suiDouBashi::amm_v1{
         let vec = std::vector::empty<Coin<LP_TOKEN<AMM_V1,SUI, suiDouBashi::usdc::USDC>>>();
         vector::push_back(&mut vec, coin);
         sui::pay::join_vec<LP_TOKEN<AMM_V1,SUI, suiDouBashi::usdc::USDC>>(&mut coin_x, vec);
-        coin::destroy_for_testing(coin_x);
+         coin::burn_for_testing(coin_x);
     }
 }
 

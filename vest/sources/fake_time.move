@@ -1,4 +1,4 @@
-module suiDouBashi::fake_time{
+module suiDouBashiVest::fake_time{
 
 
     public fun ts():u64{1}

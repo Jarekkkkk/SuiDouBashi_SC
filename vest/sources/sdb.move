@@ -25,7 +25,7 @@ module suiDouBashiVest::sdb{
             ctx
         );
 
-        transfer::freeze_object(metadata);
+        transfer::public_freeze_object(metadata);
         coin::treasury_into_supply(treasury)
     }
 

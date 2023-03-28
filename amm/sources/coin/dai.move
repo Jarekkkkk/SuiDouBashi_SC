@@ -22,14 +22,14 @@ module suiDouBashi::dai{
             ctx
         );
         let coin = coin::mint<DAI>(&mut treasury, 10000*math::pow(10, 8), ctx);
-        transfer::transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, tx_context::sender(ctx));
 
-        transfer::freeze_object(metadata);
-        transfer::share_object(treasury)
+        transfer::public_freeze_object(metadata);
+        transfer::public_share_object(treasury)
     }
     entry fun mint (cap: &mut coin::TreasuryCap<DAI>, value:u64, ctx: &mut TxContext){
         let coin = coin::mint<DAI>(cap, value, ctx);
-        transfer::transfer(
+        transfer::public_transfer(
             coin,
             tx_context::sender(ctx)
         )

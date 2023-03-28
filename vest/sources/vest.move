@@ -10,12 +10,14 @@ module suiDouBashiVest::vest{
 
 
     use suiDouBashiVest::err;
-
-    use suiDouBashi::i128::{Self, I128};
-    use suiDouBashi::i256::{Self, I256};
+    use suiDouBashiVest::point::{Point};
+    use suiDouBashiVest::sdb::{Self, SDB};
+    use suiDouBashiVest::vsdb::{Self, VSDB};
+    use suiDouBashi::i128;
+    use suiDouBashi::i256;
 
     // mocked time
-    use suiDouBashi::fake_time;
+    use suiDouBashiVest::fake_time;
 
     const WEEK: u256 = { 7 * 86400 };
     const YEAR: u256 = { 365 * 86400 };
@@ -41,18 +43,12 @@ module suiDouBashiVest::vest{
         gov: address,
         minted_vsdb:vector<u8>,
 
+        /// this epoch is different differrent from POS
         epoch: u256,
-        user_point_epoch: Table<ID, u256>,
-        user_point_history: Table<u256, Point>,
+        point_history: Table<u256, Point>,
         slope_changes: Table<u256, u256>
     }
 
-    struct Point has store, copy, drop{
-        bias: I128,
-        slope: I128, // # -dweight / dt
-        ts: u256,
-        blk: u256 // block
-    }
 
     struct CheckPoint has store {
         timestamp: u256,
@@ -60,8 +56,6 @@ module suiDouBashiVest::vest{
         // Table <ts, token_amounts>
         tokenIds: vector<ID>
     }
-
-
 
 
 
@@ -85,17 +79,17 @@ module suiDouBashiVest::vest{
                 minted_vsdb: vec::empty<u8>(),
 
                 epoch:0,
-                user_point_epoch: table::new<ID, u256>(ctx),
-                user_point_history: table::new<u256, Point>(ctx),
+                point_history: table::new<u256, Point>(ctx),
                 slope_changes: table::new<u256, u256>(ctx)
             }
         )
     }
-    /// locked_0: old
-    /// locked_1: new
-    fun checkpoint_(reg: &mut VSDBRegistry, token_id: Option<ID>, locked_0: &LockedSDB, locked_1: &LockedSDB){
-        let dslope_0 = 0;
-        let dslope_1 = 0;
+
+    /// None -> update global checkpoint
+    /// Some -> update both global & player's checkpoint
+    fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &mut Option<VSDB>){
+        let old_dslope = i128::zero();
+        let new_dslope = i128::zero();
 
 
         let slope_0 = 0;
@@ -108,7 +102,7 @@ module suiDouBashiVest::vest{
         let epoch = reg.epoch;
 
         // update calculate repsecitve slope & bias
-        if(option::is_some(&token_id)){
+        if(option::is_some(vsdb)){
             if(locked_0.end > time_stamp && balance::value(&locked_0.balance) > 0){
                 slope_0 = locked_0.end /  (balance::value(&locked_0.balance) as u256);
                 bias_0 = slope_0 * (locked_0.end -( fake_time::ts() as u256)); // i256
