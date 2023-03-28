@@ -13,13 +13,13 @@ module suiDouBashiVest::vest{
     use suiDouBashiVest::point::{Self, Point};
     use suiDouBashiVest::sdb::{Self, SDB};
     use suiDouBashiVest::vsdb::{Self, VSDB};
-    use suiDouBashi::i128;
-    use suiDouBashi::i256;
+    use suiDouBashi::i128::{Self, I128};
+    use suiDouBashi::i256::{Self, I256};
 
     // mocked time
     use suiDouBashiVest::fake_time;
 
-    const WEEK: u256 = { 7 * 86400 };
+    const WEEK: u64 = { 7 * 86400 };
     const YEAR: u256 = { 365 * 86400 };
     const MULTIPLIER: u256 = 1_000_000_000_000_000_000;
 
@@ -43,10 +43,10 @@ module suiDouBashiVest::vest{
         gov: address,
         minted_vsdb:vector<u8>,
 
-        /// this epoch is different differrent from POS
+        /// this epoch is different from POS
         epoch: u256,
         point_history: Table<u256, Point>, //epoch -> Point
-        slope_changes: Table<u256, u256> // epoch -> slope
+        slope_changes: Table<u64, I128> // ts -> slope
     }
 
 
@@ -80,7 +80,7 @@ module suiDouBashiVest::vest{
 
                 epoch:0,
                 point_history: table::new<u256, Point>(ctx),
-                slope_changes: table::new<u256, u256>(ctx)
+                slope_changes: table::new<u64, I128>(ctx)
             }
         )
     }
@@ -123,9 +123,10 @@ module suiDouBashiVest::vest{
         // };
 
 
+        // get the latest point
         let last_point = if(reg.epoch > 0){
             // copy the value in table
-            *table::borrow_mut(&mut reg.point_history, reg.epoch)
+            *table::borrow(& reg.point_history, reg.epoch)
         }else{
             point::empty()
         };
@@ -133,33 +134,49 @@ module suiDouBashiVest::vest{
         let last_checkpoint = point::ts(&last_point);
         let initial_last_point = last_point;
 
-        //calculate created_block / time
+        //calculate dblock/ dt
         let block_slope = if(time_stamp > point::ts(&last_point)){
             MULTIPLIER * ((block_num - point::blk(&last_point)) as u256) / (( time_stamp - point::ts(&last_point)) as u256)
         }else{
             0
         };
 
-        let last_checkpoint = latest_point.ts;
-        let t_i = (last_checkpoint / WEEK) / WEEK;
+        // If last point is already recorded in this block, slope=0
 
+        // But that's ok b/c we know the block in such case
+
+        // Go over weeks to fill history and calculate what the current point is
+
+        let t_i = (last_checkpoint / WEEK) * WEEK; // make sure t_i is multiply of WEEK
+        let last_point_bias = point::bias(&last_point);
+        let last_point_slope = point::slope(&last_point);
+
+        // update the weekly point
         let i = 0;
         while( i < 255 ){
             t_i = t_i + WEEK;
 
-            let d_slope = 0;
+            let d_slope = i128::zero();
             if( t_i > time_stamp ){
-                t_i = time_stamp ;
+                //latest
+                t_i =  time_stamp;
             }else{
-                d_slope = *table::borrow(&reg.slope_per_ts, t_i);
+                // obsolete point
+                d_slope = *table::borrow(&reg.slope_changes, t_i);
             };
-            latest_point.bias = latest_point.bias - latest_point.slope * (t_i - last_checkpoint); //i256
-            latest_point.slope = latest_point.slope + d_slope;
-            if(latest_point.bias < 0){
-                latest_point.bias = 0;
+            let diff = i128::from(((t_i - last_checkpoint) as u128));
+            last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &diff));
+            last_point_slope = i128::add(&last_point_slope, &d_slope);
+
+            let compare_bias = i128::compare(last_point_bias, i128::zero());
+            // if last_point_bais <= 0
+            if(compare_bias == 1 || compare_bias == 0){
+                last_point_bias = I128::zero();
             };
-            if(latest_point.slope < 0){
-                latest_point.slope = 0;
+            let compare_slope = i128::compare(last_point_slope, i128::zero());
+            // if last_point_slope <= 0
+            if(compare_slope == 1 || compare_slope == 0){
+                last_point_slope = I128::zero();
             };
 
             last_checkpoint = t_i;
