@@ -1,7 +1,7 @@
 module suiDouBashiVest::vest{
     use sui::object::{Self, UID, ID};
     use sui::balance::{Self, Supply, Balance};
-    use sui::coin::{Self};
+    use sui::coin::{Self,Coin};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector as vec;
@@ -41,7 +41,7 @@ module suiDouBashiVest::vest{
         id: UID,
         sdb_supply: Supply<SDB>,
         gov: address,
-        minted_vsdb:vector<u8>,
+        minted_vsdb: u64,
 
         /// acts like version, count down the times of checktime execution
         epoch: u256,
@@ -50,6 +50,7 @@ module suiDouBashiVest::vest{
     }
 
 
+    /// TODO: wrapped into Table<u64, vector<ID>>
     struct CheckPoint has store {
         timestamp: u256,
         // TODO: dynamic fields to store, if no need of accessing into tokens, we could replaced with
@@ -76,7 +77,7 @@ module suiDouBashiVest::vest{
                 id: object::new(ctx),
                 sdb_supply: sdb::new(ctx),
                 gov: tx_context::sender(ctx),
-                minted_vsdb: vec::empty<u8>(),
+                minted_vsdb: 0,
 
                 epoch:0,
                 point_history: table::new<u256, Point>(ctx),
@@ -85,20 +86,38 @@ module suiDouBashiVest::vest{
         )
     }
 
-    // fun deposit_for_(vsdb: VSDB, amount: u64, unlock_time: u64){
-    //     // 1. update locked end time
-    //     // 2. locked balance
-    // }
+    /// Owing to limitation of move_lang, we are unable to deposit to others NFT
+    fun create_lock_(sdb: Coin<SDB>, duration: u64, ctx: &mut TxContext){
+        // round down to weeks
+        let unlock_time = (duration + fake_time::ts()) / WEEK;
+
+        assert!( coin::value(&sdb) > 0 ,err::zero_input());
+        assert!( unlock_time > fake_time::ts() || unlock_time <= fake_time::ts() + MAX_TIME, err::invalid_lock_time());
+
+    }
+
+    fun deposit_for_(reg: &mut VSDBRegistry, vsdb: VSDB, amount: u64, unlock_time: u64, ctx: &mut TxContext){
+        // 1. update locked end time
+        // 2. locked balance
+
+
+        //TODO !!!!
+        vsdb::new(...)
+        checkpoint_(reg, &mut option::some(vsdb), );
+
+        // transfer
+        transfer::public_transfer(vsdb, tx_context::sender(ctx));
+
+
+    }
 
     /// None -> update global checkpoint
     /// Some -> update both global & player's checkpoint
-    fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &mut Option<VSDB>){
-        // REFACTOR: move to function argument
-        let old_locked_amount = 100_000;
-        let old_locked_end = 1680062834;
+    /// VSDB's balance has been updated
+    fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &mut Option<VSDB>, old_locked_amount: u64, old_locked_end: u64){
         // Assume: deposit: 50_000, extend locked_time: += 1 WEEK
-        let new_locked_amount = 150_000;
-        let new_locked_end = 1680667634;
+        let new_locked_amount = vsdb::locked_balance(option::borrow(vsdb));
+        let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
 
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();

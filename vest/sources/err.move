@@ -6,4 +6,12 @@ module suiDouBashiVest::err{
         Prefix + 200
     }
 
+    public fun zero_input(): u64{
+        Prefix + 201
+    }
+
+    public fun invalid_lock_time():u64{
+        Prefix + 202
+    }
+
 }
