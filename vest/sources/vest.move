@@ -10,9 +10,11 @@ module suiDouBashiVest::vest{
 
 
     use suiDouBashiVest::err;
+    use suiDouBashiVest::event;
     use suiDouBashiVest::point::{Self, Point};
     use suiDouBashiVest::sdb::{Self, SDB};
     use suiDouBashiVest::vsdb::{Self, VSDB};
+
     use suiDouBashi::i128::{Self, I128};
     use suiDouBashi::i256::{Self, I256};
 
@@ -41,7 +43,9 @@ module suiDouBashiVest::vest{
         id: UID,
         sdb_supply: Supply<SDB>,
         gov: address,
+
         minted_vsdb: u64,
+        locked_total: u256,
 
         /// acts like version, count down the times of checktime execution
         epoch: u256,
@@ -78,7 +82,7 @@ module suiDouBashiVest::vest{
                 sdb_supply: sdb::new(ctx),
                 gov: tx_context::sender(ctx),
                 minted_vsdb: 0,
-
+                locked_total: 0,
                 epoch:0,
                 point_history: table::new<u256, Point>(ctx),
                 slope_changes: table::new<u64, I128>(ctx)
@@ -86,39 +90,37 @@ module suiDouBashiVest::vest{
         )
     }
 
-    /// Owing to limitation of move_lang, we are unable to deposit to others NFT
-    fun create_lock_(sdb: Coin<SDB>, duration: u64, ctx: &mut TxContext){
-        // round down to weeks
+    // first time lock
+    // Question: everyone would only have single NFT ?
+    fun create_lock(reg: &mut VSDBRegistry, sdb:Coin<SDB>, duration: u64, ctx: &mut TxContext){
         let unlock_time = (duration + fake_time::ts()) / WEEK;
 
         assert!( coin::value(&sdb) > 0 ,err::zero_input());
         assert!( unlock_time > fake_time::ts() || unlock_time <= fake_time::ts() + MAX_TIME, err::invalid_lock_time());
 
-    }
+        let amount = coin::value(&sdb);
+        let slope = i128::div( &i128::from((amount as u128)), &i128::from((MAX_TIME as u128)));
+        let voting_weight = i128::mul(&slope ,&i128::from(((unlock_time - fake_time::ts()) as u128)));
 
-    fun deposit_for_(reg: &mut VSDBRegistry, vsdb: VSDB, amount: u64, unlock_time: u64, ctx: &mut TxContext){
-        // 1. update locked end time
-        // 2. locked balance
+        //locked struct has been updated
+        let vsdb_ = option::some(vsdb::new(((i128::as_u128(&voting_weight)) as u256), sdb, unlock_time, ctx));
+        reg.minted_vsdb = reg.minted_vsdb + 1;
+        reg.locked_total = reg.locked_total + amount;
 
+        checkpoint_(reg, &mut vsdb_, 0, unlock_time);
 
-        //TODO !!!!
-        vsdb::new(...)
-        checkpoint_(reg, &mut option::some(vsdb), );
+        let vsdb = option::destroy_some<VSDB>(vsdb_);
+        let id = object::id(&vsdb);
 
-        // transfer
         transfer::public_transfer(vsdb, tx_context::sender(ctx));
 
-
+        event::deposit(id, amount, duration);
     }
 
     /// None -> update global checkpoint
     /// Some -> update both global & player's checkpoint
     /// VSDB's balance has been updated
     fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &mut Option<VSDB>, old_locked_amount: u64, old_locked_end: u64){
-        // Assume: deposit: 50_000, extend locked_time: += 1 WEEK
-        let new_locked_amount = vsdb::locked_balance(option::borrow(vsdb));
-        let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
-
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();
 
@@ -133,6 +135,8 @@ module suiDouBashiVest::vest{
 
         // update calculate repsecitve slope & bias
         if(option::is_some(vsdb)){
+            let new_locked_amount = vsdb::locked_balance(option::borrow(vsdb));
+            let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
             // Calculate slopes and biases
             // Kept at zero when they have to
             if(old_locked_end > time_stamp && old_locked_amount > 0){
@@ -180,7 +184,6 @@ module suiDouBashiVest::vest{
         // If last point is already recorded in this block, slope=0
 
         // But that's ok b/c we know the block in such case
-
 
 
         // Go over weeks to fill history and calculate what the current point is
@@ -264,6 +267,7 @@ module suiDouBashiVest::vest{
         *table::borrow_mut(&mut reg.point_history, epoch) = point::new(last_point_bias, last_point_slope, last_point_ts, last_point_blk); // create new one after value manipulation
 
         if(option::is_some(vsdb)){
+            let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
             // Schedule the slope changes (slope is going down)
             // We subtract new_user_slope from [new_locked.end]
             // and add old_user_slope to [old_locked.end]

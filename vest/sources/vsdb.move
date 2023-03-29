@@ -30,7 +30,6 @@ module suiDouBashiVest::vsdb{
         // version: latest count
         user_epoch: u256,
 
-
         // this table is bined at above user_epoch or global_epoch (?)
         /// the most recently recorded rate of voting power decrease for Player
         user_point_history: Table<u256, Point>, // epoch -> point_history // TableVec (?)
@@ -54,14 +53,14 @@ module suiDouBashiVest::vsdb{
             id: uid,
             url: img_url(object::id_to_bytes(&id), voting_weight, (locked_end as u256), (coin::value(&locked_sdb) as u256)),
             logical_owner: tx_context::sender(ctx),
-            locked: false,
+            locked: false,// (?)
 
             user_epoch: 0,
             user_point_history: table::new<u256, Point>(ctx),
             locekd_balance: LockedSDB{
                 id,
                 balance: coin::into_balance(locked_sdb),
-                end: 0
+                end: locked_end
             }
         }
     }
@@ -165,5 +164,4 @@ module suiDouBashiVest::vsdb{
         std::debug::print(foo);
         //std::debug::print(&bar);
     }
-
 }
