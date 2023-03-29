@@ -4,7 +4,7 @@ module suiDouBashiVest::point{
 
     use suiDouBashiVest::fake_time;
 
-    struct Point has store, copy{
+    struct Point has store, copy, drop{
         bias: I128,
         slope: I128, // # -dweight / dt
         ts: u64,
@@ -17,6 +17,15 @@ module suiDouBashiVest::point{
             slope: i128::zero(),
             ts: fake_time::ts(),
             blk: fake_time::bn()
+        }
+    }
+
+    public fun new(bias: I128, slope: I128, ts: u64, blk: u64): Point{
+        Point{
+            bias,
+            slope,
+            ts,
+            blk
         }
     }
 

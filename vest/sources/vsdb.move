@@ -6,8 +6,8 @@ module suiDouBashiVest::vsdb{
     use sui::tx_context;
     use sui::transfer;
     use std::vector as vec;
-    use sui::table_vec::{Self, TableVec};
     use sui::balance::{Self, Balance};
+    use sui::table::{Self, Table};
 
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::point::{Self, Point};
@@ -27,11 +27,11 @@ module suiDouBashiVest::vsdb{
         logical_owner: address,
         locked: bool, // Option(?)
 
-        /// latest epoch player trigger
-        user_point_epoch: u256,
+        // version
+        user_epoch: u256,
 
         /// the most recently recorded rate of voting power decrease for Player
-        user_point_history: TableVec<Point>, // epoch -> point_history // TableVec (?)
+        user_point_history: Table<u256, Point>, // epoch -> point_history // TableVec (?)
         /// Should this assign UID (?)
         locekd_balance: LockedSDB
     }
@@ -55,8 +55,8 @@ module suiDouBashiVest::vsdb{
             logical_owner: tx_context::sender(ctx),
             locked: false,
 
-            user_point_epoch: 0,
-            user_point_history: table_vec::empty<Point>(ctx),
+            user_epoch: 0,
+            user_point_history: table::new<u256, Point>(ctx),
             locekd_balance: LockedSDB{
                 id,
                 balance: balance::zero<SDB>(),
@@ -103,29 +103,29 @@ module suiDouBashiVest::vsdb{
     }
 
     // ===== fields lookup  =====
-    public fun point(self: &VSDB, epoch: u64):&Point{
-        table_vec::borrow(&self.user_point_history, epoch)
-    }
-    public fun latest_point(self: &VSDB):&Point{
-        table_vec::borrow(&self.user_point_history, table_vec::length(&self.user_point_history))
+    public fun point(self: &VSDB, epoch: u256):&Point{
+        table::borrow(&self.user_point_history, epoch)
     }
 
-    public fun bias(self: &VSDB, epoch: u64): I128{
+    public fun bias(self: &VSDB, epoch: u256): I128{
         point::bias( point(self, epoch) )
     }
-    public fun latest_bias(self: &VSDB):I128{
-        let point = table_vec::borrow(&self.user_point_history, table_vec::length(&self.user_point_history));
-        point::bias(point)
-    }
 
-    public fun slope(self: &VSDB, epoch: u64): I128{
+    public fun slope(self: &VSDB, epoch: u256): I128{
         point::slope( point(self, epoch) )
     }
-     public fun latest_slope(self: &VSDB):I128{
-        let point = table_vec::borrow(&self.user_point_history, table_vec::length(&self.user_point_history));
-        point::slope(point)
+
+    public fun user_epoch(self: &VSDB): u256{
+        self.user_epoch
     }
 
+    public fun update_user_epoch(self: &mut VSDB, epoch: u256){
+        self.user_epoch = epoch;
+    }
+
+    public fun user_point_history_mut(self: &mut VSDB, epoch:u256):&mut Point{
+        table::borrow_mut(&mut self.user_point_history, epoch)
+    }
 
 
 
@@ -134,6 +134,15 @@ module suiDouBashiVest::vsdb{
     #[test] fun test_url(){
         let foo = img_url(b"0x1234", 2, 3, 4);
         std::debug::print(&foo);
+    }
+    #[test] fun test_foo(){
+        let foo = &mut 65;
+        // let bar = 100;
+        // *foo = bar;
+
+
+        std::debug::print(foo);
+        //std::debug::print(&bar);
     }
 
 }
