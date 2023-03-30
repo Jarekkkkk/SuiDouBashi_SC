@@ -2,31 +2,27 @@ module suiDouBashiVest::point{
     use suiDouBashi::i128::{Self, I128};
 
 
-    use suiDouBashiVest::fake_time;
 
     struct Point has store, copy, drop{
         bias: I128,
         slope: I128, // # -dweight / dt
         ts: u64,
-        blk: u64 // block_num assume u64
     }
 
     public fun empty (): Point{
         Point {
             bias: i128::zero(),
             slope: i128::zero(),
-            ts: fake_time::ts(),
-            blk: fake_time::bn()
+            ts: 0
         }
     }
 
     // TOO DYNAMIC !!!
-    public fun new(bias: I128, slope: I128, ts: u64, blk: u64): Point{
+    public fun from(bias: I128, slope: I128, ts: u64): Point{
         Point{
             bias,
             slope,
             ts,
-            blk
         }
     }
 
@@ -38,8 +34,5 @@ module suiDouBashiVest::point{
     }
      public fun ts(self: &Point): u64{
         self.ts
-    }
-     public fun blk(self: &Point): u64{
-        self.blk
     }
 }

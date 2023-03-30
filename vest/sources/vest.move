@@ -19,12 +19,8 @@ module suiDouBashiVest::vest{
     use suiDouBashi::i128::{Self, I128};
     //use suiDouBashi::i256::{Self};
 
-    // mocked time
-    use suiDouBashiVest::fake_time;
-
     const WEEK: u64 = { 7 * 86400 };
     const YEAR: u256 = { 365 * 86400 };
-    const MULTIPLIER: u256 = 1_000_000_000_000_000_000;
 
     // # 1 +        /
     // #   |      /
@@ -95,7 +91,6 @@ module suiDouBashiVest::vest{
     public entry fun create_lock(reg: &mut VSDBRegistry, sdb:Coin<SDB>, duration: u64, clock: &Clock, ctx: &mut TxContext){
         // 1. assert
         let ts = clock::timestamp_ms(clock);
-        let bn = fake_time::bn();
         let unlock_time = (duration + ts) / WEEK;
 
         assert!( coin::value(&sdb) > 0 ,err::zero_input());
@@ -104,12 +99,12 @@ module suiDouBashiVest::vest{
         // 2. create vsdb & update registry
 
         let amount = coin::value(&sdb);
-        let vsdb = vsdb::new( sdb, unlock_time, ts, bn, ctx);
+        let vsdb = vsdb::new( sdb, unlock_time, ts, ctx);
         reg.minted_vsdb = reg.minted_vsdb + 1;
         reg.locked_total = reg.locked_total + (amount as u256);
 
         // 3. udpate global checkpoint
-        checkpoint_(true, reg, &vsdb, 0, 0, ts, bn);
+        checkpoint_(true, reg, &vsdb, 0, 0, ts);
 
         let id = object::id(&vsdb);
 
@@ -117,13 +112,18 @@ module suiDouBashiVest::vest{
         transfer::public_transfer(vsdb, tx_context::sender(ctx));
 
         // 5. event
-        event::deposit(id, amount, duration);
+        event::deposit(id, amount, unlock_time);
     }
 
-    public entry fun increase_unlock_time(reg: &mut VSDBRegistry, vsdb: &mut VSDB, extended_duration: u64, clock: &Clock, ctx: &mut TxContext){
+    public entry fun increase_unlock_time(
+        reg: &mut VSDBRegistry,
+        vsdb: &mut VSDB,
+        extended_duration: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
         // 1. assert
         let ts = clock::timestamp_ms(clock);
-        let bn = fake_time::bn();
         let unlock_time = ( (ts + extended_duration ) / WEEK) * WEEK;
         let locked_bal = vsdb::locked_balance(vsdb);
         let locked_end = vsdb::locked_balance(vsdb);
@@ -136,11 +136,41 @@ module suiDouBashiVest::vest{
         // 2. update vsdb state
         let prev_bal = vsdb::locked_balance(vsdb);
         let prev_end = vsdb::locked_end(vsdb);
-        vsdb::extend(vsdb, option::none<Coin<SDB>>(), extended_duration, ts, bn);
+        vsdb::extend(vsdb, option::none<Coin<SDB>>(), extended_duration, ts);
 
         // 2. global state
-        checkpoint_(true, reg, vsdb, prev_bal, prev_end, ts, bn);
+        checkpoint_(true, reg, vsdb, prev_bal, prev_end, ts);
 
+
+        event::deposit(object::id(vsdb), vsdb::locked_balance(vsdb), unlock_time);
+    }
+
+    public entry fun increase_unlock_balance(
+        reg: &mut VSDBRegistry,
+        vsdb: &mut VSDB,
+        coin: Coin<SDB>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let ts = clock::timestamp_ms(clock);
+        let locked_bal = vsdb::locked_balance(vsdb);
+        let locked_end = vsdb::locked_balance(vsdb);
+
+        assert!(locked_end > ts, err::expired_escrow());
+        // TODO: destroy expired SDB when it is fully withdrawed
+        assert!(locked_bal > 0, err::empty_locked_balance());
+        assert!(coin::value(&coin) > 0 , err::emptry_coin());
+
+        // 2. update vsdb state
+        let prev_bal = vsdb::locked_balance(vsdb);
+        let prev_end = vsdb::locked_end(vsdb);
+        vsdb::extend(vsdb, option::some(coin), 0, ts);
+
+        // 2. global state
+        checkpoint_(true, reg, vsdb, prev_bal, prev_end, ts);
+
+
+        event::deposit(object::id(vsdb), vsdb::locked_balance(vsdb), locked_end);
     }
 
     // /// Withdraw all the unlocked coin only when the due date is attained
@@ -164,7 +194,6 @@ module suiDouBashiVest::vest{
         old_locked_amount: u64,
         old_locked_end: u64 ,
         time_stamp: u64,
-        block_num: u64
     ){
         let new_locked_amount = vsdb::locked_balance(vsdb);
         let new_locked_end = vsdb::locked_end(vsdb);
@@ -214,16 +243,6 @@ module suiDouBashiVest::vest{
             point::empty()
         };
 
-        let initial_last_point = last_point;
-
-
-        //calculate dblock/ dt if latest point is obsolete
-        let block_slope: u256 = if(time_stamp > point::ts(&last_point)){
-            MULTIPLIER * ((block_num - point::blk(&last_point)) as u256) / (( time_stamp - point::ts(&last_point)) as u256)
-        }else{
-            0
-        };
-
         // If last point is already recorded in this block, slope=0
 
         // But that's ok b/c we know the block in such case
@@ -237,7 +256,6 @@ module suiDouBashiVest::vest{
         let last_point_bias = point::bias(&last_point);
         let last_point_slope = point::slope(&last_point);
         let last_point_ts = point::ts(&last_point);
-        let last_point_blk = point::blk(&last_point);
 
         // incremntal period by week
         let t_i = (last_checkpoint / WEEK) * WEEK; // make sure t_i is multiply of WEEK
@@ -274,16 +292,14 @@ module suiDouBashiVest::vest{
             last_checkpoint = t_i;
             last_point_ts = t_i;
 
-            let last_point_blk_ = ((point::blk(&initial_last_point) as u256) + (block_slope * ((t_i - point::ts(&initial_last_point)) as u256)) / MULTIPLIER );
-            last_point_blk = (last_point_blk_ as u64);
 
             epoch = epoch + 1;
             if(t_i == time_stamp){
-                last_point_blk = block_num;
                 break
             }else{
-                let point = table::borrow_mut(&mut reg.point_history, epoch);
-                *point = point::new(last_point_bias, last_point_slope, last_point_ts, last_point_blk);
+                // new version update
+                let point = point::from(last_point_bias, last_point_slope, last_point_ts);
+                table::add(&mut reg.point_history, epoch, point);
             };
 
             i = i + 1;
@@ -307,7 +323,6 @@ module suiDouBashiVest::vest{
 
         // Record the changed point into history
 
-        table::add(&mut reg.point_history, epoch, point::new(last_point_bias, last_point_slope, last_point_ts, last_point_blk)); // create new one after value manipulation
 
         if(user_checkpoint){
             // Schedule the slope changes (slope is going down)

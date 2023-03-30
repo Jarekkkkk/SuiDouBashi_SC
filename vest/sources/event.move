@@ -6,15 +6,15 @@ module suiDouBashiVest::event{
     struct Deposit has copy, drop{
         id: ID,
         locked_value: u64,
-        duration: u64
+        unlock_time: u64
     }
 
-    public fun deposit(id: ID, locked_value: u64, duration: u64){
+    public fun deposit(id: ID, locked_value: u64, unlock_time: u64){
         emit(
            Deposit{
                 id,
                 locked_value,
-                duration
+                unlock_time
            }
         )
     }
