@@ -1,22 +1,23 @@
 module suiDouBashiVest::vest{
     use sui::object::{Self, UID, ID};
-    use sui::balance::{Self, Supply, Balance};
+    //use sui::balance::{Self, Supply, Balance};
     use sui::coin::{Self,Coin};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use std::vector as vec;
+    //use std::vector as vec;
     use sui::table::{Self, Table};
     use std::option::{Self, Option};
+    use sui::clock::{Self, Clock};
 
 
     use suiDouBashiVest::err;
     use suiDouBashiVest::event;
     use suiDouBashiVest::point::{Self, Point};
-    use suiDouBashiVest::sdb::{Self, SDB};
+    use suiDouBashiVest::sdb::{ SDB};
     use suiDouBashiVest::vsdb::{Self, VSDB};
 
     use suiDouBashi::i128::{Self, I128};
-    use suiDouBashi::i256::{Self, I256};
+    //use suiDouBashi::i256::{Self};
 
     // mocked time
     use suiDouBashiVest::fake_time;
@@ -32,7 +33,7 @@ module suiDouBashiVest::vest{
     // #   |/
     // # 0 +--------+------> time
     // #  maxtime (4 years)
-    const MAX_TIME: u64 = { 4 * 365 * 86400 };
+
 
 
     // ===== OTW =====
@@ -41,7 +42,7 @@ module suiDouBashiVest::vest{
 
     struct VSDBRegistry has key {
         id: UID,
-        sdb_supply: Supply<SDB>,
+        //sdb_supply: Supply<SDB>,
         gov: address,
 
         minted_vsdb: u64,
@@ -70,16 +71,14 @@ module suiDouBashiVest::vest{
     }
 
     // ===== entry =====
-
-
-    // ===== MAIN_LOGIC =====
     /// This function should be explictly called as we are unable to call init execution in SDB module
     fun create(ctx: &mut TxContext){
-        transfer::transfer(VSDBCap { id: object::new(ctx) }, tx_context::sender(ctx));
+        transfer::transfer(VSDBCap { id: object::new(ctx)}, tx_context::sender(ctx));
         transfer::share_object(
             VSDBRegistry {
                 id: object::new(ctx),
-                sdb_supply: sdb::new(ctx),
+                // coin supply
+                // sdb_supply: sdb::new(ctx),
                 gov: tx_context::sender(ctx),
                 minted_vsdb: 0,
                 locked_total: 0,
@@ -90,37 +89,69 @@ module suiDouBashiVest::vest{
         )
     }
 
+
+
     // first time lock
     // Question: everyone would only have single NFT ?
-    fun create_lock(reg: &mut VSDBRegistry, sdb:Coin<SDB>, duration: u64, ctx: &mut TxContext){
-        let unlock_time = (duration + fake_time::ts()) / WEEK;
+    public entry fun create_lock(reg: &mut VSDBRegistry, sdb:Coin<SDB>, duration: u64, clock: &Clock, ctx: &mut TxContext){
+        // 1. assert
+        let ts = clock::timestamp_ms(clock);
+        let bn = fake_time::bn();
+        let unlock_time = (duration + ts) / WEEK;
 
         assert!( coin::value(&sdb) > 0 ,err::zero_input());
-        assert!( unlock_time > fake_time::ts() || unlock_time <= fake_time::ts() + MAX_TIME, err::invalid_lock_time());
+        assert!( unlock_time > ts && unlock_time <= ts + vsdb::max_time(), err::invalid_lock_time());
+
+        // 2. create vsdb & update registry
 
         let amount = coin::value(&sdb);
-        let slope = i128::div( &i128::from((amount as u128)), &i128::from((MAX_TIME as u128)));
-        let voting_weight = i128::mul(&slope ,&i128::from(((unlock_time - fake_time::ts()) as u128)));
-
-        //locked struct has been updated
-        let vsdb_ = option::some(vsdb::new(((i128::as_u128(&voting_weight)) as u256), sdb, unlock_time, ctx));
+        let vsdb_ = option::some(vsdb::new( sdb, unlock_time, ts, bn, ctx));
         reg.minted_vsdb = reg.minted_vsdb + 1;
-        reg.locked_total = reg.locked_total + amount;
+        reg.locked_total = reg.locked_total + (amount as u256);
 
-        checkpoint_(reg, &mut vsdb_, 0, unlock_time);
+        // 3. udpate global checkpoint
+        checkpoint_(reg, &vsdb_, 0, unlock_time, ts);
 
         let vsdb = option::destroy_some<VSDB>(vsdb_);
         let id = object::id(&vsdb);
 
+        // 4. object transfer
         transfer::public_transfer(vsdb, tx_context::sender(ctx));
 
+        // 5. event
         event::deposit(id, amount, duration);
     }
+
+    public entry fun increase_unlock_time(_reg: &mut VSDBRegistry, vsdb: &mut VSDB, extended_duration: u64, clock: &Clock, _ctx: &mut TxContext){
+        // 1. assert
+        let ts = clock::timestamp_ms(clock);
+        let unlock_time = ( (ts + extended_duration ) / WEEK) * WEEK;
+        let locked_bal = vsdb::locked_balance(vsdb);
+        let locked_end = vsdb::locked_balance(vsdb);
+
+        assert!(locked_end > ts, err::expired_escrow());
+        // TODO: destroy expired SDB when it is fully withdrawed
+        assert!(locked_bal > 0, err::empty_locked_balance());
+        assert!(unlock_time > ts && unlock_time < ts + vsdb::max_time(), err::invalid_lock_time());
+
+        // 2.
+    }
+
+    // /// Withdraw all the unlocked coin only when the due date is attained
+    // public entry fun unlock(reg: &mut VSDBRegistry, _vsdb: VSDB, ctx: &mut TxContext){}
+
+
+
+    // ===== Utils =====
+
+
+
+    // ===== Main Logic =====
 
     /// None -> update global checkpoint
     /// Some -> update both global & player's checkpoint
     /// VSDB's balance has been updated
-    fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &mut Option<VSDB>, old_locked_amount: u64, old_locked_end: u64){
+    fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &Option<VSDB>, old_locked_amount: u64, old_locked_end: u64 , time_stamp: u64){
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();
 
@@ -129,7 +160,6 @@ module suiDouBashiVest::vest{
         let u_new_slope = i128::zero();
         let u_new_bias = i128::zero();
 
-        let time_stamp =  fake_time::ts();
         let block_num =  fake_time::bn();
         let epoch = reg.epoch;
 
@@ -140,12 +170,12 @@ module suiDouBashiVest::vest{
             // Calculate slopes and biases
             // Kept at zero when they have to
             if(old_locked_end > time_stamp && old_locked_amount > 0){
-                u_old_slope = i128::div( &i128::from((old_locked_amount as u128)), &i128::from((MAX_TIME as u128)));
+                u_old_slope = i128::div( &i128::from((old_locked_amount as u128)), &i128::from((vsdb::max_time() as u128)));
                 u_old_bias = i128::mul(&u_old_slope, &i128::from((old_locked_end as u128) - (fake_time::ts() as u128)) );
             };
 
              if(new_locked_end > time_stamp && new_locked_amount > 0){
-                u_new_slope = i128::div( &i128::from((new_locked_amount as u128)), &i128::from((MAX_TIME as u128)));
+                u_new_slope = i128::div( &i128::from((new_locked_amount as u128)), &i128::from((vsdb::max_time() as u128)));
                 u_new_bias = i128::mul(&u_old_slope, &i128::from((old_locked_end as u128) - (fake_time::ts() as u128)) );
             };
 
@@ -264,7 +294,7 @@ module suiDouBashiVest::vest{
 
         // Record the changed point into history
 
-        *table::borrow_mut(&mut reg.point_history, epoch) = point::new(last_point_bias, last_point_slope, last_point_ts, last_point_blk); // create new one after value manipulation
+        table::add(&mut reg.point_history, epoch, point::new(last_point_bias, last_point_slope, last_point_ts, last_point_blk)); // create new one after value manipulation
 
         if(option::is_some(vsdb)){
             let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
@@ -288,14 +318,14 @@ module suiDouBashiVest::vest{
                 // else: we recorded it already in old_dslope
             };
 
-            // Now handle user history
-            let user_vsdb = option::borrow_mut<VSDB>(vsdb);
+            // // Now handle user history
+            // let user_vsdb = option::borrow_mut<VSDB>(vsdb);
 
-            let user_epoch = vsdb::user_epoch(user_vsdb);
-            vsdb::update_user_epoch(user_vsdb, user_epoch + 1);
+            // vsdb::update_user_epoch(user_vsdb); // version + 1
 
-            let user_point_mut = vsdb::user_point_history_mut(user_vsdb, epoch);
-            *user_point_mut = point::new(u_new_bias, u_new_slope, time_stamp, block_num);
+            // // update point
+            // let user_point_mut = vsdb::user_point_history_mut(user_vsdb, epoch);
+            // *user_point_mut = point::new(u_new_bias, u_new_slope, time_stamp, block_num);
         };
     }
 }

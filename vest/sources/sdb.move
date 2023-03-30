@@ -2,11 +2,10 @@ module suiDouBashiVest::sdb{
     use std::option;
     use sui::coin::{Self};
     use sui::transfer;
-    use sui::tx_context::{ TxContext};
+    use sui::tx_context::{ Self, TxContext};
     use sui::url::{Self, Url};
-    use sui::balance::Supply;
 
-    struct SDB has drop, store {}
+    struct SDB has drop {}
 
     friend suiDouBashiVest::vest;
 
@@ -14,9 +13,9 @@ module suiDouBashiVest::sdb{
 
 
     // TODO: First Mint quantitiy & Display standard format
-    public (friend) fun new(ctx: &mut TxContext): Supply<SDB> {
+    fun init(witness: SDB, ctx: &mut TxContext){
         let (treasury, metadata) = coin::create_currency(
-            SDB{},
+            witness,
             18,
             b"SDB",
             b"SuiDouBashi",
@@ -26,7 +25,7 @@ module suiDouBashiVest::sdb{
         );
 
         transfer::public_freeze_object(metadata);
-        coin::treasury_into_supply(treasury)
+        transfer::public_transfer(treasury, tx_context::sender(ctx));
     }
 
     // entry public fun transfer(coin: Coin<SDB>, to:address){

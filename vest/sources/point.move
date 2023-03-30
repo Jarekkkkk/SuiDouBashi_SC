@@ -1,6 +1,6 @@
 module suiDouBashiVest::point{
     use suiDouBashi::i128::{Self, I128};
-    use suiDouBashi::i256::{Self, I256};
+
 
     use suiDouBashiVest::fake_time;
 
@@ -20,6 +20,7 @@ module suiDouBashiVest::point{
         }
     }
 
+    // TOO DYNAMIC !!!
     public fun new(bias: I128, slope: I128, ts: u64, blk: u64): Point{
         Point{
             bias,

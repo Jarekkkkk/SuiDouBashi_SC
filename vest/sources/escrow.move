@@ -26,7 +26,7 @@ module suiDouBashiVest::escrow {
     ) {
         let sender = tx_context::sender(ctx);
         let id = object::new(ctx);
-        transfer::transfer(
+        transfer::public_transfer(
             EscrowedObj<T,ExchangeForT> {
                 id, sender, recipient, exchange_for, escrowed
             },
@@ -58,8 +58,8 @@ module suiDouBashiVest::escrow {
         assert!(&sender2 == &recipient1, EMismatchedSenderRecipient);
         assert!(object::id(&escrowed1) == exchange_for2, EMismatchedExchangeObject);
         assert!(object::id(&escrowed2) == exchange_for1, EMismatchedExchangeObject);
-        transfer::transfer(escrowed1, sender2);
-        transfer::transfer(escrowed2, sender1)
+        transfer::public_transfer(escrowed1, sender2);
+        transfer::public_transfer(escrowed2, sender1)
     }
 
     public entry fun return_to_sender<T: key + store, ExchangeForT: key + store>(
@@ -69,6 +69,6 @@ module suiDouBashiVest::escrow {
             id, sender, recipient: _, exchange_for: _, escrowed
         } = obj;
         object::delete(id);
-        transfer::transfer(escrowed, sender)
+        transfer::public_transfer(escrowed, sender)
     }
 }
