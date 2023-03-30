@@ -17,7 +17,6 @@ module suiDouBashiVest::point{
         }
     }
 
-    // TOO DYNAMIC !!!
     public fun from(bias: I128, slope: I128, ts: u64): Point{
         Point{
             bias,

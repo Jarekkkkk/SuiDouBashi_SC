@@ -12,4 +12,5 @@ module suiDouBashiVest::err{
     public fun empty_locked_balance():u64{ Prefix + 204 }
 
     public fun emptry_coin(): u64{ Prefix + 205 }
+
 }
