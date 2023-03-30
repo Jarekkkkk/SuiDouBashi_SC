@@ -35,7 +35,6 @@ module suiDouBashiVest::vest{
     // #  maxtime (4 years)
 
 
-
     // ===== OTW =====
 
     struct VSDBCap has key, store { id: UID }
@@ -105,14 +104,13 @@ module suiDouBashiVest::vest{
         // 2. create vsdb & update registry
 
         let amount = coin::value(&sdb);
-        let vsdb_ = option::some(vsdb::new( sdb, unlock_time, ts, bn, ctx));
+        let vsdb = vsdb::new( sdb, unlock_time, ts, bn, ctx);
         reg.minted_vsdb = reg.minted_vsdb + 1;
         reg.locked_total = reg.locked_total + (amount as u256);
 
         // 3. udpate global checkpoint
-        checkpoint_(reg, &vsdb_, 0, unlock_time, ts);
+        checkpoint_(true, reg, &vsdb, 0, 0, ts, bn);
 
-        let vsdb = option::destroy_some<VSDB>(vsdb_);
         let id = object::id(&vsdb);
 
         // 4. object transfer
@@ -122,9 +120,10 @@ module suiDouBashiVest::vest{
         event::deposit(id, amount, duration);
     }
 
-    public entry fun increase_unlock_time(_reg: &mut VSDBRegistry, vsdb: &mut VSDB, extended_duration: u64, clock: &Clock, _ctx: &mut TxContext){
+    public entry fun increase_unlock_time(reg: &mut VSDBRegistry, vsdb: &mut VSDB, extended_duration: u64, clock: &Clock, ctx: &mut TxContext){
         // 1. assert
         let ts = clock::timestamp_ms(clock);
+        let bn = fake_time::bn();
         let unlock_time = ( (ts + extended_duration ) / WEEK) * WEEK;
         let locked_bal = vsdb::locked_balance(vsdb);
         let locked_end = vsdb::locked_balance(vsdb);
@@ -134,7 +133,14 @@ module suiDouBashiVest::vest{
         assert!(locked_bal > 0, err::empty_locked_balance());
         assert!(unlock_time > ts && unlock_time < ts + vsdb::max_time(), err::invalid_lock_time());
 
-        // 2.
+        // 2. update vsdb state
+        let prev_bal = vsdb::locked_balance(vsdb);
+        let prev_end = vsdb::locked_end(vsdb);
+        vsdb::extend(vsdb, option::none<Coin<SDB>>(), extended_duration, ts, bn);
+
+        // 2. global state
+        checkpoint_(true, reg, vsdb, prev_bal, prev_end, ts, bn);
+
     }
 
     // /// Withdraw all the unlocked coin only when the due date is attained
@@ -151,7 +157,17 @@ module suiDouBashiVest::vest{
     /// None -> update global checkpoint
     /// Some -> update both global & player's checkpoint
     /// VSDB's balance has been updated
-    fun checkpoint_(reg: &mut VSDBRegistry, vsdb: &Option<VSDB>, old_locked_amount: u64, old_locked_end: u64 , time_stamp: u64){
+    fun checkpoint_(
+        user_checkpoint: bool,
+        reg: &mut VSDBRegistry,
+        vsdb: &VSDB, // option is not allowed to wrap referenced obj
+        old_locked_amount: u64,
+        old_locked_end: u64 ,
+        time_stamp: u64,
+        block_num: u64
+    ){
+        let new_locked_amount = vsdb::locked_balance(vsdb);
+        let new_locked_end = vsdb::locked_end(vsdb);
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();
 
@@ -160,23 +176,20 @@ module suiDouBashiVest::vest{
         let u_new_slope = i128::zero();
         let u_new_bias = i128::zero();
 
-        let block_num =  fake_time::bn();
         let epoch = reg.epoch;
 
         // update calculate repsecitve slope & bias
-        if(option::is_some(vsdb)){
-            let new_locked_amount = vsdb::locked_balance(option::borrow(vsdb));
-            let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
+        if(user_checkpoint){
             // Calculate slopes and biases
             // Kept at zero when they have to
             if(old_locked_end > time_stamp && old_locked_amount > 0){
                 u_old_slope = i128::div( &i128::from((old_locked_amount as u128)), &i128::from((vsdb::max_time() as u128)));
-                u_old_bias = i128::mul(&u_old_slope, &i128::from((old_locked_end as u128) - (fake_time::ts() as u128)) );
+                u_old_bias = i128::mul(&u_old_slope, &i128::from((old_locked_end as u128) - (time_stamp as u128)) );
             };
 
              if(new_locked_end > time_stamp && new_locked_amount > 0){
                 u_new_slope = i128::div( &i128::from((new_locked_amount as u128)), &i128::from((vsdb::max_time() as u128)));
-                u_new_bias = i128::mul(&u_old_slope, &i128::from((old_locked_end as u128) - (fake_time::ts() as u128)) );
+                u_new_bias = i128::mul(&u_old_slope, &i128::from((old_locked_end as u128) - (time_stamp as u128)) );
             };
 
             // Read values of scheduled changes in the slope
@@ -279,7 +292,7 @@ module suiDouBashiVest::vest{
         reg.epoch = epoch;
         // Now point_history is filled until t=now
 
-        if (option::is_some(vsdb)) {
+        if (user_checkpoint) {
             // If last point was in this block, the slope change has been applied already
             // But in such case we have 0 slope(s)
             last_point_slope = i128::add(&last_point_slope, &i128::sub(&u_new_slope, &u_old_slope));
@@ -296,8 +309,7 @@ module suiDouBashiVest::vest{
 
         table::add(&mut reg.point_history, epoch, point::new(last_point_bias, last_point_slope, last_point_ts, last_point_blk)); // create new one after value manipulation
 
-        if(option::is_some(vsdb)){
-            let new_locked_end = vsdb::locked_end(option::borrow(vsdb));
+        if(user_checkpoint){
             // Schedule the slope changes (slope is going down)
             // We subtract new_user_slope from [new_locked.end]
             // and add old_user_slope to [old_locked.end]

@@ -9,6 +9,7 @@ module suiDouBashiVest::vsdb{
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
     use sui::coin::{Self, Coin};
+    use std::option::{Self, Option};
 
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::point::{Self, Point};
@@ -132,15 +133,35 @@ module suiDouBashiVest::vsdb{
         let amount = balance::value(&self.locekd_balance.balance);
         let slope = i128::div( &i128::from((amount as u128)), &i128::from((MAX_TIME as u128)));
         let bias = i128::mul(&slope, &i128::from((self.locekd_balance.end as u128) - (time_stamp as u128)) );
+        // update epoch version
         self.user_epoch = self.user_epoch + 1;
 
         let point = point::new(bias, slope, time_stamp, block_num);
         table::add(&mut self.user_point_history, self.user_epoch, point);
     }
 
-    // public fun extend_unlock_time(self: &mut VSDB, extended_duration: u64){
-    //     table::
-    // }
+    public fun extend(
+        self: &mut VSDB,
+        coin: Option<Coin<SDB>>,
+        extended_duration: u64, // extended ! not specific value
+        ts: u64,
+        bn: u64
+    ):(u64, u64){
+        if(option::is_some<Coin<SDB>>(&coin)){
+            // extend the amount
+            balance::join(&mut self.locekd_balance.balance, coin::into_balance(option::destroy_some(coin)));
+        }else{
+            // extedn the time_lock
+            self.locekd_balance.end = self.locekd_balance.end + extended_duration;
+            option::destroy_none(coin);
+        };
+
+        update_user_point(self, ts, bn);
+
+        (balance::value(&self.locekd_balance.balance), self.locekd_balance.end)
+    }
+
+
 
     // ===== Utils =====
     /// get the voting weight depends on locked balance struct
