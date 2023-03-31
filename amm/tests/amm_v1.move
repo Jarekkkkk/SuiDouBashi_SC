@@ -13,20 +13,20 @@
 
 //     const MINIMUM_LIQUIDITY: u64 = 1000;
 
-//     // X/Y = 1/2
+//     X/Y = 1/2
 //     const TOKEN_X_AMT:u64 = 9_000_000;
 //     const TOKEN_Y_AMT: u64 = 10_000_000;
 
 //     const FEE_SCALING: u64 = 1000;
 //     const FEE: u64 = 3;
 
-//     //#[test]
+//     #[test]
 //     fun test_init_pool(){
 //         let scenario = test::begin(@0x1);
 //         test_init_pool_<AMM_V1, TOKEN_X, TOKEN_Y>(&mut scenario);
 //         test::end(scenario);
 //     }
-//     //#[test]
+//     #[test]
 //     fun test_add_liquidity() {
 //         let scenario = test::begin(@0x1);
 //         let deposit_x = 30000;
@@ -34,25 +34,25 @@
 //         add_liquidity_<AMM_V1, TOKEN_X, TOKEN_Y>(deposit_x, deposit_y, &mut scenario);
 //         test::end(scenario);
 //     }
-//     //#[test]
+//     #[test]
 //     fun test_swap_for_y() {
 //         let scenario = test::begin(@0x1);
 //         test_swap_for_y_<AMM_V1, TOKEN_X, TOKEN_Y>(TOKEN_X_AMT, TOKEN_Y_AMT, &mut scenario);
 //         test::end(scenario);
 //     }
-//     //#[test]
+//     #[test]
 //     fun test_swap_for_x() {
 //         let scenario = test::begin(@0x1);
 //         test_swap_for_x_<AMM_V1, TOKEN_X, TOKEN_Y>(TOKEN_X_AMT, TOKEN_Y_AMT, &mut scenario);
 //         test::end(scenario);
 //     }
-//     //#[test]
+//     #[test]
 //     fun test_remove_liquidity() {
 //         let scenario = test::begin(@0x1);
 //         remove_liquidity_<AMM_V1, TOKEN_X, TOKEN_Y>(TOKEN_X_AMT, TOKEN_Y_AMT, &mut scenario);
 //         test::end(scenario);
 //     }
-//     //#[test]
+//     #[test]
 //     fun test_zap_x(){
 //         let scenario = test::begin(@0x1);
 //         test_swap_for_y_<AMM_V1, TOKEN_X, TOKEN_Y>(TOKEN_X_AMT, TOKEN_Y_AMT, &mut scenario);
