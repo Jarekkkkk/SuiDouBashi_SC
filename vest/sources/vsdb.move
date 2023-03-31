@@ -80,10 +80,9 @@ module suiDouBashiVest::vsdb{
         let slope_changes = table::new<u64, I128>(ctx);
 
         // MOcked Time cuz epoch_epoch_timestamp_ms is zero in test
-        let ts = 100;//tx_context::epoch_timestamp_ms(ctx)
+        let ts = 1672531200;//tx_context::epoch_timestamp_ms(ctx)
         table::add(&mut point_history, 0, point::from(i128::zero(), i128::zero(), ts));
         table::add(&mut slope_changes, 0, i128::zero());
-
 
         transfer::share_object(
             VSDBRegistry {
@@ -351,6 +350,7 @@ module suiDouBashiVest::vsdb{
         let slope = calculate_slope(amount, max_time);
         i128::mul(&slope, &i128::from((end as u128) - (ts as u128)))
     }
+    public fun round_down_week(t: u64):u64{ t / WEEK * WEEK}
     public fun week(): u64{ WEEK }
     public fun max_time(): u64 { MAX_TIME }
 
@@ -436,11 +436,12 @@ module suiDouBashiVest::vsdb{
     fun checkpoint_(
         user_checkpoint: bool,
         self: &mut VSDBRegistry,
-        vsdb: &VSDB, // option is not allowed to wrap referenced obj
+        vsdb: &VSDB,
         old_locked_amount: u64,
         old_locked_end: u64 ,
         time_stamp: u64,
     ){
+        // TODO: we are allowed to access fields
         let new_locked_amount = locked_balance(vsdb);
         let new_locked_end =  locked_end(vsdb);
         let old_dslope = i128::zero();
@@ -453,7 +454,6 @@ module suiDouBashiVest::vsdb{
         let u_new_bias = i128::zero();
 
         let epoch = self.epoch;
-
 
         // update calculate repsecitve slope & bias
         if(user_checkpoint){
@@ -469,8 +469,7 @@ module suiDouBashiVest::vsdb{
                 u_old_bias = i128::mul(&u_old_slope, &time_left);
             };
 
-
-             if(new_locked_end > time_stamp && new_locked_amount > 0){
+            if(new_locked_end > time_stamp && new_locked_amount > 0){
                 let new_locked_amount_ = &i128::from((new_locked_amount as u128));
                 let new_locked_end_ = &i128::from((new_locked_end as u128));
                 let time_stamp_ = &i128::from((time_stamp as u128));
