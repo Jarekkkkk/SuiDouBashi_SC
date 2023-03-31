@@ -1,3 +1,3 @@
-module suiDouBashVest::gauge{
+module suiDouBashiVest::gauge{
 
 }

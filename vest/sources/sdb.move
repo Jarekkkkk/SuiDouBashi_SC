@@ -15,7 +15,7 @@ module suiDouBashiVest::sdb{
     fun init(witness: SDB, ctx: &mut TxContext){
         let (treasury, metadata) = coin::create_currency(
             witness,
-            18,
+            8,
             b"SDB",
             b"SuiDouBashi",
             b"SuiDouBashi's Utility Token",
@@ -30,6 +30,7 @@ module suiDouBashiVest::sdb{
     // entry public fun transfer(coin: Coin<SDB>, to:address){
     //     transfer::transfer(coin, to);
     // }
+    public fun decimals(): u8 { 8 }
 
 
 

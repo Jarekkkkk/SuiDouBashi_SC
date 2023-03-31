@@ -1,20 +1,12 @@
 module suiDouBashiVest::point{
-    use suiDouBashi::i128::{Self, I128};
+    use suiDouBashi::i128::{ I128};
 
 
 
     struct Point has store, copy, drop{
         bias: I128,
         slope: I128, // # -dweight / dt
-        ts: u64,
-    }
-
-    public fun empty (): Point{
-        Point {
-            bias: i128::zero(),
-            slope: i128::zero(),
-            ts: 0
-        }
+        ts: u64, // t_i (week_based)
     }
 
     public fun from(bias: I128, slope: I128, ts: u64): Point{
