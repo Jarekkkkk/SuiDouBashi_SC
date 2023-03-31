@@ -13,7 +13,7 @@ module suiDouBashiVest::point{
         Point{
             bias,
             slope,
-            ts,
+            ts, // when does this Point created
         }
     }
 

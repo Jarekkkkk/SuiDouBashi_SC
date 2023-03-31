@@ -20,7 +20,7 @@ module suiDouBashiVest::vsdb{
     use suiDouBashi::encode::base64_encode as encode;
     use suiDouBashi::i128::{Self, I128};
 
-
+    use std::debug::print;
 
     const MAX_TIME: u64 = { 4 * 365 * 86400 };
     const WEEK: u64 = { 7 * 86400 };
@@ -156,7 +156,7 @@ module suiDouBashiVest::vsdb{
         event::deposit(object::id(vsdb), locked_balance(vsdb), unlock_time);
     }
 
-    public entry fun increase_unlock_balance(
+    public entry fun increase_unlock_amount(
         self: &mut VSDBRegistry,
         vsdb: &mut VSDB,
         coin: Coin<SDB>,
@@ -176,7 +176,7 @@ module suiDouBashiVest::vsdb{
         extend(vsdb, option::some(coin), 0, ts);
 
         // 2. global state
-        checkpoint_(false, self, vsdb, locked_bal, locked_end, ts);
+        checkpoint_(true, self, vsdb, locked_bal, locked_end, ts);
 
 
         event::deposit(object::id(vsdb), locked_balance(vsdb), locked_end);
@@ -265,6 +265,10 @@ module suiDouBashiVest::vsdb{
         point::ts( point )
     }
 
+    public fun get_slope_change( reg: &VSDBRegistry, epoch: u64): &I128{
+        table::borrow( &reg.slope_changes, epoch)
+    }
+
 
     // ===== Setter  =====
     /// 1. increase version
@@ -273,8 +277,8 @@ module suiDouBashiVest::vsdb{
     /// have to called after modification of locked_balance
     fun update_user_point(self: &mut VSDB, time_stamp: u64){
         let amount = balance::value(&self.locked_balance.balance);
-        let slope = i128::div( &i128::from((amount as u128)), &i128::from((MAX_TIME as u128)));
-        let bias = i128::mul(&slope, &i128::from((self.locked_balance.end as u128) - (time_stamp as u128)) );
+        let slope = calculate_slope(amount, MAX_TIME);
+        let bias = calculate_bias(amount, MAX_TIME, self.locked_balance.end, time_stamp);
         // update epoch version
         self.user_epoch = self.user_epoch + 1;
 
@@ -442,12 +446,14 @@ module suiDouBashiVest::vsdb{
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();
 
+
         let u_old_slope = i128::zero();
         let u_old_bias = i128::zero();
         let u_new_slope = i128::zero();
         let u_new_bias = i128::zero();
 
         let epoch = self.epoch;
+
 
         // update calculate repsecitve slope & bias
         if(user_checkpoint){
@@ -463,6 +469,7 @@ module suiDouBashiVest::vsdb{
                 u_old_bias = i128::mul(&u_old_slope, &time_left);
             };
 
+
              if(new_locked_end > time_stamp && new_locked_amount > 0){
                 let new_locked_amount_ = &i128::from((new_locked_amount as u128));
                 let new_locked_end_ = &i128::from((new_locked_end as u128));
@@ -476,16 +483,21 @@ module suiDouBashiVest::vsdb{
             // Read values of scheduled changes in the slope
             // old_locked.end can be in the past and in the future
             // new_locked.end can ONLY by in the FUTURE unless everything expired: than zeros
-            old_dslope = *table::borrow(&self.slope_changes, old_locked_end);
+            if(table::contains(&self.slope_changes, old_locked_end)){
+                old_dslope = *table::borrow(&self.slope_changes, old_locked_end);
+            };
             if(new_locked_end != 0){
                 if(new_locked_end == old_locked_end){
                     new_dslope = old_dslope;
                 }else{
-                    new_dslope = *table::borrow(&self.slope_changes, new_locked_end);
+                     if(table::contains(&self.slope_changes, new_locked_end)){
+                        *table::borrow_mut(&mut self.slope_changes, new_locked_end) = new_dslope;
+                     }else{
+                        table::add(&mut self.slope_changes, new_locked_end, new_dslope);
+                     }
                 }
             };
         };
-
         // get the latest point
         let last_point = if(self.epoch > 0){
             // copy the value in table
@@ -590,15 +602,23 @@ module suiDouBashiVest::vsdb{
                 if (new_locked_end == old_locked_end) {
                     old_dslope = i128::sub( &old_dslope, &u_new_slope);  // It was a new deposit, not extension
                 };
-                *table::borrow_mut(&mut self.slope_changes, old_locked_end) = old_dslope;
+                if(table::contains(&self.slope_changes, old_locked_end)){
+                    *table::borrow_mut(&mut self.slope_changes, old_locked_end) = old_dslope;
+                }else{
+                    table::add(&mut self.slope_changes, old_locked_end, old_dslope);
+                }
             };
 
             if (new_locked_end > time_stamp) {
+                // else: we recorded it already in old_dslope
                 if (new_locked_end > old_locked_end) {
                     new_dslope =  i128::sub(&new_dslope, &u_new_slope);// old slope disappeared at this point
-                    *table::borrow_mut(&mut self.slope_changes, new_locked_end) = new_dslope;
+                     if(table::contains(&self.slope_changes, new_locked_end)){
+                        *table::borrow_mut(&mut self.slope_changes, new_locked_end) = new_dslope;
+                    }else{
+                        table::add(&mut self.slope_changes, new_locked_end, new_dslope);
+                    }
                 };
-                // else: we recorded it already in old_dslope
             };
         };
     }
@@ -635,6 +655,6 @@ module suiDouBashiVest::vsdb{
     }
     #[test] fun test_url(){
         let foo = img_url_(b"0x1234", 2, 3, 4);
-        std::debug::print(&foo);
+        print(&foo);
     }
 }
