@@ -133,9 +133,9 @@ module suiDouBashiVest::vsdb{
     ){
         // 1. assert
         let ts = clock::timestamp_ms(clock);
-        let unlock_time = ( (ts + extended_duration ) / WEEK) * WEEK;
         let locked_bal = locked_balance(vsdb);
         let locked_end = locked_end(vsdb);
+        let unlock_time = ( (locked_end + extended_duration ) / WEEK) * WEEK;
 
         assert!(locked_end > ts, err::locked());
         // TODO: destroy expired SDB when it is fully withdrawed
@@ -145,7 +145,8 @@ module suiDouBashiVest::vsdb{
         // 2. update vsdb state
         let prev_bal = locked_balance(vsdb);
         let prev_end = locked_end(vsdb);
-        extend(vsdb, option::none<Coin<SDB>>(), extended_duration, ts);
+        print(&locked_end);
+        extend(vsdb, option::none<Coin<SDB>>(), unlock_time, ts);
 
         // 2. global state
         checkpoint_(true, self, vsdb, prev_bal, prev_end, ts);
@@ -178,6 +179,37 @@ module suiDouBashiVest::vsdb{
 
 
         event::deposit(object::id(vsdb), locked_balance(vsdb), locked_end);
+    }
+
+    /// useful when transferring VSDB
+    public entry fun merge(reg: &mut VSDBRegistry, self: &mut VSDB, vsdb:VSDB, clock: &Clock, ctx: &mut TxContext){
+        let locked_bal = locked_balance(self);
+        let locked_end = locked_end(self);
+        let locked_bal_ = locked_balance(&vsdb);
+        let locked_end_ = locked_end(&vsdb);
+        let ts = clock::timestamp_ms(clock);
+
+        assert!(ts >= locked_end_ , err::locked());
+        assert!(locked_bal_ > 0, err::empty_locked_balance());
+        assert!(ts >= locked_end_ , err::locked());
+        assert!(locked_bal_ > 0, err::empty_locked_balance());
+
+        // empty the old vsdb f
+        let coin = withdraw(&mut vsdb, ctx);
+        checkpoint_(true, reg, &vsdb, locked_bal_, locked_end_, ts);
+
+        destroy(vsdb);
+
+        let end_ = if(locked_end > locked_end_){
+            locked_end
+        }else{
+            locked_end_
+        };
+
+        extend(self, option::some(coin), end_, ts);
+        checkpoint_(true, reg, self, locked_bal, locked_end, ts);
+
+        event::deposit(object::id(self), locked_balance(self), end_);
     }
 
     // /// Withdraw all the unlocked coin only when the due date is attained
@@ -408,17 +440,20 @@ module suiDouBashiVest::vsdb{
     ):(u64, u64){
         if(option::is_some<Coin<SDB>>(&coin)){
             // extend the amount
-            balance::join(&mut self.locked_balance.balance, coin::into_balance(option::destroy_some(coin)));
-        }else{
-            // extedn the time_lock
-            self.locked_balance.end = self.locked_balance.end + extended_duration;
-            option::destroy_none(coin);
+            balance::join(&mut self.locked_balance.balance, coin::into_balance(option::extract(&mut coin)));
         };
+
+        if(extended_duration != 0){
+            self.locked_balance.end = extended_duration;
+        };
+
+        option::destroy_none(coin);
 
         update_user_point(self, ts);
 
         (balance::value(&self.locked_balance.balance), self.locked_balance.end)
     }
+
 
     fun withdraw(self: &mut VSDB, ctx: &mut TxContext): Coin<SDB>{
         let bal = balance::withdraw_all(&mut self.locked_balance.balance);

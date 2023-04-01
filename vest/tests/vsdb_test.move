@@ -67,7 +67,6 @@ module suiDouBashiVest::vasdb_test{
             assert!( vsdb::get_version(&vsdb) == 1, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
-
             test::return_to_sender(s, vsdb);
         };
 
@@ -92,7 +91,8 @@ module suiDouBashiVest::vasdb_test{
             let slope = vsdb::calculate_slope(locked_value, vsdb::max_time()); // slope is unchanged
             let bias = vsdb::calculate_bias(locked_value, vsdb::max_time(), _locked_end, _g_t);
 
-
+            print(&_locked_end);
+            print(&vsdb::locked_end(&vsdb));
             assert!( vsdb::locked_end(&vsdb) == _locked_end, 0);
             assert!( vsdb::get_version(&vsdb) == 2, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
