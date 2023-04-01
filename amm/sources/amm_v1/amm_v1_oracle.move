@@ -8,7 +8,7 @@ module suiDouBashi::amm_v1_oracle{
     }
 
     public fun current_cumulative_price<V,X,Y>
-    (pool: &Pool<V,X,Y>,
+    (pool: &Pool<X,Y>,
     clock: &Clock
     ):(u256, u256)
     {

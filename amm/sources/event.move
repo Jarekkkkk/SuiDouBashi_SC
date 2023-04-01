@@ -17,25 +17,25 @@ module suiDouBashi::event{
     struct GuardianAdded has copy, drop{
         guardian: address
     }
-    struct PoolCreated<phantom V, phantom X, phantom Y> has copy, drop{
+    struct PoolCreated<phantom X, phantom Y> has copy, drop{
         pool_id: ID,
         creator: address
     }
-    struct LiquidityAdded<phantom V, phantom X, phantom Y> has copy, drop{
+    struct LiquidityAdded<phantom X, phantom Y> has copy, drop{
         deposit_x: u64,
         deposit_y: u64,
         lp_token: u64
     }
-    struct LiquidityRemoved<phantom V, phantom X, phantom Y> has copy, drop{
+    struct LiquidityRemoved<phantom X, phantom Y> has copy, drop{
         withdrawl_x: u64,
         withdrawl_y: u64,
         burned_lp: u64
     }
-    struct Swap<phantom V, phantom X, phantom Y> has copy, drop{
+    struct Swap<phantom X, phantom Y> has copy, drop{
         input: u64,
         output: u64,
     }
-    struct OracleUpdated<phantom V, phantom X, phantom Y> has copy, drop {
+    struct OracleUpdated<phantom X, phantom Y> has copy, drop {
         last_price_cumulative_x: u128,
         last_price_cumulative_y: u128,
     }
@@ -71,35 +71,35 @@ module suiDouBashi::event{
             }
         )
     }
-    public fun pool_created<V, X, Y>(pool_id: ID, creator: address){
+    public fun pool_created <X, Y>(pool_id: ID, creator: address){
         emit(
-            PoolCreated<V, X, Y>{
+            PoolCreated<X,Y>{
                 pool_id,
                 creator
             }
         )
     }
-    public fun liquidity_added<V, X, Y>(deposit_x:u64, deposit_y:u64, lp_token:u64 ){
+    public fun liquidity_added <X, Y>(deposit_x:u64, deposit_y:u64, lp_token:u64 ){
         emit(
-            LiquidityAdded<V, X, Y>{
+            LiquidityAdded<X, Y>{
                 deposit_x,
                 deposit_y,
                 lp_token
             }
         )
     }
-    public fun liquidity_removed<V, X, Y>(withdrawl_x: u64, withdrawl_y: u64, burned_lp: u64){
+    public fun liquidity_removed <X, Y>(withdrawl_x: u64, withdrawl_y: u64, burned_lp: u64){
         emit(
-            LiquidityRemoved<V, X, Y>{
+            LiquidityRemoved<X, Y>{
                 withdrawl_x,
                 withdrawl_y,
                 burned_lp
             }
         )
     }
-    public fun swap<V, X, Y>(input: u64, output: u64){
+    public fun swap<X, Y>(input: u64, output: u64){
         emit(
-            Swap<V, X, Y>{
+            Swap<X,Y>{
                 input,
                 output
             }
