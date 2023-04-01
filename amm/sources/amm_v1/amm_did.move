@@ -12,6 +12,8 @@ module suiDouBashi::amm_did{
     struct AMM_DID has key, store{
         id: UID,
         pools_playin: VecMap<String, u64>,
+
+        // bag, store multiple protoco's object that is required in tx
     }
 
     public fun create_did(ctx: &mut TxContext):AMM_DID{

@@ -70,6 +70,9 @@ module suiDouBashiVest::vsdb{
     fun assert_gov(self: & VSDBRegistry, ctx: &mut TxContext){
         assert!(self.gov == tx_context::sender(ctx), err::invalid_guardian());
     }
+    fun assert_owner(self: &VSDB, ctx: &mut TxContext){
+        assert!( self.logical_owner == tx_context::sender(ctx), err::invalid_owner());
+    }
 
     // ===== entry =====
     /// To access clock object, we have to make it
@@ -98,22 +101,22 @@ module suiDouBashiVest::vsdb{
         )
     }
 
-    public entry fun lock(self: &mut VSDBRegistry, sdb:Coin<SDB>, duration: u64, clock: &Clock, ctx: &mut TxContext){
+    public entry fun lock(reg: &mut VSDBRegistry, self:Coin<SDB>, duration: u64, clock: &Clock, ctx: &mut TxContext){
         // 1. assert
         let ts = clock::timestamp_ms(clock);
         let unlock_time = (duration + ts) / WEEK * WEEK;
 
-        assert!( coin::value(&sdb) > 0 ,err::zero_input());
+        assert!( coin::value(&self) > 0 ,err::zero_input());
         assert!( unlock_time > ts && unlock_time <= ts + MAX_TIME, err::invalid_lock_time());
 
         // 2. create vsdb & update registry
-        let amount = coin::value(&sdb);
-        let vsdb = new( sdb, unlock_time, ts, ctx);
-        self.minted_vsdb = self.minted_vsdb + 1;
-        self.locked_total = self.locked_total + (amount as u256);
+        let amount = coin::value(&self);
+        let vsdb = new( self, unlock_time, ts, ctx);
+        reg.minted_vsdb = reg.minted_vsdb + 1;
+        reg.locked_total = reg.locked_total + (amount as u256);
 
         // 3. udpate global checkpoint
-        checkpoint_(false, self, &vsdb, 0, 0, ts);
+        checkpoint_(false, reg, &vsdb, 0, 0, ts);
 
         let id = object::id(&vsdb);
 
@@ -125,16 +128,17 @@ module suiDouBashiVest::vsdb{
     }
 
     public entry fun increase_unlock_time(
-        self: &mut VSDBRegistry,
-        vsdb: &mut VSDB,
+        reg: &mut VSDBRegistry,
+        self: &mut VSDB,
         extended_duration: u64,
         clock: &Clock,
-        _ctx: &mut TxContext
+        ctx: &mut TxContext
     ){
         // 1. assert
+        assert_owner(self, ctx);
         let ts = clock::timestamp_ms(clock);
-        let locked_bal = locked_balance(vsdb);
-        let locked_end = locked_end(vsdb);
+        let locked_bal = locked_balance(self);
+        let locked_end = locked_end(self);
         let unlock_time = ( (locked_end + extended_duration ) / WEEK) * WEEK;
 
         assert!(locked_end > ts, err::locked());
@@ -143,46 +147,55 @@ module suiDouBashiVest::vsdb{
         assert!(unlock_time > ts && unlock_time < ts + MAX_TIME, err::invalid_lock_time());
 
         // 2. update vsdb state
-        let prev_bal = locked_balance(vsdb);
-        let prev_end = locked_end(vsdb);
+        let prev_bal = locked_balance(self);
+        let prev_end = locked_end(self);
         print(&locked_end);
-        extend(vsdb, option::none<Coin<SDB>>(), unlock_time, ts);
+        extend(self, option::none<Coin<SDB>>(), unlock_time, ts);
 
         // 2. global state
-        checkpoint_(true, self, vsdb, prev_bal, prev_end, ts);
+        checkpoint_(true, reg, self, prev_bal, prev_end, ts);
 
 
-        event::deposit(object::id(vsdb), locked_balance(vsdb), unlock_time);
+        event::deposit(object::id(self), locked_balance(self), unlock_time);
     }
 
     public entry fun increase_unlock_amount(
-        self: &mut VSDBRegistry,
-        vsdb: &mut VSDB,
+        reg: &mut VSDBRegistry,
+        self: &mut VSDB,
         coin: Coin<SDB>,
         clock: &Clock,
-        _ctx: &mut TxContext
+        ctx: &mut TxContext
     ){
+        assert_owner(self, ctx);
         let ts = clock::timestamp_ms(clock);
-        let locked_bal = locked_balance(vsdb);
-        let locked_end = locked_end(vsdb);
+        let locked_bal = locked_balance(self);
+        let locked_end = locked_end(self);
 
         assert!(locked_end > ts, err::locked());
         // TODO: destroy expired SDB when it is fully withdrawed
         assert!(locked_bal > 0, err::empty_locked_balance());
         assert!(coin::value(&coin) > 0 , err::emptry_coin());
 
-        // 2. update vsdb state
-        extend(vsdb, option::some(coin), 0, ts);
+        // 2. update self state
+        extend(self, option::some(coin), 0, ts);
 
         // 2. global state
-        checkpoint_(true, self, vsdb, locked_bal, locked_end, ts);
+        checkpoint_(true, reg, self, locked_bal, locked_end, ts);
 
 
-        event::deposit(object::id(vsdb), locked_balance(vsdb), locked_end);
+        event::deposit(object::id(self), locked_balance(self), locked_end);
     }
 
     /// useful when transferring VSDB
-    public entry fun merge(reg: &mut VSDBRegistry, self: &mut VSDB, vsdb:VSDB, clock: &Clock, ctx: &mut TxContext){
+    public entry fun merge(
+        reg: &mut VSDBRegistry,
+        self: &mut VSDB,
+        vsdb:VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert_owner(self, ctx);
+        assert_owner(&vsdb, ctx);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let locked_bal_ = locked_balance(&vsdb);
@@ -235,7 +248,10 @@ module suiDouBashiVest::vsdb{
 
 
     // ===== Display & Transfer =====
+
+    /// As sui's high level transfer is too strong, we preent vsdb wrongly transfer
     public entry fun transfer(self: VSDB, to:address){
+        self.logical_owner = to;
         transfer::transfer(
             self,
             to

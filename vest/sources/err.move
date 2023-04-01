@@ -13,4 +13,6 @@ module suiDouBashiVest::err{
 
     public fun emptry_coin(): u64{ Prefix + 205 }
 
+    public fun invalid_owner(): u64{ Prefix + 206 }
+
 }

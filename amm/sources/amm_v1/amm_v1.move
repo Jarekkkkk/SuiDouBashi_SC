@@ -22,6 +22,7 @@ module suiDouBashi::amm_v1{
     /// range of possible fee percentage: [0.01%, 100%]
     const FEE_SCALING:u64 = 10000;
     const PERIOD_SIZE:u64 = 1800;
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     const MINIMUM_LIQUIDITY: u64 = 10000;
     const MAX_POOL_VALUE: u64 = { // MAX_U64 / 10000
@@ -62,6 +63,8 @@ module suiDouBashi::amm_v1{
     struct Fee<phantom X, phantom Y> has store{
         fee_x:  Balance<X>,
         fee_y:  Balance<Y>,
+        index_x: u256, // fee_x/ total_supply
+        index_y: u256, // fee_y/ total_supply
         fee_percentage:u64, // 2 decimal places
         fee_on: bool,
         fee_to: address,
@@ -137,6 +140,8 @@ module suiDouBashi::amm_v1{
             balance::supply_value(&pool.lp_supply)
         )
     }
+    public fun get_total_supply<X,Y>(self: &Pool<X,Y>): u64 { balance::supply_value(&self.lp_supply)}
+
     public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u32{
         pool.last_block_timestamp
     }
@@ -459,6 +464,10 @@ module suiDouBashi::amm_v1{
         let lp_supply = balance::create_supply(LP_TOKEN<X, Y>{});
 
         let fee = Fee{
+            fee_x: balance::zero<X>(),
+            fee_y: balance::zero<Y>(),
+            index_x: 0,
+            index_y: 0,
             fee_on: false,
             fee_percentage,
             fee_to: tx_context::sender(ctx),
@@ -468,15 +477,16 @@ module suiDouBashi::amm_v1{
         let pool = Pool{
             id: object::new(ctx),
             stable,
+            locked: false,
+            lp_supply,
             reserve_x: balance::zero<X>(),
             reserve_y: balance::zero<Y>(),
             reserve_lp: balance::zero<LP_TOKEN<X,Y>>(),
-            lp_supply,
             last_block_timestamp: (tx_context::epoch(ctx) as u32),
             last_price_x_cumulative: 0,
             last_price_y_cumulative: 0,
             fee,
-            locked: false,
+            player_claims: table::new<address, Claim>(ctx)
         };
         let pool_name = get_pool_name<X,Y>();
         //TODO: register whole name including involved coin type
@@ -711,8 +721,16 @@ module suiDouBashi::amm_v1{
         assert!(pool_bal_x <= MAX_POOL_VALUE, err::pool_max_value());
         let coin_y = coin::take<Y>(&mut pool.reserve_y, output_y, ctx);
 
-        let updated_res_x = amm_math::mul_to_u128(balance::value<X>(&pool.reserve_x), 1000) - (( value_x * 3 ) as u128 );
-        let updated_res_y = amm_math::mul_to_u128(balance::value<Y>(&pool.reserve_y), 1000);
+        // accrue the fees and move from pool reserves
+        let fee = value_x * pool.fee.fee_percentage / FEE_SCALING;
+        let coin_fee = coin::take(&mut pool.reserve_x, fee, ctx);
+        coin::put(&mut pool.fee.fee_x, coin_fee);
+        if(pool.fee.index_x > 0){
+            pool.fee.index_x = pool.fee.index_x + (fee as u256) * SCALE_FACTOR / (get_total_supply(pool) as u256);
+        };
+
+        let updated_res_x =( balance::value<X>(&pool.reserve_x) as u128);
+        let updated_res_y =( balance::value<Y>(&pool.reserve_y) as u128);
         assert!(updated_res_x * updated_res_y >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
 
         return(
@@ -765,8 +783,18 @@ module suiDouBashi::amm_v1{
         assert!(pool_bal_y <= MAX_POOL_VALUE, err::pool_max_value());
         let coin_y = coin::take<X>(&mut pool.reserve_x, output_x, ctx);
 
-        let updated_res_x = amm_math::mul_to_u128(balance::value<X>(&pool.reserve_x), 1000);
-        let updated_res_y = amm_math::mul_to_u128(balance::value<Y>(&pool.reserve_y), 1000) - (( value_y * 3 ) as u128 );
+        // fee & ratio
+        let fee = value_y * pool.fee.fee_percentage / FEE_SCALING;
+        let coin_fee = coin::take(&mut pool.reserve_y, fee, ctx);
+        coin::put(&mut pool.fee.fee_y, coin_fee);
+        if(pool.fee.index_y > 0){
+            pool.fee.index_y = pool.fee.index_y + (fee as u256) * SCALE_FACTOR / (get_total_supply(pool) as u256);
+        };
+
+
+        // check x * y >= k
+        let updated_res_x =( balance::value<X>(&pool.reserve_x) as u128);
+        let updated_res_y =( balance::value<Y>(&pool.reserve_y) as u128);
         assert!(updated_res_x * updated_res_y >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
 
         return (

@@ -67,6 +67,7 @@ module suiDouBashiVest::vasdb_test{
             assert!( vsdb::get_version(&vsdb) == 1, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
+            print(&end);
             test::return_to_sender(s, vsdb);
         };
 
