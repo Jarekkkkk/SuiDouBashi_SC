@@ -7,7 +7,7 @@ module suiDouBashiVest::err{
 
     public fun invalid_lock_time():u64 { Prefix + 202 }
 
-    public fun expired_escrow():u64 { Prefix + 203 }
+    public fun locked():u64 { Prefix + 203 }
 
     public fun empty_locked_balance():u64{ Prefix + 204 }
 

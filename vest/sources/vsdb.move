@@ -33,7 +33,6 @@ module suiDouBashiVest::vsdb{
         url: Url,
         // useful for preventing high-level transfer function & traceability of the owner
         logical_owner: address,
-
         // version: latest count
         user_epoch: u64,
         // this table is bined at above user_epoch or global_epoch (?)
@@ -48,7 +47,7 @@ module suiDouBashiVest::vsdb{
         /// ID of VSDB
         id: ID,
         balance: Balance<SDB>,
-        end: u64
+        end: u64 // week-based
     }
 
     struct VSDBCap has key, store { id: UID }
@@ -136,9 +135,9 @@ module suiDouBashiVest::vsdb{
         let ts = clock::timestamp_ms(clock);
         let unlock_time = ( (ts + extended_duration ) / WEEK) * WEEK;
         let locked_bal = locked_balance(vsdb);
-        let locked_end = locked_balance(vsdb);
+        let locked_end = locked_end(vsdb);
 
-        assert!(locked_end > ts, err::expired_escrow());
+        assert!(locked_end > ts, err::locked());
         // TODO: destroy expired SDB when it is fully withdrawed
         assert!(locked_bal > 0, err::empty_locked_balance());
         assert!(unlock_time > ts && unlock_time < ts + MAX_TIME, err::invalid_lock_time());
@@ -164,9 +163,9 @@ module suiDouBashiVest::vsdb{
     ){
         let ts = clock::timestamp_ms(clock);
         let locked_bal = locked_balance(vsdb);
-        let locked_end = locked_balance(vsdb);
+        let locked_end = locked_end(vsdb);
 
-        assert!(locked_end > ts, err::expired_escrow());
+        assert!(locked_end > ts, err::locked());
         // TODO: destroy expired SDB when it is fully withdrawed
         assert!(locked_bal > 0, err::empty_locked_balance());
         assert!(coin::value(&coin) > 0 , err::emptry_coin());
@@ -184,10 +183,10 @@ module suiDouBashiVest::vsdb{
     // /// Withdraw all the unlocked coin only when the due date is attained
     public entry fun unlock(self: &mut VSDBRegistry, vsdb: VSDB, clock: &Clock, ctx: &mut TxContext){
         let locked_bal = locked_balance(&vsdb);
-        let locked_end = locked_balance(&vsdb);
+        let locked_end = locked_end(&vsdb);
         let ts = clock::timestamp_ms(clock);
 
-        assert!(ts >= locked_end , err::expired_escrow());
+        assert!(ts >= locked_end , err::locked());
         assert!(locked_bal > 0, err::empty_locked_balance());
 
         let coin = withdraw(&mut vsdb, ctx);
@@ -264,9 +263,18 @@ module suiDouBashiVest::vsdb{
         point::ts( point )
     }
 
-    public fun get_slope_change( reg: &VSDBRegistry, epoch: u64): &I128{
+    // - reg
+    public fun get_global_slope_change( reg: &VSDBRegistry, epoch: u64): &I128{
         table::borrow( &reg.slope_changes, epoch)
     }
+
+    public fun get_latest_global_point_history(reg: &VSDBRegistry): &Point{
+        get_global_point_history(reg, reg.epoch)
+    }
+    public fun get_global_point_history(reg: &VSDBRegistry, epoch: u256): &Point{
+        table::borrow(&reg.point_history, epoch)
+    }
+
 
 
     // ===== Setter  =====
@@ -301,12 +309,16 @@ module suiDouBashiVest::vsdb{
             return ((i128::as_u128(&last_point_bias))as u64)
         }
     }
-
     public fun latest_voting_weight(self: &VSDB, clock: &Clock):u64{
         voting_weight(self, clock::timestamp_ms(clock))
     }
 
+
+    public fun latest_total_voting_weight(reg: &VSDBRegistry, clock: &Clock): u64{
+        total_voting_weight(reg, clock::timestamp_ms(clock))
+    }
     public fun total_voting_weight(self: &VSDBRegistry, ts: u64): u64{
+        // calculate by latest epoch
         let point = table::borrow(&self.point_history, self.epoch);
         let last_point_bias = point::bias(point);
         let last_point_slope = point::slope(point);
@@ -342,6 +354,7 @@ module suiDouBashiVest::vsdb{
 
         return ((i128::as_u128(&last_point_bias)) as u64)
     }
+
     public fun calculate_slope(amount: u64, max_time: u64): I128{
         i128::div( &i128::from((amount as u128)), &i128::from((max_time as u128)))
     }
@@ -409,6 +422,7 @@ module suiDouBashiVest::vsdb{
 
     fun withdraw(self: &mut VSDB, ctx: &mut TxContext): Coin<SDB>{
         let bal = balance::withdraw_all(&mut self.locked_balance.balance);
+        self.locked_balance.end = 0;
         coin::from_balance(bal, ctx)
     }
 
@@ -447,7 +461,6 @@ module suiDouBashiVest::vsdb{
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();
 
-
         let u_old_slope = i128::zero();
         let u_old_bias = i128::zero();
         let u_new_slope = i128::zero();
@@ -460,23 +473,13 @@ module suiDouBashiVest::vsdb{
             // Calculate slopes and biases
             // Kept at zero when they have to
             if(old_locked_end > time_stamp && old_locked_amount > 0){
-                let old_locked_amount_ = &i128::from((old_locked_amount as u128));
-                let old_locked_end_ = &i128::from((old_locked_end as u128));
-                let time_stamp_ = &i128::from((time_stamp as u128));
-
-                u_old_slope = i128::div( old_locked_amount_, &i128::from((MAX_TIME as u128)));
-                let time_left = i128::sub( old_locked_end_, time_stamp_);
-                u_old_bias = i128::mul(&u_old_slope, &time_left);
+                u_old_slope = calculate_slope(old_locked_amount, MAX_TIME);
+                u_old_bias = calculate_bias(old_locked_amount, MAX_TIME, old_locked_end, time_stamp);
             };
 
             if(new_locked_end > time_stamp && new_locked_amount > 0){
-                let new_locked_amount_ = &i128::from((new_locked_amount as u128));
-                let new_locked_end_ = &i128::from((new_locked_end as u128));
-                let time_stamp_ = &i128::from((time_stamp as u128));
-
-                u_new_slope = i128::div( new_locked_amount_, &i128::from((MAX_TIME as u128)));
-                let time_left = i128::sub( new_locked_end_, time_stamp_);
-                u_new_bias = i128::mul(&u_new_slope, &time_left);
+                u_new_slope = calculate_slope(new_locked_amount, MAX_TIME);
+                u_new_bias = calculate_bias(new_locked_amount, MAX_TIME, new_locked_end, time_stamp);
             };
 
             // Read values of scheduled changes in the slope
@@ -485,18 +488,18 @@ module suiDouBashiVest::vsdb{
             if(table::contains(&self.slope_changes, old_locked_end)){
                 old_dslope = *table::borrow(&self.slope_changes, old_locked_end);
             };
-            if(new_locked_end != 0){
-                if(new_locked_end == old_locked_end){
+
+            if(new_locked_end != 0){ //except for withdraw action
+                if(new_locked_end == old_locked_end){ // extend amount & create --> we have to updatw d_slope
                     new_dslope = old_dslope;
-                }else{
-                     if(table::contains(&self.slope_changes, new_locked_end)){
-                        *table::borrow_mut(&mut self.slope_changes, new_locked_end) = new_dslope;
-                     }else{
-                        table::add(&mut self.slope_changes, new_locked_end, new_dslope);
-                     }
+                }else{ // extend unlocked time
+                    if(table::contains(&self.slope_changes, new_locked_end)){
+                        new_dslope = *table::borrow(&self.slope_changes, new_locked_end);
+                    };
                 }
             };
         };
+
         // get the latest point
         let last_point = if(self.epoch > 0){
             // copy the value in table
@@ -513,53 +516,57 @@ module suiDouBashiVest::vsdb{
         // Go over weeks to fill history and calculate what the current point is
 
         // things get easier if we copy all the fields value first
-        let last_checkpoint = point::ts(&last_point); // make sure checkpoint is multiply of WEEK
 
         let last_point_bias = point::bias(&last_point);
         let last_point_slope = point::slope(&last_point);
         let last_point_ts = point::ts(&last_point);
 
         // incremntal period by week
-        let t_i = (last_checkpoint / WEEK) * WEEK;
+        let t_i = (last_point_ts / WEEK) * WEEK;
         // update the weekly checkpoint
         let i = 0;
         while( i < 255 ){
-            t_i = t_i + WEEK;
-
+            // Hopefully it won't happen that this won't get used in 5 years!
+            // If it does, users will be able to withdraw but vote weight will be broken
+            t_i = t_i + WEEK; // jump to endpoint of interval where checkpoint at
             let d_slope = i128::zero();
+
             if( t_i > time_stamp ){
-                //latest, --> the loop will only execute once
+                //latest, all histroy has been filled, no need of recording point_history
                 t_i = time_stamp;
             }else{
-                // obsolete point to update
-                d_slope = *table::borrow(&self.slope_changes, t_i);
+                // get the d_slope of this interval, only update when the period is passed
+                if(table::contains(&self.slope_changes, t_i)){
+                    d_slope = *table::borrow(&self.slope_changes, t_i);
+                };
             };
 
-            let time_left = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_checkpoint as u128)));
-            // calculate next week's bias
+            let time_left = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
+
+            // update ned bias & slope as we insert new checkpoint
             last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left));
             last_point_slope = i128::add(&last_point_slope, &d_slope);
 
             let compare_bias = i128::compare(&last_point_bias, &i128::zero());
             // if last_point_bais <= 0
             if(compare_bias == 1 || compare_bias == 0){
+                // this could be negative as current interval of 2 checkpoint is larger than previous interval
                 last_point_bias = i128::zero();
             };
             let compare_slope = i128::compare(&last_point_slope, &i128::zero());
             // if last_point_slope <= 0
             if(compare_slope == 1 || compare_slope == 0){
+                // this won't happen, just make sure
                 last_point_slope = i128::zero();
             };
 
-            last_checkpoint = t_i;
             last_point_ts = t_i;
-
 
             epoch = epoch + 1;
             if(t_i == time_stamp){
                 break
             }else{
-                // new version update
+                // update if checkpoint is in obsolete weekly interval
                 let point = point::from(last_point_bias, last_point_slope, last_point_ts);
                 table::add(&mut self.point_history, epoch, point);
             };
@@ -575,21 +582,28 @@ module suiDouBashiVest::vsdb{
             // But in such case we have 0 slope(s)
             last_point_slope = i128::add(&last_point_slope, &i128::sub(&u_new_slope, &u_old_slope));
             last_point_bias = i128::add(&last_point_bias, &i128::sub(&u_new_bias, &u_old_bias));
+            //  if last_point_slope < 0
             if (i128::compare(&last_point_slope, &i128::zero()) == 1) {
                 last_point_slope = i128::zero();
             };
+            //  if last_point_bias < 0
             if (i128::compare(&last_point_bias, &i128::zero()) == 1) {
                 last_point_bias = i128::zero();
             };
         };
 
+        let _foo = last_point_slope;
+        let _fo = last_point_bias;
+
         // Record the changed point into history
-        let last_point = point::from(last_point_bias, last_point_slope, last_point_ts);
-        if(table::contains(&self.point_history, epoch)){
-            *table::borrow_mut(&mut self.point_history, epoch) = last_point;
-        }else{
-            table::add(&mut self.point_history, epoch, last_point);
-        };
+        // let last_point = point::from(last_point_bias, last_point_slope, last_point_ts);
+        // if(table::contains(&self.point_history, epoch)){
+        //     *table::borrow_mut(&mut self.point_history, epoch) = last_point;
+        // }else{
+
+        // };
+        // update latest epoch
+        table::add(&mut self.point_history, epoch, last_point);
 
         if(user_checkpoint){
             // Schedule the slope changes (slope is going down)
@@ -598,9 +612,11 @@ module suiDouBashiVest::vsdb{
             if (old_locked_end > time_stamp) {
                 // old_dslope was <something> - u_old.slope, so we cancel that
                 old_dslope = i128::add(&old_dslope, &u_old_slope);
-                if (new_locked_end == old_locked_end) {
+
+                if (new_locked_end == old_locked_end) { // extend_amount
                     old_dslope = i128::sub( &old_dslope, &u_new_slope);  // It was a new deposit, not extension
                 };
+                // update old_locked.end in slope_changes
                 if(table::contains(&self.slope_changes, old_locked_end)){
                     *table::borrow_mut(&mut self.slope_changes, old_locked_end) = old_dslope;
                 }else{
@@ -610,13 +626,16 @@ module suiDouBashiVest::vsdb{
 
             if (new_locked_end > time_stamp) {
                 // else: we recorded it already in old_dslope
-                if (new_locked_end > old_locked_end) {
+                if (new_locked_end > old_locked_end) { // lock & extend locked_time
                     new_dslope =  i128::sub(&new_dslope, &u_new_slope);// old slope disappeared at this point
+
+                    // update new_locked.end in slope_changes
                      if(table::contains(&self.slope_changes, new_locked_end)){
                         *table::borrow_mut(&mut self.slope_changes, new_locked_end) = new_dslope;
                     }else{
                         table::add(&mut self.slope_changes, new_locked_end, new_dslope);
                     }
+                    // else: we recorded it already in old_dslope
                 };
             };
         };
