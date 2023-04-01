@@ -72,7 +72,8 @@ module suiDouBashi::amm_v1{
     }
 
     struct Claim has store{
-        position_x: u64,
+        lp_balance: u64,
+        position_x: u64, //
         position_y: u64,
         claimable_x: u64,
         claimable_y: u64
@@ -186,6 +187,48 @@ module suiDouBashi::amm_v1{
             pool.last_price_y_cumulative = pool.last_price_y_cumulative + p_1 * elapsed;
         };
         pool.last_block_timestamp = block_timestamp;
+    }
+
+    fun update_claim<X,Y>(self: &mut Pool<X,Y>, player: address){
+        let lp_balance_ = if(table::contains(&self.player_claims, player)){
+            table::borrow(&self.player_claims, player)
+        }else{
+            0
+        };
+
+        if(lp_balance_ > 0){
+            let claim = table::borrow_mut(&mut self.player_claims, player);
+            let position_x_ = claim.position_x;
+            let position_y_ = claim.position_y;
+            let claimable_x_ = claim.claimable_x;
+            let claimable_y_ = claim.claimable_y;
+            claim.position_x = self.fee.index_x;
+            claim.position_y = self.fee.index_y;
+            let delta_x = self.fee.index_x - position_x_;
+            let delta_y = self.fee.index_y - position_y_;
+
+            if(delta_x > 0){
+                let share = lp_balance_ * delta_x / SCALE_FACTOR;
+                claim.claimable_x = claim.claimable_x + share;
+            };
+            if(delta_y > 0){
+                let share = lp_balance_ * delta_y / SCALE_FACTOR;
+                claim.claimable_y = claim.claimable_y + share;
+            };
+        }else{
+            // new player
+            let claim = Claim{
+                lp_balance: 0,
+                position_x: self.fee.index_x,
+                position_y: self.fee.index_y,
+                claimable_x: 0,
+                claimable_y: 0,
+            };
+            table::add(&mut self.player_claims, player, claim);
+        };
+        // calculate in respecrive function
+        // let bal_ = table::borrow(&self.player_claims, player);
+        // *table::borrow_mut(&mut self.player_claims, player) = bal_ + ;
     }
 
     // ===== public Entry =====
