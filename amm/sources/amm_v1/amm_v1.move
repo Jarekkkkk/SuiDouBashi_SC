@@ -66,9 +66,6 @@ module suiDouBashi::amm_v1{
         index_x: u256, // fee_x/ total_supply
         index_y: u256, // fee_y/ total_supply
         fee_percentage:u64, // 2 decimal places
-        fee_on: bool,
-        fee_to: address,
-        k_last: u128, // TODO: extend the size after sui update u64 value to u256 in coin package
     }
 
     struct Observation has store {
@@ -166,6 +163,8 @@ module suiDouBashi::amm_v1{
         };
         coin
     }
+
+    // ===== getter =====
     public fun get_pool_name<X,Y>():String{
         let (_, _, symbol_x) = type::get_package_module_type<X>();
         let (_, _, symbol_y) = type::get_package_module_type<Y>();
@@ -236,7 +235,8 @@ module suiDouBashi::amm_v1{
         self.last_block_timestamp = ts;
     }
 
-    /// updated after respective balance changes, such as 'add liquidity', 'remove liquidity', 'transfer lp token', 'claim fees', but lp_balance has to be updated after this udpate claim
+    // updated after respective balance changes, such as 'add liquidity', 'remove liquidity', 'transfer lp token', 'claim fees', but lp_balance has to be updated after this udpate claim
+    /// updats address's claim history before balance changed
     fun update_claim<X,Y>(self: &mut Pool<X,Y>, player: address){
         if(!table::contains(&self.player_claims, player)){
               let claim = Claim{
@@ -258,6 +258,7 @@ module suiDouBashi::amm_v1{
             let claimable_y = claim.claimable_y;
             update_position_x(claim, self.fee.index_x);
             update_position_y(claim, self.fee.index_y);
+            // Fee will on be incremental
             let delta_x = self.fee.index_x - position_x;
             let delta_y = self.fee.index_y - position_y;
 
@@ -298,20 +299,10 @@ module suiDouBashi::amm_v1{
         assert_pool_unlocked(pool);
         pool.locked = locked;
     }
-    public entry fun update_fee_on<X,Y>(pool_gov: &PoolGov,pool: &mut Pool<X,Y>, fee_on: bool, ctx:&mut TxContext){
-        assert_guardian(pool_gov, tx_context::sender(ctx));
-        assert_pool_unlocked(pool);
-        pool.fee.fee_on = fee_on;
-    }
     public entry fun update_fee_percentage<X,Y>(pool_gov: &PoolGov,pool: &mut Pool<X,Y>, fee_percentage: u64, ctx:&mut TxContext){
         assert_guardian(pool_gov, tx_context::sender(ctx));
         assert_pool_unlocked(pool);
         pool.fee.fee_percentage = fee_percentage;
-    }
-    public entry fun update_fee_to<X,Y>(pool_gov: &PoolGov, pool: &mut Pool<X,Y>, _fee_to:address, ctx: &mut TxContext){
-        assert_guardian(pool_gov, tx_context::sender(ctx));
-        assert_pool_unlocked(pool);
-        pool.fee.fee_to = _fee_to;
     }
     // - pool
     public entry fun create_pool<X, Y>(
@@ -557,10 +548,7 @@ module suiDouBashi::amm_v1{
             fee_y: balance::zero<Y>(),
             index_x: 0,
             index_y: 0,
-            fee_on: false,
             fee_percentage,
-            fee_to: tx_context::sender(ctx),
-            k_last: 0,
         };
         let observation = Observation{
             timestamp: ts,
@@ -631,9 +619,7 @@ module suiDouBashi::amm_v1{
         let value_y = coin::value(&coin_y);
         assert!(value_x > 0 && value_y > 0, err::zero_amount());
 
-        // charge the fee when fee is on
-        charge_fee_(pool, ctx);
-
+        // quote the inputs
         let (reserve_x, reserve_y, lp_supply) = get_reserves(pool);
         let (deposit_x, deposit_y, coin_x, coin_y) = if (reserve_x == 0 && reserve_y == 0){
             (value_x, value_y, coin_x, coin_y)
@@ -657,6 +643,7 @@ module suiDouBashi::amm_v1{
             }
         };
 
+        // mint LP
         let lp_output = if( balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply) == 0){
             let amount = (amm_math::mul_sqrt(deposit_x, deposit_y) - MINIMUM_LIQUIDITY);
             let min = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
@@ -676,8 +663,8 @@ module suiDouBashi::amm_v1{
         let pool_coin_y = balance::join<Y>(&mut pool.reserve_y,  coin::into_balance(coin_y));
         assert!(pool_coin_x < MAX_POOL_VALUE && pool_coin_y < MAX_POOL_VALUE ,err::pool_max_value());
 
-        if(pool.fee.fee_on) pool.fee.k_last = amm_math::mul_to_u128(pool_coin_x, pool_coin_y);
         let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_output);
+
         return (
             coin::from_balance(lp_balance, ctx),
             lp_output,
@@ -714,7 +701,6 @@ module suiDouBashi::amm_v1{
         Coin<Y>,
         u64,
     ){
-        charge_fee_(pool, ctx);
 
         let lp_value = coin::value(&lp_token);
         assert!(lp_value > 0, err::zero_amount());
@@ -733,7 +719,6 @@ module suiDouBashi::amm_v1{
         let coin_y = coin::take<Y>(&mut pool.reserve_y, withdrawl_y, ctx);
         balance::decrease_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply,coin::into_balance(lp_token));
 
-        if(pool.fee.fee_on) pool.fee.k_last = amm_math::mul_to_u128(balance::value<X>(&pool.reserve_x),balance::value<Y>(&pool.reserve_y));
         return (
             coin_x,
             coin_y,
@@ -753,24 +738,24 @@ module suiDouBashi::amm_v1{
     /// Assume: LP_Provider hold t amount of LP_TOKEN in the period [t1, t2]
     /// Accumlated Fee between interval as a percentage of the pool  = `(( t / sqrt(k1) ) - ( t / sqrt(k2) ) / ( t/sqrt(k2) )` when k2 is larger than k1
     /// TODO: velodrone's model doesn't charge further fees
-    fun charge_fee_<X,Y>(pool: &mut Pool<X,Y>, ctx: &mut TxContext){
-        if(pool.fee.fee_on){
-            let (reserve_x, reserve_y, _) = get_reserves(pool);
-            let root_k = amm_math::mul_sqrt(reserve_x, reserve_y);
-            let root_k_last = amm_math::sqrt_u64(pool.fee.k_last);
-            if(root_k > root_k_last){  // we only charge the fee when liquidity increase
-                let numerator = amm_math::mul_to_u128(balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply), (root_k - root_k_last));
-                let denominator = amm_math::mul_to_u128(5, root_k) + (root_k_last as u128);
-                let liquidity = ((numerator / denominator) as u64 );
-                if(liquidity > 0){
-                    let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, liquidity);
-                    transfer::public_transfer(coin::from_balance<LP_TOKEN<X,Y>>(lp_balance,ctx),tx_context::sender(ctx));
-                }
-            }
-        }else if(pool.fee.k_last != 0){
-            pool.fee.k_last = 0
-        }
-    }
+    // fun charge_fee_<X,Y>(pool: &mut Pool<X,Y>, ctx: &mut TxContext){
+    //     if(pool.fee.fee_on){
+    //         let (reserve_x, reserve_y, _) = get_reserves(pool);
+    //         let root_k = amm_math::mul_sqrt(reserve_x, reserve_y);
+    //         let root_k_last = amm_math::sqrt_u64(pool.fee.k_last);
+    //         if(root_k > root_k_last){  // we only charge the fee when liquidity increase
+    //             let numerator = amm_math::mul_to_u128(balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply), (root_k - root_k_last));
+    //             let denominator = amm_math::mul_to_u128(5, root_k) + (root_k_last as u128);
+    //             let liquidity = ((numerator / denominator) as u64 );
+    //             if(liquidity > 0){
+    //                 let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, liquidity);
+    //                 transfer::public_transfer(coin::from_balance<LP_TOKEN<X,Y>>(lp_balance,ctx),tx_context::sender(ctx));
+    //             }
+    //         }
+    //     }else if(pool.fee.k_last != 0){
+    //         pool.fee.k_last = 0
+    //     }
+    // }
     // ===== SWAP =====
     fun swap_for_y_<X, Y>(
         pool: &mut Pool<X, Y>,

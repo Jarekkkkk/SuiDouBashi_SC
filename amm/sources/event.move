@@ -39,6 +39,20 @@ module suiDouBashi::event{
         last_price_cumulative_x: u128,
         last_price_cumulative_y: u128,
     }
+    struct Sync<phantom X, phantom Y> has copy, drop{
+        res_x: u64,
+        res_y: u64
+    }
+    struct Fee<phantom X, phantom Y> has copy, drop{
+        to: address,
+        amount_x: u64,
+        amount_y: u64
+    }
+    struct Claim<phantom X, phantom Y> has copy, drop{
+        from: address,
+        amount_x: u64,
+        amount_y: u64
+    }
 
     // - ESCROW
     struct Deposit {}
@@ -105,7 +119,32 @@ module suiDouBashi::event{
             }
         )
     }
+    public fun sync<X, Y>(res_x: u64, res_y: u64){
+        emit(
+            Sync<X,Y>{
+                res_x,
+                res_y
+            }
+        )
+    }
+    public fun fee<X, Y>(to: address, amount_x: u64, amount_y: u64){
+        emit(
+            Fee<X,Y>{
+                to,
+                amount_x,
+                amount_y
+            }
+        )
+    }
+    public fun claim<X, Y>(from: address, amount_x: u64, amount_y: u64){
+        emit(
+            Claim<X,Y>{
+                from,
+                amount_x,
+                amount_y
+            }
+        )
+    }
 
-    // - ESCROW
 
 }
