@@ -6,6 +6,7 @@ module suiDouBashi::amm_v1{
     use sui::transfer;
     use std::vector;
     use sui::table::{Self, Table};
+    use sui::table_vec::{Self,TableVec};
     use sui::pay;
     use sui::math;
     use std::string::{Self, String};
@@ -14,17 +15,17 @@ module suiDouBashi::amm_v1{
     use suiDouBashi::err;
     use suiDouBashi::event;
     use suiDouBashi::amm_math;
-    use suiDouBashi::uq128x128;
     use suiDouBashi::type;
     use suiDouBashi::formula;
 
     // === Const ===
     /// range of possible fee percentage: [0.01%, 100%]
     const FEE_SCALING:u64 = 10000;
-    const PERIOD_SIZE:u64 = 1800;
+     // Capture oracle reading every 10 minutes
+    const PERIOD_SIZE:u64 = 600;
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
-    const MINIMUM_LIQUIDITY: u64 = 10000;
+    const MINIMUM_LIQUIDITY: u64 = 1000;
     const MAX_POOL_VALUE: u64 = { // MAX_U64 / 10000
         18446744073709551615 / 10000
     };
@@ -33,8 +34,6 @@ module suiDouBashi::amm_v1{
 
     // ===== Object =====
     // - OTW
-    // TODO: distinguished by pool type
-    struct AMM_V1 has drop {}
     struct LP_TOKEN<phantom X, phantom Y> has drop {}
 
     // - GOV
@@ -43,19 +42,20 @@ module suiDouBashi::amm_v1{
         pools: Table<String, ID>,
         guardian: address
     }
-    // - Pool
     struct Pool<phantom X, phantom Y> has key {
         id: UID,
         stable:bool,
         locked: bool,
         lp_supply: Supply<LP_TOKEN<X, Y>>,
+        /// reserves
         reserve_x: Balance<X>,
         reserve_y: Balance<Y>,
         reserve_lp: Balance<LP_TOKEN<X, Y>>,
-        last_block_timestamp: u32,
-        // observation
+        /// oracle
+        last_block_timestamp: u64,
         last_price_x_cumulative: u256,
         last_price_y_cumulative: u256,
+        observations: TableVec<Observation>,
         fee:Fee<X,Y>,
         player_claims: Table<address, Claim>
         // TODO: falshloan uage
@@ -71,12 +71,52 @@ module suiDouBashi::amm_v1{
         k_last: u128, // TODO: extend the size after sui update u64 value to u256 in coin package
     }
 
+    struct Observation has store {
+        timestamp: u64,
+        reserve_x_cumulative: u256,
+        reserve_y_cumulative: u256,
+    }
+
+    fun get_observation<X,Y>(self: &Pool<X,Y>, idx: u64):&Observation{
+        table_vec::borrow(&self.observations, idx)
+    }
+
+    fun get_latest_observation<X,Y>(self: &Pool<X,Y>):&Observation{
+        get_observation(self, table_vec::length(&self.observations) - 1)
+    }
+
+    fun add_reserve_x_cumulative(o: &mut Observation, increment: u256){
+        o.reserve_x_cumulative = o.reserve_x_cumulative + increment;
+    }
+    fun add_reserve_y_cumulative(o: &mut Observation, increment: u256){
+        o.reserve_y_cumulative = o.reserve_y_cumulative + increment;
+    }
+
+
+    /// This can be transferred into DID, and assign th Balance<LP>
+    /// but considering high-level transfer api calling, balance might not be updated when using high-level trasnfer func
     struct Claim has store{
         lp_balance: u64,
-        position_x: u64, //
-        position_y: u64,
+        position_x: u256, //
+        position_y: u256,
         claimable_x: u64,
         claimable_y: u64
+    }
+
+    fun update_claim_lp_balance(claim: &mut Claim, value: u64){
+        claim.lp_balance = value;
+    }
+    fun update_position_x(claim: &mut Claim, value: u256){
+        claim.position_x = value;
+    }
+    fun update_position_y(claim: &mut Claim, value: u256){
+        claim.position_y = value;
+    }
+    fun update_claimable_x(claim: &mut Claim, value: u64){
+        claim.claimable_x = value;
+    }
+    fun update_claimable_y(claim: &mut Claim, value: u64){
+        claim.claimable_y = value;
     }
 
     // ===== Assertion =====
@@ -143,12 +183,10 @@ module suiDouBashi::amm_v1{
     }
     public fun get_total_supply<X,Y>(self: &Pool<X,Y>): u64 { balance::supply_value(&self.lp_supply)}
 
-    public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u32{
+    public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u64{
         pool.last_block_timestamp
     }
-    public fun get_cumulative_prices<X,Y>(pool: &Pool<X,Y>):(u256, u256){
-        (pool.last_price_x_cumulative, pool.last_price_y_cumulative)
-    }
+
     /// currently we are unable to get either block.timestamp & epoch, so we directly fetch the reserve's pool
     public fun get_x_price(res_x: u64, res_y:u64): u64{
         res_y / res_x
@@ -174,50 +212,34 @@ module suiDouBashi::amm_v1{
         ((numerator / (denominator as u128)) as u64)
     }
     /// record the last block_timestamp before any pool mutation
-    fun update_timestamp<X,Y>(pool: &mut Pool<X,Y>, clock: &Clock){
-        let res_x = ( balance::value<X>(&pool.reserve_x) as u128);
-        let res_y = ( balance::value<Y>(&pool.reserve_y) as u128);
-        let block_timestamp = (( clock::timestamp_ms(clock) % (sui::math::pow(2,32)) ) as u32);
-        let elapsed =(( block_timestamp - pool.last_block_timestamp) as u256);
+    fun update_timestamp<X,Y>(self: &mut Pool<X,Y>, clock: &Clock){
+        let res_x = (balance::value<X>(&self.reserve_x) as u256);
+        let res_y = (balance::value<Y>(&self.reserve_y) as u256);
+        let ts = clock::timestamp_ms(clock);
+        let elapsed =(( ts - self.last_block_timestamp) as u256); // might be overflow !!
 
         if(elapsed > 0 && res_x != 0 && res_y != 0){
-            let p_0 = uq128x128::to_u256(uq128x128::div(uq128x128::encode(res_y), res_x));
-            let p_1 = uq128x128::to_u256(uq128x128::div(uq128x128::encode(res_x), res_y));
-            pool.last_price_x_cumulative = pool.last_price_x_cumulative + p_0 * elapsed;
-            pool.last_price_y_cumulative = pool.last_price_y_cumulative + p_1 * elapsed;
+            self.last_price_x_cumulative = self.last_price_x_cumulative + (res_x * elapsed);
+            self.last_price_y_cumulative = self.last_price_y_cumulative + (res_y * elapsed);
         };
-        pool.last_block_timestamp = block_timestamp;
+
+        let observation = get_latest_observation(self);
+        elapsed = ((ts - observation.timestamp) as u256);
+        if(elapsed > (PERIOD_SIZE as u256)){
+            table_vec::push_back(&mut self.observations,
+            Observation{
+                timestamp: ts,
+                reserve_x_cumulative: self.last_price_x_cumulative,
+                reserve_y_cumulative: self.last_price_y_cumulative,
+            })
+        };
+        self.last_block_timestamp = ts;
     }
 
+    /// updated after respective balance changes, such as 'add liquidity', 'remove liquidity', 'transfer lp token', 'claim fees', but lp_balance has to be updated after this udpate claim
     fun update_claim<X,Y>(self: &mut Pool<X,Y>, player: address){
-        let lp_balance_ = if(table::contains(&self.player_claims, player)){
-            table::borrow(&self.player_claims, player)
-        }else{
-            0
-        };
-
-        if(lp_balance_ > 0){
-            let claim = table::borrow_mut(&mut self.player_claims, player);
-            let position_x_ = claim.position_x;
-            let position_y_ = claim.position_y;
-            let claimable_x_ = claim.claimable_x;
-            let claimable_y_ = claim.claimable_y;
-            claim.position_x = self.fee.index_x;
-            claim.position_y = self.fee.index_y;
-            let delta_x = self.fee.index_x - position_x_;
-            let delta_y = self.fee.index_y - position_y_;
-
-            if(delta_x > 0){
-                let share = lp_balance_ * delta_x / SCALE_FACTOR;
-                claim.claimable_x = claim.claimable_x + share;
-            };
-            if(delta_y > 0){
-                let share = lp_balance_ * delta_y / SCALE_FACTOR;
-                claim.claimable_y = claim.claimable_y + share;
-            };
-        }else{
-            // new player
-            let claim = Claim{
+        if(!table::contains(&self.player_claims, player)){
+              let claim = Claim{
                 lp_balance: 0,
                 position_x: self.fee.index_x,
                 position_y: self.fee.index_y,
@@ -226,13 +248,36 @@ module suiDouBashi::amm_v1{
             };
             table::add(&mut self.player_claims, player, claim);
         };
-        // calculate in respecrive function
-        // let bal_ = table::borrow(&self.player_claims, player);
-        // *table::borrow_mut(&mut self.player_claims, player) = bal_ + ;
+
+        let lp_balance = table::borrow(&self.player_claims, player).lp_balance;
+        if(lp_balance > 0){
+            let claim = table::borrow_mut(&mut self.player_claims, player);
+            let position_x = claim.position_x;
+            let position_y = claim.position_y;
+            let claimable_x = claim.claimable_x;
+            let claimable_y = claim.claimable_y;
+            update_position_x(claim, self.fee.index_x);
+            update_position_y(claim, self.fee.index_y);
+            let delta_x = self.fee.index_x - position_x;
+            let delta_y = self.fee.index_y - position_y;
+
+            if(delta_x > 0){
+                let share = (lp_balance as u256) * delta_x / SCALE_FACTOR;
+                update_claimable_x(claim, claimable_x + (share as u64));
+            };
+            if(delta_y > 0){
+                let share = (lp_balance as u256) * delta_y / SCALE_FACTOR;
+                update_claimable_y(claim, claimable_y + (share as u64));
+            };
+        }else{
+            let claim = table::borrow_mut(&mut self.player_claims, player);
+            update_position_x(claim, self.fee.index_x);
+            update_position_y(claim, self.fee.index_y);
+        };
     }
 
     // ===== public Entry =====
-    fun init(_witness: AMM_V1, ctx:&mut TxContext){
+    fun init(ctx:&mut TxContext){
         let pool_gov = PoolGov{
             id: object::new(ctx),
             pools: table::new<String, ID>(ctx),
@@ -505,6 +550,7 @@ module suiDouBashi::amm_v1{
         ctx: &mut TxContext
     ):(Pool<X, Y>){
         let lp_supply = balance::create_supply(LP_TOKEN<X, Y>{});
+        let ts = tx_context::epoch_timestamp_ms(ctx);
 
         let fee = Fee{
             fee_x: balance::zero<X>(),
@@ -516,7 +562,11 @@ module suiDouBashi::amm_v1{
             fee_to: tx_context::sender(ctx),
             k_last: 0,
         };
-
+        let observation = Observation{
+            timestamp: ts,
+            reserve_x_cumulative: 0,
+            reserve_y_cumulative: 0
+        };
         let pool = Pool{
             id: object::new(ctx),
             stable,
@@ -525,14 +575,14 @@ module suiDouBashi::amm_v1{
             reserve_x: balance::zero<X>(),
             reserve_y: balance::zero<Y>(),
             reserve_lp: balance::zero<LP_TOKEN<X,Y>>(),
-            last_block_timestamp: (tx_context::epoch(ctx) as u32),
+            last_block_timestamp: ts,
             last_price_x_cumulative: 0,
             last_price_y_cumulative: 0,
+            observations: table_vec::singleton( observation, ctx),
             fee,
             player_claims: table::new<address, Claim>(ctx)
         };
         let pool_name = get_pool_name<X,Y>();
-        //TODO: register whole name including involved coin type
         table::add(pool_list, pool_name, object::id(&pool));
 
         pool
@@ -594,7 +644,6 @@ module suiDouBashi::amm_v1{
 
                 let take = coin::take<Y>(coin::balance_mut<Y>(&mut coin_y), opt_y, ctx);
                 transfer::public_transfer(coin_y, tx_context::sender(ctx));
-
                 (value_x, opt_y, coin_x, take)
             }else{
                 let opt_x = quote(reserve_y, reserve_x, value_y);
@@ -611,7 +660,9 @@ module suiDouBashi::amm_v1{
         let lp_output = if( balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply) == 0){
             let amount = (amm_math::mul_sqrt(deposit_x, deposit_y) - MINIMUM_LIQUIDITY);
             let min = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
+            //freeze the minimum liquidity, quesion: does this affect k value calculation
             transfer::public_transfer(coin::from_balance(min,ctx), sui::address::from_u256(0));
+            update_claim(pool, sui::address::from_u256(0));
             amount
         }else{
             math::min(
@@ -701,6 +752,7 @@ module suiDouBashi::amm_v1{
     }
     /// Assume: LP_Provider hold t amount of LP_TOKEN in the period [t1, t2]
     /// Accumlated Fee between interval as a percentage of the pool  = `(( t / sqrt(k1) ) - ( t / sqrt(k2) ) / ( t/sqrt(k2) )` when k2 is larger than k1
+    /// TODO: velodrone's model doesn't charge further fees
     fun charge_fee_<X,Y>(pool: &mut Pool<X,Y>, ctx: &mut TxContext){
         if(pool.fee.fee_on){
             let (reserve_x, reserve_y, _) = get_reserves(pool);
@@ -877,7 +929,7 @@ module suiDouBashi::amm_v1{
     //glue calling for init the module
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
-        init(AMM_V1{}, ctx)
+        init(ctx)
     }
     #[test]
     fun test_quote(){
@@ -905,12 +957,7 @@ module suiDouBashi::amm_v1{
          );
     }
 
-    #[test]fun type_name(){
-        let type_name = std::type_name::get<AMM_V1>();
-        let _mod = std::type_name::get_module(&type_name);
-        let _ads = std::type_name::get_address(&type_name);
-    }
-    #[test] fun test_fee(){
+   #[test] fun test_fee(){
         let x_1 = 100000;
         let y_1 = 1000;
         let x_2 = 90000;
