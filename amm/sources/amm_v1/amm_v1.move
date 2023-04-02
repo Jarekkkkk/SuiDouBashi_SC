@@ -7,6 +7,7 @@ module suiDouBashi::amm_v1{
     use std::vector;
     use sui::table::{Self, Table};
     use sui::table_vec::{Self,TableVec};
+    use sui::object_table::{Self, ObjectTable};
     use sui::pay;
     use sui::math;
     use std::string::{Self, String};
@@ -57,7 +58,7 @@ module suiDouBashi::amm_v1{
         last_price_y_cumulative: u256,
         observations: TableVec<Observation>,
         fee:Fee<X,Y>,
-        player_claims: Table<address, Claim>
+        player_claims: ObjectTable<address, Claim<X,Y>>
         // TODO: falshloan uage
     }
     struct Fee<phantom X, phantom Y> has store{
@@ -91,28 +92,36 @@ module suiDouBashi::amm_v1{
 
 
     /// This can be transferred into DID, and assign th Balance<LP>
-    /// but considering high-level transfer api calling, balance might not be updated when using high-level trasnfer func
-    struct Claim has store{
-        lp_balance: u64,
+    /// taking acount high-level transfer api calling, lp_balance will lose sync, therefore we have to managed in shared object
+    struct Claim<phantom X, phantom Y> has key, store{
+        id: UID,
+        lp_balance: Balance<LP_TOKEN<X,Y>>,
         position_x: u256, //
         position_y: u256,
         claimable_x: u64,
         claimable_y: u64
     }
 
-    fun update_claim_lp_balance(claim: &mut Claim, value: u64){
-        claim.lp_balance = value;
+    fun get_lp_balance<X,Y>(claim: &Claim<X,Y>):u64{
+        balance::value(&claim.lp_balance)
     }
-    fun update_position_x(claim: &mut Claim, value: u256){
+    fun top_up_claim_lp_balance<X,Y>(claim: &mut Claim<X,Y>, balance: Balance<LP_TOKEN<X,Y>>){
+        balance::join(&mut claim.lp_balance, balance);
+    }
+    fun top_down_claim_lp_balance<X,Y>(claim: &mut Claim<X,Y>, value: u64): Balance<LP_TOKEN<X,Y>>{
+        balance::split(&mut claim.lp_balance, value)
+    }
+
+    fun update_position_x<X,Y>(claim: &mut Claim<X,Y>, value: u256){
         claim.position_x = value;
     }
-    fun update_position_y(claim: &mut Claim, value: u256){
+    fun update_position_y<X,Y>(claim: &mut Claim<X,Y>, value: u256){
         claim.position_y = value;
     }
-    fun update_claimable_x(claim: &mut Claim, value: u64){
+    fun update_claimable_x<X,Y>(claim: &mut Claim<X,Y>, value: u64){
         claim.claimable_x = value;
     }
-    fun update_claimable_y(claim: &mut Claim, value: u64){
+    fun update_claimable_y<X,Y>(claim: &mut Claim<X,Y>, value: u64){
         claim.claimable_y = value;
     }
 
@@ -237,21 +246,22 @@ module suiDouBashi::amm_v1{
 
     // updated after respective balance changes, such as 'add liquidity', 'remove liquidity', 'transfer lp token', 'claim fees', but lp_balance has to be updated after this udpate claim
     /// updats address's claim history before balance changed
-    fun update_claim<X,Y>(self: &mut Pool<X,Y>, player: address){
-        if(!table::contains(&self.player_claims, player)){
+    fun update_claim<X,Y>(self: &mut Pool<X,Y>, player: address, ctx: &mut TxContext){
+        if(!object_table::contains(&self.player_claims, player)){
               let claim = Claim{
-                lp_balance: 0,
+                id: object::new(ctx),
+                lp_balance: balance::zero<LP_TOKEN<X,Y>>(),
                 position_x: self.fee.index_x,
                 position_y: self.fee.index_y,
                 claimable_x: 0,
                 claimable_y: 0,
             };
-            table::add(&mut self.player_claims, player, claim);
+            object_table::add(&mut self.player_claims, player, claim);
         };
 
-        let lp_balance = table::borrow(&self.player_claims, player).lp_balance;
+        let lp_balance = balance::value(&object_table::borrow(&self.player_claims, player).lp_balance);
         if(lp_balance > 0){
-            let claim = table::borrow_mut(&mut self.player_claims, player);
+            let claim = object_table::borrow_mut(&mut self.player_claims, player);
             let position_x = claim.position_x;
             let position_y = claim.position_y;
             let claimable_x = claim.claimable_x;
@@ -271,7 +281,7 @@ module suiDouBashi::amm_v1{
                 update_claimable_y(claim, claimable_y + (share as u64));
             };
         }else{
-            let claim = table::borrow_mut(&mut self.player_claims, player);
+            let claim = object_table::borrow_mut(&mut self.player_claims, player);
             update_position_x(claim, self.fee.index_x);
             update_position_y(claim, self.fee.index_y);
         };
@@ -338,13 +348,9 @@ module suiDouBashi::amm_v1{
     ){
         assert_pool_unlocked(pool);
         // main execution
-        let (output_lp_coin, lp_output, deposit_x, deposit_y) = add_liquidity_(pool, coin_x, coin_y, deposit_x_min, deposit_y_min
+        let (lp_output, deposit_x, deposit_y) = add_liquidity_(pool, coin_x, coin_y, deposit_x_min, deposit_y_min
         , clock, ctx);
 
-        transfer::public_transfer(
-            output_lp_coin,
-            tx_context::sender(ctx)
-        );
         event::liquidity_added<X,Y>(deposit_x, deposit_y, lp_output)
     }
     public entry fun add_liquidity_pay<X, Y>(
@@ -364,15 +370,18 @@ module suiDouBashi::amm_v1{
     // - remove liquidity
     public entry fun remove_liquidity<X, Y>(
         pool:&mut Pool<X, Y>,
-        lp_token:Coin<LP_TOKEN<X, Y>>,
+        lp_value:u64,
         withdrawl_x_min:u64,
         withdrawl_y_min:u64,
         clock: &Clock,
         ctx:&mut TxContext
     ){
+        let lp_hold = get_lp_balance<X,Y>(object_table::borrow(&pool.player_claims, tx_context::sender(ctx)));
+        assert!(lp_value <= lp_hold, err::insufficient_input());
         assert_pool_unlocked(pool);
 
-        let ( withdrawl_x, withdrawl_y, burned_lp) = remove_liquidity_(pool, lp_token, withdrawl_x_min, withdrawl_y_min, clock, ctx);
+
+        let ( withdrawl_x, withdrawl_y, burned_lp) = remove_liquidity_(pool, lp_value, withdrawl_x_min, withdrawl_y_min, clock, ctx);
 
         let withdrawl_value_x = coin::value(&withdrawl_x);
         let withdrawl_value_y = coin::value(&withdrawl_y);
@@ -387,18 +396,6 @@ module suiDouBashi::amm_v1{
         );
 
         event::liquidity_removed<X,Y>( withdrawl_value_x, withdrawl_value_y, burned_lp);
-    }
-    public entry fun remove_liquidity_pay<X,Y>(
-        pool:&mut Pool<X, Y>,
-        lp_token:vector<Coin<LP_TOKEN<X, Y>>>,
-        value: u64,
-        withdrawl_x_min:u64,
-        withdrawl_y_min:u64,
-        clock: &Clock,
-        ctx:&mut TxContext
-    ){
-        let lp_token = merge_and_split(lp_token, value, ctx);
-        remove_liquidity<X,Y>(pool, lp_token, withdrawl_x_min, withdrawl_y_min, clock, ctx);
     }
     // - swap
     public entry fun swap_for_y<X, Y>(
@@ -568,7 +565,7 @@ module suiDouBashi::amm_v1{
             last_price_y_cumulative: 0,
             observations: table_vec::singleton( observation, ctx),
             fee,
-            player_claims: table::new<address, Claim>(ctx)
+            player_claims: object_table::new<address, Claim<X,Y>>(ctx)
         };
         let pool_name = get_pool_name<X,Y>();
         table::add(pool_list, pool_name, object::id(&pool));
@@ -610,7 +607,6 @@ module suiDouBashi::amm_v1{
         clock: &Clock,
         ctx:&mut TxContext
     ):(
-        Coin<LP_TOKEN<X, Y>>,
         u64,
         u64,
         u64
@@ -649,7 +645,7 @@ module suiDouBashi::amm_v1{
             let min = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
             //freeze the minimum liquidity, quesion: does this affect k value calculation
             transfer::public_transfer(coin::from_balance(min,ctx), sui::address::from_u256(0));
-            update_claim(pool, sui::address::from_u256(0));
+            update_claim(pool, sui::address::from_u256(0), ctx);
             amount
         }else{
             math::min(
@@ -657,16 +653,22 @@ module suiDouBashi::amm_v1{
                 amm_math::mul_div(deposit_y, lp_supply, reserve_y),
             )
         };
+        // update global state
         update_timestamp(pool, clock);
 
+        // object ownership transfer
         let pool_coin_x = balance::join<X>(&mut pool.reserve_x, coin::into_balance(coin_x));
         let pool_coin_y = balance::join<Y>(&mut pool.reserve_y,  coin::into_balance(coin_y));
         assert!(pool_coin_x < MAX_POOL_VALUE && pool_coin_y < MAX_POOL_VALUE ,err::pool_max_value());
 
         let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_output);
 
+        // update player's state
+        update_claim(pool, tx_context::sender(ctx), ctx);
+        //TODO: better logic for updating balance in history
+        top_up_claim_lp_balance(object_table::borrow_mut(&mut pool.player_claims, tx_context::sender(ctx)), lp_balance);
+
         return (
-            coin::from_balance(lp_balance, ctx),
             lp_output,
             deposit_x,
             deposit_y
@@ -691,7 +693,8 @@ module suiDouBashi::amm_v1{
     }
     fun remove_liquidity_<X, Y>(
         pool:&mut Pool<X, Y>,
-        lp_token:Coin<LP_TOKEN<X, Y>>,
+        lp_value: u64,
+        //lp_token:Coin<LP_TOKEN<X, Y>>,
         withdrawl_x_min:u64,
         withdrawl_y_min:u64,
         clock: &Clock,
@@ -701,8 +704,6 @@ module suiDouBashi::amm_v1{
         Coin<Y>,
         u64,
     ){
-
-        let lp_value = coin::value(&lp_token);
         assert!(lp_value > 0, err::zero_amount());
 
         let (res_x, res_y, lp_s) = get_reserves(pool);
@@ -717,7 +718,10 @@ module suiDouBashi::amm_v1{
 
         let coin_x = coin::take<X>(&mut pool.reserve_x, withdrawl_x, ctx);
         let coin_y = coin::take<Y>(&mut pool.reserve_y, withdrawl_y, ctx);
-        balance::decrease_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply,coin::into_balance(lp_token));
+
+        update_claim(pool, tx_context::sender(ctx), ctx);
+        let lp_balance = top_down_claim_lp_balance(object_table::borrow_mut(&mut pool.player_claims, tx_context::sender(ctx)),lp_value);
+        balance::decrease_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_balance);
 
         return (
             coin_x,
