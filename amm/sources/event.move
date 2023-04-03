@@ -43,10 +43,8 @@ module suiDouBashi::event{
         res_x: u64,
         res_y: u64
     }
-    struct Fee<phantom X, phantom Y> has copy, drop{
-        to: address,
-        amount_x: u64,
-        amount_y: u64
+    struct Fee<phantom T> has copy, drop{
+        amount: u64
     }
     struct Claim<phantom X, phantom Y> has copy, drop{
         from: address,
@@ -127,12 +125,10 @@ module suiDouBashi::event{
             }
         )
     }
-    public fun fee<X, Y>(to: address, amount_x: u64, amount_y: u64){
+    public fun fee<T>( amount: u64){
         emit(
-            Fee<X,Y>{
-                to,
-                amount_x,
-                amount_y
+            Fee<T>{
+                amount
             }
         )
     }

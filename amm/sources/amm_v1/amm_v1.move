@@ -102,6 +102,9 @@ module suiDouBashi::amm_v1{
         claimable_y: u64
     }
 
+    public fun get_player_balance<X,Y>(self: &Pool<X,Y>, lp: address): u64{
+        get_lp_balance<X,Y>(object_table::borrow(&self.player_claims, lp))
+    }
     fun get_lp_balance<X,Y>(claim: &Claim<X,Y>):u64{
         balance::value(&claim.lp_balance)
     }
@@ -244,9 +247,9 @@ module suiDouBashi::amm_v1{
         self.last_block_timestamp = ts;
     }
 
-    // updated after respective balance changes, such as 'add liquidity', 'remove liquidity', 'transfer lp token', 'claim fees', but lp_balance has to be updated after this udpate claim
+    // updated before respective balance changes, such as 'add liquidity', 'remove liquidity', 'transfer lp token', 'claim fees', but lp_balance has to be updated after this udpate claim
     /// updats address's claim history before balance changed
-    fun update_claim<X,Y>(self: &mut Pool<X,Y>, player: address, ctx: &mut TxContext){
+    fun update_lp_position<X,Y>(self: &mut Pool<X,Y>, player: address, ctx: &mut TxContext){
         if(!object_table::contains(&self.player_claims, player)){
               let claim = Claim{
                 id: object::new(ctx),
@@ -286,6 +289,23 @@ module suiDouBashi::amm_v1{
             update_position_y(claim, self.fee.index_y);
         };
     }
+    /// Update global fee distribution when swapping
+    fun update_fee_index_x<X,Y>(self: &mut Pool<X,Y>, fee_x: u64 ){
+        let ratio_x = (fee_x as u256) * SCALE_FACTOR / (get_total_supply(self) as u256);
+
+        self.fee.index_x = self.fee.index_x + ratio_x;
+
+        event::fee<X>(fee_x);
+    }
+
+    fun update_fee_index_y<X,Y>(self: &mut Pool<X,Y>, fee_y: u64 ){
+        let ratio_y = (fee_y as u256) * SCALE_FACTOR / (get_total_supply(self) as u256);
+
+        self.fee.index_y = self.fee.index_y + ratio_y;
+
+        event::fee<Y>(fee_y);
+    }
+
 
     // ===== public Entry =====
     fun init(ctx:&mut TxContext){
@@ -645,7 +665,7 @@ module suiDouBashi::amm_v1{
             let min = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
             //freeze the minimum liquidity, quesion: does this affect k value calculation
             transfer::public_transfer(coin::from_balance(min,ctx), sui::address::from_u256(0));
-            update_claim(pool, sui::address::from_u256(0), ctx);
+            update_lp_position(pool, sui::address::from_u256(0), ctx);
             amount
         }else{
             math::min(
@@ -661,11 +681,11 @@ module suiDouBashi::amm_v1{
         let pool_coin_y = balance::join<Y>(&mut pool.reserve_y,  coin::into_balance(coin_y));
         assert!(pool_coin_x < MAX_POOL_VALUE && pool_coin_y < MAX_POOL_VALUE ,err::pool_max_value());
 
-        let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_output);
+        // update player' lp_position, before supply & balance changed !!!
+        update_lp_position(pool, tx_context::sender(ctx), ctx);
 
-        // update player's state
-        update_claim(pool, tx_context::sender(ctx), ctx);
         //TODO: better logic for updating balance in history
+        let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_output);
         top_up_claim_lp_balance(object_table::borrow_mut(&mut pool.player_claims, tx_context::sender(ctx)), lp_balance);
 
         return (
@@ -719,7 +739,8 @@ module suiDouBashi::amm_v1{
         let coin_x = coin::take<X>(&mut pool.reserve_x, withdrawl_x, ctx);
         let coin_y = coin::take<Y>(&mut pool.reserve_y, withdrawl_y, ctx);
 
-        update_claim(pool, tx_context::sender(ctx), ctx);
+        update_lp_position(pool, tx_context::sender(ctx), ctx);
+
         let lp_balance = top_down_claim_lp_balance(object_table::borrow_mut(&mut pool.player_claims, tx_context::sender(ctx)),lp_value);
         balance::decrease_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_balance);
 
@@ -805,13 +826,14 @@ module suiDouBashi::amm_v1{
         assert!(pool_bal_x <= MAX_POOL_VALUE, err::pool_max_value());
         let coin_y = coin::take<Y>(&mut pool.reserve_y, output_y, ctx);
 
-        // accrue the fees and move from pool reserves
-        let fee = value_x * pool.fee.fee_percentage / FEE_SCALING;
-        let coin_fee = coin::take(&mut pool.reserve_x, fee, ctx);
+        // accrue the fees and moved from pool reserves
+        let fee_x = value_x * pool.fee.fee_percentage / FEE_SCALING;
+        let coin_fee = coin::take(&mut pool.reserve_x, fee_x, ctx);
         coin::put(&mut pool.fee.fee_x, coin_fee);
         if(pool.fee.index_x > 0){
-            pool.fee.index_x = pool.fee.index_x + (fee as u256) * SCALE_FACTOR / (get_total_supply(pool) as u256);
+            pool.fee.index_x = pool.fee.index_x + (fee_x as u256) * SCALE_FACTOR / (get_total_supply(pool) as u256);
         };
+        update_fee_index_x(pool, fee_x);
 
         let updated_res_x =( balance::value<X>(&pool.reserve_x) as u128);
         let updated_res_y =( balance::value<Y>(&pool.reserve_y) as u128);
@@ -868,12 +890,13 @@ module suiDouBashi::amm_v1{
         let coin_y = coin::take<X>(&mut pool.reserve_x, output_x, ctx);
 
         // fee & ratio
-        let fee = value_y * pool.fee.fee_percentage / FEE_SCALING;
-        let coin_fee = coin::take(&mut pool.reserve_y, fee, ctx);
+        let fee_y = value_y * pool.fee.fee_percentage / FEE_SCALING;
+        let coin_fee = coin::take(&mut pool.reserve_y, fee_y, ctx);
         coin::put(&mut pool.fee.fee_y, coin_fee);
         if(pool.fee.index_y > 0){
-            pool.fee.index_y = pool.fee.index_y + (fee as u256) * SCALE_FACTOR / (get_total_supply(pool) as u256);
+            pool.fee.index_y = pool.fee.index_y + (fee_y as u256) * SCALE_FACTOR / (get_total_supply(pool) as u256);
         };
+        update_fee_index_y(pool, fee_y);
 
 
         // check x * y >= k

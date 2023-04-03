@@ -34,4 +34,8 @@ module suiDouBashi::dai{
             tx_context::sender(ctx)
         )
     }
+
+    #[test_only] public fun deploy_coin(ctx: &mut TxContext){
+        init(DAI{}, ctx);
+    }
 }

@@ -35,5 +35,9 @@ module suiDouBashi::usdc{
         )
     }
 
+    #[test_only] public fun deploy_coin(ctx: &mut TxContext){
+        init(USDC{}, ctx);
+    }
+
     //TODO: add high level mint function
 }
