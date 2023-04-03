@@ -1,6 +1,6 @@
 
 #[test_only]
-module suiDouBashi::amm_test{
+module suiDouBashi::test{
     use sui::coin::{Self, Coin, mint_for_testing as mint, CoinMetadata };
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use sui::clock::{Self, Clock};
@@ -83,7 +83,7 @@ module suiDouBashi::amm_test{
         clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
-        test_swap_for_y_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
+        zap_x_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
         test::end(scenario);
         print(&string::utf8(b"--"));
     }
@@ -294,8 +294,8 @@ module suiDouBashi::amm_test{
             let pool = test::take_shared<Pool< X, Y>>(test);
             let meta_x = test::take_immutable<CoinMetadata<X>>(test);
             let meta_y = test::take_immutable<CoinMetadata<Y>>(test);
-
             let vec = vector::empty<Coin<X>>();
+
             vector::push_back(&mut vec, mint<X>(1000, ctx(test)));
             vector::push_back(&mut vec, mint<X>(1250, ctx(test)));
             amm_v1::zap_x_pay(&mut pool, vec, 1500, &meta_x, &meta_y, 0, 0,0, &clock, ctx(test));

@@ -152,12 +152,4 @@ module suiDouBashi::profile{
         event::item_added<T>(object::uid_to_inner(&profile.id),item_id );
     }
 
-    #[test]fun test_foo(){
-        let foo = &5;
-        let bar = *foo;
-
-        std::debug::print(&*foo);
-        std::debug::print(&bar);
-    }
-
 }

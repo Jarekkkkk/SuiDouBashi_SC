@@ -192,19 +192,23 @@ module suiDouBashi::amm_v1{
             balance::supply_value(&pool.lp_supply)
         )
     }
+    public fun get_stable<X,Y>(pool: &Pool<X,Y>):bool { pool.stable }
     public fun get_total_supply<X,Y>(self: &Pool<X,Y>): u64 { balance::supply_value(&self.lp_supply)}
 
     public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u64{
         pool.last_block_timestamp
     }
 
-    /// currently we are unable to get either block.timestamp & epoch, so we directly fetch the reserve's pool
-    public fun get_x_price(res_x: u64, res_y:u64): u64{
-        res_y / res_x
+    public fun get_price(base: u64, quote:u64): u64{
+        quote / base
     }
     /// for fetching pool info
     public fun get_l(res_x:u64, res_y: u64): u64{
         amm_math::mul_sqrt(res_x, res_y)
+    }
+
+    public fun calculate_fee(value: u64, fee: u64, scaling: u64): u64{
+        value * fee / scaling
     }
     /// Action: adding liquidity
     /// b' (optimzied_) = (Y/X) * a, subjected to Y/X = b/a
@@ -800,23 +804,22 @@ module suiDouBashi::amm_v1{
         assert!(value_x >0, err::zero_amount());
         assert!(reserve_x > 0 && reserve_y > 0, err::empty_reserve());
 
-        let _value_x = ( value_x as u256 );
-        let dx = _value_x - _value_x * (pool.fee.fee_percentage as u256) / (FEE_SCALING as u256);
+        let fee_x = calculate_fee(value_x, pool.fee.fee_percentage, FEE_SCALING);
+        let dx = value_x - fee_x;
 
         let  output_y = if(pool.stable){
            ( formula::stable_swap_output(
-                dx,
+                (dx as u256),
                 (reserve_x as u256),
                 (reserve_y as u256),
                 (math::pow(10, coin::get_decimals(metadata_x)) as u256),
                 (math::pow(10, coin::get_decimals(metadata_y)) as u256)
             ) as u64)
         }else{
-             ( formula::variable_swap_output(dx, (reserve_x as u256), (reserve_y as u256)) as u64)
+             ( formula::variable_swap_output((dx as u256), (reserve_x as u256), (reserve_y as u256)) as u64)
         };
 
         assert!(output_y > output_y_min, err::slippage());
-
         // store prev value to verify after tx execution
         let _res_x = balance::value(&pool.reserve_x);
         let _res_y = balance::value(&pool.reserve_y);
@@ -826,8 +829,6 @@ module suiDouBashi::amm_v1{
         assert!(pool_bal_x <= MAX_POOL_VALUE, err::pool_max_value());
         let coin_y = coin::take<Y>(&mut pool.reserve_y, output_y, ctx);
 
-        // accrue the fees and moved from pool reserves
-        let fee_x = value_x * pool.fee.fee_percentage / FEE_SCALING;
         let coin_fee = coin::take(&mut pool.reserve_x, fee_x, ctx);
         coin::put(&mut pool.fee.fee_x, coin_fee);
         if(pool.fee.index_x > 0){
@@ -835,9 +836,7 @@ module suiDouBashi::amm_v1{
         };
         update_fee_index_x(pool, fee_x);
 
-        let updated_res_x =( balance::value<X>(&pool.reserve_x) as u128);
-        let updated_res_y =( balance::value<Y>(&pool.reserve_y) as u128);
-        assert!(updated_res_x * updated_res_y >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
+        assert!(amm_math::mul_to_u128(_res_x + value_x, _res_y) >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
 
         return(
             coin_y,
@@ -863,19 +862,20 @@ module suiDouBashi::amm_v1{
         assert!(reserve_x > 0 && reserve_y > 0, err::empty_reserve());
         assert!(value_y > 0, err::zero_amount());
 
-        let _value_y = ( value_y as u256 );
-        let dy = _value_y - _value_y * (pool.fee.fee_percentage as u256) / (FEE_SCALING as u256);
 
-        let  output_x = if(pool.stable){
+        let fee_y = calculate_fee(value_y, pool.fee.fee_percentage, FEE_SCALING);
+        let dy = value_y - fee_y;
+
+        let output_x = if(pool.stable){
            ( formula::stable_swap_output(
-                dy,
+                (dy as u256),
                 (reserve_y as u256),
                 (reserve_x as u256),
                 (math::pow(10, coin::get_decimals(metadata_y)) as u256),
                 (math::pow(10, coin::get_decimals(metadata_x)) as u256)
             ) as u64)
         }else{
-             ( formula::variable_swap_output(dy, (reserve_y as u256), (reserve_x as u256)) as u64)
+             ( formula::variable_swap_output((dy as u256), (reserve_y as u256), (reserve_x as u256)) as u64)
         };
 
 
@@ -887,10 +887,10 @@ module suiDouBashi::amm_v1{
         let coin_y_balance = coin::into_balance(coin_y);
         let pool_bal_y = balance::join<Y>(&mut pool.reserve_y, coin_y_balance);
         assert!(pool_bal_y <= MAX_POOL_VALUE, err::pool_max_value());
+
+
         let coin_y = coin::take<X>(&mut pool.reserve_x, output_x, ctx);
 
-        // fee & ratio
-        let fee_y = value_y * pool.fee.fee_percentage / FEE_SCALING;
         let coin_fee = coin::take(&mut pool.reserve_y, fee_y, ctx);
         coin::put(&mut pool.fee.fee_y, coin_fee);
         if(pool.fee.index_y > 0){
@@ -899,10 +899,7 @@ module suiDouBashi::amm_v1{
         update_fee_index_y(pool, fee_y);
 
 
-        // check x * y >= k
-        let updated_res_x =( balance::value<X>(&pool.reserve_x) as u128);
-        let updated_res_y =( balance::value<Y>(&pool.reserve_y) as u128);
-        assert!(updated_res_x * updated_res_y >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
+        assert!(amm_math::mul_to_u128(_res_x, _res_y + value_y) >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
 
         return (
             coin_y,

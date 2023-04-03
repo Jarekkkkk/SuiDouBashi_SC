@@ -53,9 +53,6 @@ module suiDouBashi::formula{
         (math::sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4
     }
 
-    public fun calculate_fee(value: u64, fee: u64, scaling: u64): u64{
-        value * fee / scaling
-    }
 
     fun get_y(x0: u256, xy: u256, y: u256): u256 {
         let i = 0;
