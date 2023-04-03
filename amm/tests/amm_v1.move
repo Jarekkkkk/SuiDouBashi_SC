@@ -3,11 +3,12 @@
 module suiDouBashi::amm_test{
     use sui::coin::{Self, Coin, mint_for_testing as mint, CoinMetadata };
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
-    use sui::clock::Clock;
-    use suiDouBashi::amm_v1::{Self, PoolGov, LP_TOKEN, Pool};
+    use sui::clock::{Self, Clock};
+    use suiDouBashi::amm_v1::{Self, PoolGov, Pool};
     use suiDouBashi::amm_math;
     use sui::math;
     use suiDouBashi::formula;
+    use std::debug::print;
 
     // coin pkg
     use suiDouBashi::dai::{Self, DAI};
@@ -20,12 +21,12 @@ module suiDouBashi::amm_test{
     const DAI_AMT:u64 = 9_000_000;
     const USDC_AMT: u64 = 10_000_000;
 
-    const FEE_SCALING: u64 = 1000;
     const FEE: u64 = 3;
 
     #[test]
     fun test_init_pool(){
         let scenario = test::begin(@0x1);
+        clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         test_init_pool_<DAI, USDC>(&mut scenario);
@@ -34,6 +35,7 @@ module suiDouBashi::amm_test{
     #[test]
     fun test_add_liquidity() {
         let scenario = test::begin(@0x1);
+        clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         let deposit_x = 30000;
@@ -44,6 +46,7 @@ module suiDouBashi::amm_test{
     #[test]
     fun test_swap_for_y() {
         let scenario = test::begin(@0x1);
+        clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         test_swap_for_y_<DAI,USDC>(DAI_AMT, USDC_AMT, &mut scenario);
@@ -52,6 +55,7 @@ module suiDouBashi::amm_test{
     #[test]
     fun test_swap_for_x() {
         let scenario = test::begin(@0x1);
+        clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         test_swap_for_x_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
@@ -60,6 +64,7 @@ module suiDouBashi::amm_test{
     #[test]
     fun test_remove_liquidity() {
         let scenario = test::begin(@0x1);
+        clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         remove_liquidity_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
@@ -68,6 +73,7 @@ module suiDouBashi::amm_test{
     #[test]
     fun test_zap_x(){
         let scenario = test::begin(@0x1);
+        clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         test_swap_for_y_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
@@ -129,10 +135,9 @@ module suiDouBashi::amm_test{
         };
         next_tx(test, creator);{
             let pool = test::take_shared<Pool< X, Y>>(test);
-            let lsp = test::take_from_sender<Coin<LP_TOKEN< X, Y>>>(test);
-            assert!(coin::value(&lsp) == minted_lp, 0);
+            let lp_value = amm_v1::get_player_balance<X,Y>(&pool, creator);
+            assert!(lp_value == minted_lp, 0);
 
-            test::return_to_sender(test, lsp);
             test::return_shared(pool);
         }
     }
@@ -145,23 +150,25 @@ module suiDouBashi::amm_test{
         let swap_y = {// swap X for Y
             let pool = test::take_shared<Pool< X, Y>>(test);
             let clock = test::take_shared<Clock>(test);
-            let meta_x = test::take_shared<CoinMetadata<X>>(test);
-            let meta_y = test::take_shared<CoinMetadata<Y>>(test);
+            let meta_x = test::take_immutable<CoinMetadata<X>>(test);
+            let meta_y = test::take_immutable<CoinMetadata<Y>>(test);
             let (res_x, res_y, _) = amm_v1::get_reserves< X, Y>(&mut pool);
             let coin_x =  mint<X>(input_x, ctx(test));
-            let desired_y = formula::variable_swap_output((input_x as u256),( res_x as u256), (res_y as u256));
 
+            let desired_y = (formula::variable_swap_output((input_x as u256),( res_x as u256), (res_y as u256)) as u64);
+            desired_y = desired_y - formula::calculate_fee(desired_y , 3, 10000);
             amm_v1::swap_for_y< X, Y>(&mut pool, coin_x, &meta_x, &meta_y, 0 , &clock, ctx(test));
 
             test::return_shared(pool);
             test::return_shared(clock);
-            test::return_shared(meta_x);
-            test::return_shared(meta_y);
-            (desired_y as u64)
+            test::return_immutable(meta_x);
+            test::return_immutable(meta_y);
+            desired_y
         };
         next_tx(test, trader);{
             let coin_y = test::take_from_sender<Coin<Y>>(test);
-            assert!(coin::value(&coin_y) == swap_y, 0);
+            let coin_value = coin::value(&coin_y);
+            assert!(coin_value == swap_y, 0);
             test::return_to_sender(test, coin_y);
         }
     }
@@ -175,18 +182,19 @@ module suiDouBashi::amm_test{
         let swap_x = {// swap Y for X
             let pool = test::take_shared<Pool< X, Y>>(test);
             let clock = test::take_shared<Clock>(test);
-            let meta_x = test::take_shared<CoinMetadata<X>>(test);
-            let meta_y = test::take_shared<CoinMetadata<Y>>(test);
+            let meta_x = test::take_immutable<CoinMetadata<X>>(test);
+            let meta_y = test::take_immutable<CoinMetadata<Y>>(test);
 
             let (res_x, res_y, _) = amm_v1::get_reserves< X, Y>(&mut pool);
             let coin_y=  mint<Y>(input_x, ctx(test));
-            let desired_x = formula::variable_swap_output((input_x as u256),( res_y as u256), (res_x as u256));
+            let desired_x = (formula::variable_swap_output((input_x as u256),( res_y as u256), (res_x as u256)) as u64);
+            desired_x = desired_x - formula::calculate_fee(desired_x , 3, 10000);
 
             amm_v1::swap_for_x< X, Y>(&mut pool, coin_y, &meta_x, &meta_y, 0 , &clock, ctx(test));
             test::return_shared(pool);
             test::return_shared(clock);
-            test::return_shared(meta_x);
-            test::return_shared(meta_y);
+            test::return_immutable(meta_x);
+            test::return_immutable(meta_y);
             (desired_x as u64)
         };
 
@@ -227,8 +235,12 @@ module suiDouBashi::amm_test{
             let coin_y = test::take_from_sender<Coin<Y>>(test);
             let value_x = coin::value(&coin_x);
             let value_y = coin::value(&coin_y);
-            assert!(value_x != withdraw_x, 0);
-            assert!(value_y != withdraw_y, 0);
+            print(&value_x);
+            print(&withdraw_x);
+            print(&value_y);
+            print(&withdraw_y);
+            assert!(value_x == withdraw_x, 0);
+            assert!(value_y == withdraw_y, 0);
 
             test::return_to_sender(test, coin_x);
             test::return_to_sender(test, coin_y);
@@ -249,21 +261,21 @@ module suiDouBashi::amm_test{
         next_tx(test, trader);{// single zap
             let pool = test::take_shared<Pool< X, Y>>(test);
             let clock = test::take_shared<Clock>(test);
-            let meta_x = test::take_shared<CoinMetadata<X>>(test);
-            let meta_y = test::take_shared<CoinMetadata<Y>>(test);
+            let meta_x = test::take_immutable<CoinMetadata<X>>(test);
+            let meta_y = test::take_immutable<CoinMetadata<Y>>(test);
 
             amm_v1::zap_x(&mut pool, mint<X>(deposit_x, ctx(test)), &meta_x, &meta_y, 0, 0,0, &clock, ctx(test));
 
             test::return_shared(pool);
             test::return_shared(clock);
-            test::return_shared(meta_x);
-            test::return_shared(meta_y);
+            test::return_immutable(meta_x);
+            test::return_immutable(meta_y);
         };
         next_tx(test, trader);{// mul_coin zap
             let clock = test::take_shared<Clock>(test);
             let pool = test::take_shared<Pool< X, Y>>(test);
-            let meta_x = test::take_shared<CoinMetadata<X>>(test);
-            let meta_y = test::take_shared<CoinMetadata<Y>>(test);
+            let meta_x = test::take_immutable<CoinMetadata<X>>(test);
+            let meta_y = test::take_immutable<CoinMetadata<Y>>(test);
 
             let vec = vector::empty<Coin<X>>();
             vector::push_back(&mut vec, mint<X>(1000, ctx(test)));
@@ -272,8 +284,8 @@ module suiDouBashi::amm_test{
 
             test::return_shared(pool);
             test::return_shared(clock);
-            test::return_shared(meta_x);
-            test::return_shared(meta_y);
+            test::return_immutable(meta_x);
+            test::return_immutable(meta_y);
         }
     }
     fun people(): (address, address) { (@0xABCD, @0x1234 ) }

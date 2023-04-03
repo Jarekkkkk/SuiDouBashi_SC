@@ -3,15 +3,7 @@ module suiDouBashi::formula{
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     use suiDouBashi::math;
-    //use suiDouBashi::amm_v1::swap_output as swap;
-        /// Action: Swap: swap X for Y
-    /// dy = (dx * y) / (dx + x), at dx' = dx(1 - fee)
 
-    public fun variable_swap_output(dx:u256, res_x:u256, res_y:u256): u256{
-        let n = dx * res_y ;
-        let d = dx + res_x;
-         n / d
-    }
 
     public fun k_(res_x: u256, res_y: u256, scale_x: u256, scale_y: u256): u256 {
         // x^3y + xy^3 = k
@@ -22,6 +14,15 @@ module suiDouBashi::formula{
         let _b =(( _x * _x) / SCALE_FACTOR) + (( _y * _y) / SCALE_FACTOR) ;
 
         (_a * _b / SCALE_FACTOR)
+    }
+
+    //use suiDouBashi::amm_v1::swap_output as swap;
+    /// Action: Swap: swap X for Y
+    /// dy = (dx * y) / (dx + x), at dx' = dx(1 - fee)
+    public fun variable_swap_output(dx:u256, res_x:u256, res_y:u256): u256{
+        let n = dx * res_y ;
+        let d = dx + res_x;
+         n / d
     }
 
     public fun stable_swap_output(input_x: u256, res_x: u256, res_y: u256, scale_x: u256, scale_y: u256 ): u256 {
@@ -50,6 +51,10 @@ module suiDouBashi::formula{
         let var_4 = 2 * ( scaling_ - fee_);
 
         (math::sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4
+    }
+
+    public fun calculate_fee(value: u64, fee: u64, scaling: u64): u64{
+        value * fee / scaling
     }
 
     fun get_y(x0: u256, xy: u256, y: u256): u256 {
