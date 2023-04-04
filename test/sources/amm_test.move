@@ -1,6 +1,6 @@
 
 #[test_only]
-module suiDouBashi::test{
+module test::amm_test{
     use sui::coin::{Self, Coin, mint_for_testing as mint, CoinMetadata };
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use sui::clock::{Self, Clock};
@@ -8,8 +8,6 @@ module suiDouBashi::test{
     use suiDouBashi::amm_math;
     use sui::math;
     use suiDouBashi::formula;
-    use std::debug::print;
-    use std::string;
     use std::vector;
 
     // coin pkg
@@ -33,7 +31,6 @@ module suiDouBashi::test{
         test_init_pool_<DAI, USDC>(&mut scenario);
         test::end(scenario);
 
-        print(&string::utf8(b"--"));
     }
     #[test]
     fun test_add_liquidity() {
@@ -45,7 +42,6 @@ module suiDouBashi::test{
         let deposit_y = 3000;
         add_liquidity_<DAI, USDC>(deposit_x, deposit_y, &mut scenario);
         test::end(scenario);
-        print(&string::utf8(b"--"));
     }
     #[test]
     fun test_swap_for_y() {
@@ -55,7 +51,6 @@ module suiDouBashi::test{
         usdc::deploy_coin(ctx(&mut scenario));
         test_swap_for_y_<DAI,USDC>(DAI_AMT, USDC_AMT, &mut scenario);
         test::end(scenario);
-        print(&string::utf8(b"--"));
     }
     #[test]
     fun test_swap_for_x() {
@@ -65,7 +60,6 @@ module suiDouBashi::test{
         usdc::deploy_coin(ctx(&mut scenario));
         test_swap_for_x_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
         test::end(scenario);
-        print(&string::utf8(b"--"));
     }
     #[test]
     fun test_remove_liquidity() {
@@ -75,7 +69,6 @@ module suiDouBashi::test{
         usdc::deploy_coin(ctx(&mut scenario));
         remove_liquidity_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
         test::end(scenario);
-        print(&string::utf8(b"--"));
     }
     #[test]
     fun test_zap_x(){
@@ -85,7 +78,6 @@ module suiDouBashi::test{
         usdc::deploy_coin(ctx(&mut scenario));
         zap_x_<DAI, USDC>(DAI_AMT, USDC_AMT, &mut scenario);
         test::end(scenario);
-        print(&string::utf8(b"--"));
     }
     fun test_init_pool_<X, Y>(test:&mut Scenario) {
         let ( creator, _) = people();

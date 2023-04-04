@@ -16,3 +16,5 @@ std = "0x1"
 sui =  "0x2"
 sui_system = "0x3"
 
+test = "0x11111"
+
