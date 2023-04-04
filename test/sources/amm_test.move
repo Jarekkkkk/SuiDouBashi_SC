@@ -106,7 +106,8 @@ module test::amm_test{
             assert!(res_y == 0, 0);
 
             test::return_shared(pool);
-            test::return_shared(pool_gov);
+            test::return_shared(pool_gov)
+            ;
         };
      }
     fun add_liquidity_<X, Y>(deposit_x: u64, deposit_y:u64, test: &mut Scenario){
