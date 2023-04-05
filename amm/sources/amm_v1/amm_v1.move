@@ -177,7 +177,7 @@ module suiDouBashi::amm_v1{
     }
 
     // ===== getter =====
-    public fun get_pool_name<X,Y>():String{
+    public fun get_pool_name<X,Y>(_pool: &Pool<X, Y>):String{
         let (_, _, symbol_x) = type::get_package_module_type<X>();
         let (_, _, symbol_y) = type::get_package_module_type<Y>();
 
@@ -553,6 +553,31 @@ module suiDouBashi::amm_v1{
         let coin_y = merge_and_split(coin_y, value, ctx);
         zap_y(pool, coin_y, metadata_x, metadata_y, output_x_min, deposit_x_min, deposit_y_min, clock, ctx,);
     }
+    public entry fun claim_fee<X,Y>(self: &mut Pool<X,Y>, ctx: &mut TxContext){
+        update_lp_position(self, tx_context::sender(ctx), ctx);
+
+        let claim = object_table::borrow_mut(&mut self.player_claims, tx_context::sender(ctx));
+        if(claim.claimable_x > 0 || claim.claimable_y > 0){
+            let coin_x = coin::take(&mut self.fee.fee_x, claim.claimable_x, ctx);
+            let coin_y = coin::take(&mut self.fee.fee_y, claim.claimable_y, ctx);
+            let value_x = coin::value(&coin_x);
+            let value_y = coin::value(&coin_y);
+
+            claim.claimable_x = 0;
+            claim.claimable_y = 0;
+
+            transfer::public_transfer(
+                coin_x,
+                tx_context::sender(ctx)
+            );
+            transfer::public_transfer(
+                coin_y,
+                tx_context::sender(ctx)
+            );
+
+            event::claim<X,Y>(tx_context::sender(ctx), value_x, value_y);
+        }
+    }
 
     // ====== MAIN_LOGIC ======
     public fun create_pool_<X, Y>(
@@ -576,7 +601,7 @@ module suiDouBashi::amm_v1{
             reserve_x_cumulative: 0,
             reserve_y_cumulative: 0
         };
-        let pool = Pool{
+        let pool = Pool<X,Y>{
             id: object::new(ctx),
             stable,
             locked: false,
@@ -591,7 +616,7 @@ module suiDouBashi::amm_v1{
             fee,
             player_claims: object_table::new<address, Claim<X,Y>>(ctx)
         };
-        let pool_name = get_pool_name<X,Y>();
+        let pool_name = get_pool_name<X,Y>(&pool);
         table::add(pool_list, pool_name, object::id(&pool));
 
         pool

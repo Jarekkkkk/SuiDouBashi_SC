@@ -20,8 +20,6 @@ module suiDouBashiVest::vsdb{
     use suiDouBashi::encode::base64_encode as encode;
     use suiDouBashi::i128::{Self, I128};
 
-    use std::debug::print;
-
     const MAX_TIME: u64 = { 4 * 365 * 86400 };
     const WEEK: u64 = { 7 * 86400 };
     const YEAR: u256 = { 365 * 86400 };
@@ -149,7 +147,6 @@ module suiDouBashiVest::vsdb{
         // 2. update vsdb state
         let prev_bal = locked_balance(self);
         let prev_end = locked_end(self);
-        print(&locked_end);
         extend(self, option::none<Coin<SDB>>(), unlock_time, ts);
 
         // 2. global state
@@ -721,9 +718,5 @@ module suiDouBashiVest::vsdb{
      #[test_only]
     public fun slope_changes(reg: &mut VSDBRegistry, ts: u64): &mut I128{
         table::borrow_mut(&mut reg.slope_changes, ts)
-    }
-    #[test] fun test_url(){
-        let foo = img_url_(b"0x1234", 2, 3, 4);
-        print(&foo);
     }
 }

@@ -1,17 +1,13 @@
 // Gauges are used to incentivize pools, they emit reward tokens over 7 days for staked LP tokens
 module suiDouBashiVest::gauge{
-    use sui::object::{UID, ID};
-    use sui::table::{Self, Table};
+    use sui::object::{UID};
+    use sui::table::{ Table};
 
-
-    use suiDouBashi::amm_v1::{Self, Pool};
-
-
+//    use suiDouBashi::amm_v1::Pool;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;
     const MAX_REWARD_TOKENS: u64 = 16;
-
 
 
     struct Gauge has key{
@@ -60,3 +56,11 @@ module suiDouBashiVest::gauge{
     }
 
 }
+
+
+
+// pool -> Guage
+//          1. internal Bribe
+//          2. external Bribe
+//          3.
+
