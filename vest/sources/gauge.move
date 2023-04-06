@@ -64,3 +64,7 @@ module suiDouBashiVest::gauge{
 //          2. external Bribe
 //          3.
 
+
+// bribe:
+//      1. notifyRewardAmount
+//      2. left

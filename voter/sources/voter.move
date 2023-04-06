@@ -12,3 +12,8 @@
 //     function notifyRewardAmount(uint amount) external;
 //     function distribute(address _gauge) external;
 // }
+
+
+// bribe:
+//      1. deposit
+//      2. withdraw

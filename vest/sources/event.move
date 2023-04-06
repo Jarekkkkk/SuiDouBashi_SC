@@ -36,5 +36,18 @@ module suiDouBashiVest::event{
 
 
     // - Bribe
+    struct ClaimRewards has copy, drop{
+        claimer: address,
+        value: u64
+    }
+
+    public fun claim_reward(claimer: address, value: u64){
+        emit(
+            ClaimRewards{
+                claimer,
+                value
+            }
+        )
+    }
 
 }
