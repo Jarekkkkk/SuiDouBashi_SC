@@ -422,6 +422,27 @@ module suiDouBashi::amm_v1{
         event::liquidity_removed<X,Y>( withdrawl_value_x, withdrawl_value_y, burned_lp);
     }
     // - swap
+    use std::type_name;
+    //TODO: merge 2 transaction
+    public fun swap<X, Y, T>(
+        // pool: &mut Pool<X, Y>,
+        // coin_x: Coin<T>,
+        // metadata_x: &CoinMetadata<X>,
+        // metadata_y: &CoinMetadata<Y>,
+        // output_y_min: u64,
+        // clock: &Clock,
+        // ctx: &mut TxContext
+    ):bool{
+        let type_t = type_name::get<T>();
+        let type_x = type_name::get<X>();
+        let _type_y = type_name::get<Y>();
+
+        // let str = type_name::into_string(type_t);
+        // let str_1 = type_name::into_string(type_x);
+
+        type_t == type_x
+    }
+
     public entry fun swap_for_y<X, Y>(
         pool: &mut Pool<X, Y>,
         coin_x: Coin<X>,
