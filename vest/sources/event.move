@@ -50,4 +50,18 @@ module suiDouBashiVest::event{
         )
     }
 
+    struct NotifyRewards<phantom T> has copy, drop{
+        from: address,
+        value: u64
+    }
+
+    public fun notify_reward<T>(from: address, value: u64){
+        emit(
+            NotifyRewards<T>{
+                from,
+                value
+            }
+        )
+    }
+
 }
