@@ -2,33 +2,25 @@
 module suiDouBashiVest::gauge{
     use sui::object::{UID};
     use sui::table::{ Table};
+    use sui::balance::{Self, Balance};
 
-//    use suiDouBashi::amm_v1::Pool;
+    use suiDouBashi::amm_v1::{Pool, LP_TOKEN};
+    use suiDouBashiVest::vsdb::VSDB;
+    use suiDouBashiVest::internal_bribe::Reward;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;
     const MAX_REWARD_TOKENS: u64 = 16;
 
 
-    struct Gauge has key{
+    struct Guage<phantom X, phantom Y> has key, store{
         id: UID,
+        stake: Balance<LP_TOKEN<X,Y>>,
 
-    }
+        derived_supply: u64,
+        derived_balances: Table<address, u64>,
 
-    struct Reg has key{
-        id: UID,
-        /// A record of balance checkpoints for each token, by index
-        supply_checkpoints: Table<u64, SupplyCheckpoint>,
-        /// A record of balance checkpoints for each token, by index
-        reward_per_token_checkpoints: Table<u64, RewardPerTokenCheckpoint>,
-
-        fees_0: u64,
-        fees_1: u64
-    }
-
-    struct Vote has key{
-        id: UID,
-        derived_balances: u64,
+        is_for_pair: bool,
         reward_rate: u64,
         period_finish: u64,
         last_update_time: u64,
