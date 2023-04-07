@@ -6,7 +6,7 @@ module suiDouBashiVest::gauge{
 
     use suiDouBashi::amm_v1::{Pool, LP_TOKEN};
     use suiDouBashiVest::vsdb::VSDB;
-    use suiDouBashiVest::internal_bribe::Reward;
+    use suiDouBashiVest::reward::Reward;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;

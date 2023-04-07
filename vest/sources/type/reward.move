@@ -4,7 +4,6 @@ module suiDouBashiVest::reward{
     use sui::table::{Self, Table};
     use sui::tx_context::TxContext;
     use sui::object;
-    use sui::table_vec::{Self, TableVec};
 
     use suiDouBashiVest::checkpoints::RewardPerTokenCheckpoint;
 
@@ -18,12 +17,10 @@ module suiDouBashiVest::reward{
         reward_per_token_stored: u64, // pair
         is_reward: bool,// pair
 
-        reward_per_token_checkpoints: Table<ID, TableVec< RewardPerTokenCheckpoint>>, // pair
+        reward_per_token_checkpoints: Table<ID, Table<u64,  RewardPerTokenCheckpoint>>, // pair
         user_reward_per_token_stored: Table<ID, u64>, // player -> token_value
         last_earn: Table<ID, u64>, // VSDB -> ts
     }
-
-
 
     public fun new<X,Y,T>(ctx: &mut TxContext): Reward<X,Y,T>{
         Reward<X,Y,T>{
@@ -33,7 +30,7 @@ module suiDouBashiVest::reward{
             period_finish: 0,
             last_update_time: 0,
             reward_per_token_stored: 0,
-            reward_per_token_checkpoints: table::new<ID, TableVec<RewardPerTokenCheckpoint>>(ctx),
+            reward_per_token_checkpoints: table::new<ID, Table<u64, RewardPerTokenCheckpoint>>(ctx),
 
             user_reward_per_token_stored: table::new<ID, u64>(ctx),
             last_earn: table::new<ID, u64>(ctx),
@@ -45,6 +42,10 @@ module suiDouBashiVest::reward{
     // ===== Getter =====
     public fun balance<X,Y,T>(self: &Reward<X,Y,T>):u64{
         balance::value(&self.balance)
+    }
+
+    public fun balance_mut<X,Y,T>(self: &mut Reward<X,Y,T>):&mut Balance<T>{
+        &mut self.balance
     }
 
     public fun reward_rate<X,Y,T>(self: &Reward<X,Y,T>):u64{
@@ -68,11 +69,11 @@ module suiDouBashiVest::reward{
     }
 
     public fun reward_per_token_checkpoints<X,Y,T>(self: &Reward<X,Y,T>, id: ID)
-    :&TableVec<RewardPerTokenCheckpoint>{
+    :&Table<u64, RewardPerTokenCheckpoint>{
         table::borrow(&self.reward_per_token_checkpoints, id)
     }
     public fun reward_per_token_checkpoints_mut<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID)
-    :&mut TableVec<RewardPerTokenCheckpoint>{
+    :&mut Table<u64, RewardPerTokenCheckpoint>{
         table::borrow_mut(&mut self.reward_per_token_checkpoints, id)
     }
 
@@ -87,6 +88,7 @@ module suiDouBashiVest::reward{
     public fun last_earn<X,Y,T>(self: &Reward<X,Y,T>, id:ID):u64{
         *table::borrow(&self.last_earn, id)
     }
+
     public fun last_earn_contain<X,Y,T>(self: &Reward<X,Y,T>, id:ID):bool{
         table::contains(&self.last_earn, id)
     }
@@ -94,7 +96,33 @@ module suiDouBashiVest::reward{
 
     // ===== Setter =====
     public fun add_new_user_reward<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, ctx: &mut TxContext){
-        let table_vec = table_vec::empty(ctx);
-        table::add(&mut self.reward_per_token_checkpoints, id, table_vec);
+        let table = table::new(ctx);
+        table::add(&mut self.reward_per_token_checkpoints, id, table);
     }
+
+    public fun update_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, reward_per_token_stored:u64){
+        self.reward_per_token_stored = reward_per_token_stored;
+    }
+
+    public fun update_last_update_time<X,Y,T>(self: &mut Reward<X,Y,T>, last_update_time: u64){
+        self.last_update_time = last_update_time;
+    }
+
+    public fun update_last_earn<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, last_earn:u64){
+        *table::borrow_mut(&mut self.last_earn, id) = last_earn ;
+    }
+
+    public fun update_user_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, user_reward_per_token_stored:u64){
+        *table::borrow_mut(&mut self.user_reward_per_token_stored, id) = user_reward_per_token_stored ;
+    }
+
+    public fun update_reward_rate<X,Y,T>(self:&mut Reward<X,Y,T>, reward_rate:u64){
+        self.reward_rate = reward_rate;
+    }
+
+    public fun update_period_finish<X,Y,T>(self:&mut Reward<X,Y,T>, period_finish: u64){
+        self.period_finish = period_finish;
+    }
+
+
 }
