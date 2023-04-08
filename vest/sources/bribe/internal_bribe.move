@@ -1,4 +1,4 @@
-// Internal Bribes represent pool fee
+// Internal Bribes represent pool fee distributed to LP holders
 module suiDouBashiVest::internal_bribe{
     use std::type_name::{Self, TypeName};
     use sui::balance::{Self, Balance};
@@ -18,6 +18,8 @@ module suiDouBashiVest::internal_bribe{
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
 
     use sui::table::{ Self, Table};
+
+    friend suiDouBashiVest::gauge;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;
@@ -51,6 +53,8 @@ module suiDouBashiVest::internal_bribe{
         // TODO: Balance<LP_TOKEN<X,Y>>
     }
 
+    // we can only add dof here, since we are unable to expose &mut id
+    /// TODO: whitelisted coin type, and type validatoin
     fun create_reward<X,Y,T>(self: &mut InternalBribe<X,Y>, ctx: &mut TxContext){
         assert_generic_type<X,Y,T>();
 
@@ -60,7 +64,7 @@ module suiDouBashiVest::internal_bribe{
         dof::add(&mut self.id, type_name, reward);
     }
 
-    fun borrow_reward<X,Y,T>(self: &InternalBribe<X,Y>):&Reward<X, Y, T>{
+    public fun borrow_reward<X,Y,T>(self: &InternalBribe<X,Y>):&Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
         dof::borrow(&self.id, type_name)
@@ -84,10 +88,10 @@ module suiDouBashiVest::internal_bribe{
         assert!(dof::exists_(&self.id, type_name), err::reward_not_exist());
     }
     // being calling by voter, when creating guage
-    fun create_bribe<X,Y>(
-        _: &mut Pool<X,Y>,
+    public (friend )fun create_bribe<X,Y>(
+        _: & Pool<X,Y>,
         ctx: &mut TxContext
-    ) {
+    ):ID {
         let bribe = InternalBribe<X,Y>{
             id: object::new(ctx),
             total_supply:0,
@@ -96,11 +100,13 @@ module suiDouBashiVest::internal_bribe{
 
             checkpoints: table::new<ID, Table<u64, Checkpoint>>(ctx), // voting weights for each voter
         };
-
+        let id = object::id(&bribe);
         create_reward<X,Y,X>(&mut bribe, ctx);
         create_reward<X,Y,Y>(&mut bribe, ctx);
 
         transfer::share_object(bribe);
+
+        id
     }
 
 
@@ -324,13 +330,13 @@ module suiDouBashiVest::internal_bribe{
         let cp = table::borrow(bps_borrow, end_idx);
         let ( _, reward_per_token ) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp));
 
-        /// HOw ?
+        // HOw ?
         earned_reward = earned_reward + checkpoints::balance(cp) * (get_reward_per_token<X,Y,T>(self, clock) - math::max(reward_per_token, reward::user_reward_per_token_stored(reward, id))) / PRECISION;
 
         return earned_reward
     }
 
-    // calculate reward between each supply checkpoints
+    // calculate reward between supply checkpoints
     fun calc_reward_per_token<X, Y, T>(
         reward: &Reward<X, Y, T>,
         timestamp_1: u64,
@@ -434,7 +440,7 @@ module suiDouBashiVest::internal_bribe{
         actual_last: bool,
         clock: &Clock,
         ctx: &mut TxContext
-    ):(u64, u64) // ( reward_per_token_sttored, last_update_time)
+    ):(u64, u64) // ( reward_per_token_stored, last_update_time)
     {
         assert_generic_type<X,Y,T>();
 
@@ -615,10 +621,5 @@ module suiDouBashiVest::internal_bribe{
         event::notify_reward<X>(tx_context::sender(ctx), value);
     }
 
-
-    // ===== getter =====
-    // #[test_only]public fun mock_init(ctx: &mut TxContext){
-    //     init(ctx);
-    // }
 
 }

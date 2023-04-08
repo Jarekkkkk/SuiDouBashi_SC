@@ -43,7 +43,6 @@ module suiDouBashiVest::reward{
         }
     }
 
-
     // ===== Getter =====
     public fun balance<X,Y,T>(self: &Reward<X,Y,T>):u64{
         balance::value(&self.balance)
