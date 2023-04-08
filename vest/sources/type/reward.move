@@ -11,15 +11,20 @@ module suiDouBashiVest::reward{
         id: UID,
 
         balance: Balance<T>,
-        reward_rate: u64, // pair
-        period_finish: u64,// pair
-        last_update_time: u64, // pair
-        reward_per_token_stored: u64, // pair
-        is_reward: bool,// pair
 
-        reward_per_token_checkpoints: Table<ID, Table<u64,  RewardPerTokenCheckpoint>>, // pair
-        user_reward_per_token_stored: Table<ID, u64>, // player -> token_value
-        last_earn: Table<ID, u64>, // VSDB -> ts
+        //update when bribe is deposited
+        reward_rate: u64,
+        period_finish: u64, // update when bribe is deposited, (internal_bribe -> fee ), (external_bribe -> doverse coins)
+
+        last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
+        reward_per_token_stored: u64,
+
+        user_reward_per_token_stored: Table<ID, u64>, // udpate when user deposit
+        is_reward: bool,
+
+        /// TODO: move to VSDB
+        reward_per_token_checkpoints: Table<ID, Table<u64,  RewardPerTokenCheckpoint>>,
+        last_earn: Table<ID, u64>, // last time player deposit the reward
     }
 
     public fun new<X,Y,T>(ctx: &mut TxContext): Reward<X,Y,T>{
@@ -112,10 +117,6 @@ module suiDouBashiVest::reward{
         *table::borrow_mut(&mut self.last_earn, id) = last_earn ;
     }
 
-    public fun update_user_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, user_reward_per_token_stored:u64){
-        *table::borrow_mut(&mut self.user_reward_per_token_stored, id) = user_reward_per_token_stored ;
-    }
-
     public fun update_reward_rate<X,Y,T>(self:&mut Reward<X,Y,T>, reward_rate:u64){
         self.reward_rate = reward_rate;
     }
@@ -124,5 +125,8 @@ module suiDouBashiVest::reward{
         self.period_finish = period_finish;
     }
 
+    public fun update_user_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, user_reward_per_token_stored:u64){
+        *table::borrow_mut(&mut self.user_reward_per_token_stored, id) = user_reward_per_token_stored ;
+    }
 
 }

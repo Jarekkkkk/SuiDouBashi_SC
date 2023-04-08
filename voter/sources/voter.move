@@ -17,3 +17,12 @@
 // bribe:
 //      1. deposit
 //      2. withdraw
+module suiDouBashiVoter::voter{
+    use sui::object::{ID, UID};
+    use sui::table::{Self, Table};
+
+    struct Voter has key{
+        id: UID,
+        weights: Table<ID, u64> // pool -> weight
+    }
+}

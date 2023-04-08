@@ -1,5 +1,5 @@
 [package]
-name = "voter"
+name = "suiDouBashiVoter"
 version = "0.0.1"
 
 [dependencies]
@@ -14,3 +14,4 @@ voter =  "0x0"
 std = "0x1"
 sui =  "0x2"
 sui_system = "0x3"
+suiDouBashiVoter = "0x4321"

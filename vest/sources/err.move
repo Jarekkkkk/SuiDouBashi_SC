@@ -17,4 +17,6 @@ module suiDouBashiVest::err{
 
     public fun invalid_type_argument(): u64{ Prefix + 206 }
 
+    public fun reward_not_exist(): u64 { Prefix + 207 }
+
 }
