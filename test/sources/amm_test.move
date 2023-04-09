@@ -25,7 +25,7 @@ module test::amm_test{
     #[test]
     fun test_init_pool(){
         let scenario = test::begin(@0x1);
-        clock::create_for_testing(ctx(&mut scenario));
+        let clock = clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         test_init_pool_<DAI, USDC>(&mut scenario);
@@ -35,7 +35,7 @@ module test::amm_test{
     #[test]
     fun test_add_liquidity() {
         let scenario = test::begin(@0x1);
-        clock::create_for_testing(ctx(&mut scenario));
+        let clock = clock::create_for_testing(ctx(&mut scenario));
         dai::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
         let deposit_x = 30000;

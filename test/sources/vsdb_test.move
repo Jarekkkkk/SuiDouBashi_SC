@@ -18,6 +18,7 @@ module test::vasdb_test{
     }
     fun setup(scenario: &mut Scenario){
         clock::create_for_testing(ctx(scenario));
+        tran
     }
     fun test_lock_( sdb: Coin<SDB>, duration: u64, s: &mut Scenario){
         let jarek = person();

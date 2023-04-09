@@ -29,5 +29,13 @@ module suiDouBashiVest::err{
 
     // - Gauge
     public fun already_stake(): u64 { Prefix + 211 }
+    public fun dead_gauge(): u64 { Prefix + 211 }
+
+
+    // - Vote
+    public fun already_voted(): u64 { Prefix + 212 }
+    public fun invalid_governor(): u64 { Prefix + 213 }
+    public fun invalid_emergency(): u64 { Prefix + 214 }
+    public fun non_whitelist(): u64 { Prefix + 215 }
 
 }

@@ -10,6 +10,8 @@ module suiDouBashiVest::gauge{
     use sui::clock::{Self, Clock};
     use sui::math;
     use std::vector as vec;
+    use sui::vec_set::{Self, VecSet};
+    use std::ascii::String;
 
 
     use suiDouBashiVest::vsdb::{Self, VSDB};
@@ -28,14 +30,17 @@ module suiDouBashiVest::gauge{
     const MAX_REWARD_TOKENS: u64 = 16;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
+    friend suiDouBashiVest::voter;
 
-    struct Guage<phantom X, phantom Y> has key, store{
+
+    struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,
+        is_alive:bool,
 
         bribes: vector<ID>,//[ Internal, External ]
+        pool: ID,
 
-        //TODO
-        //rewards:
+        rewards: VecSet<String>,
 
         total_supply: Balance<LP_TOKEN<X,Y>>,
         // TODO: move to VSDB
@@ -52,9 +57,13 @@ module suiDouBashiVest::gauge{
 
 
         checkpoints: Table<ID, Table<u64, Checkpoint>>,
+
+        // voting, distributing, fee
+        supplu_index: u64,
+        claimable: u64
     }
 
-    fun create_reward<X,Y,T>(self: &mut Guage<X,Y>, ctx: &mut TxContext){
+    public (friend) fun create_reward<X,Y,T>(self: &mut Gauge<X,Y>, ctx: &mut TxContext){
         assert_generic_type<X,Y,T>();
 
         let type_name = type_name::get<T>();
@@ -63,13 +72,13 @@ module suiDouBashiVest::gauge{
         dof::add(&mut self.id, type_name, reward);
     }
 
-    fun borrow_reward<X,Y,T>(self: &Guage<X,Y>):&Reward<X, Y, T>{
+    fun borrow_reward<X,Y,T>(self: &Gauge<X,Y>):&Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
         dof::borrow(&self.id, type_name)
     }
 
-    fun borrow_reward_mut<X,Y,T>(self: &mut Guage<X,Y>):&mut Reward<X, Y, T>{
+    fun borrow_reward_mut<X,Y,T>(self: &mut Gauge<X,Y>):&mut Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
         dof::borrow_mut(&mut self.id, type_name)
@@ -83,20 +92,29 @@ module suiDouBashiVest::gauge{
         assert!( type_t == type_x || type_t == type_y, err::invalid_type_argument());
     }
 
-    public fun assert_reward_created<X,Y,T>(self: &Guage<X,Y>, type_name: TypeName){
+    public fun assert_reward_created<X,Y,T>(self: &Gauge<X,Y>, type_name: TypeName){
         assert!(dof::exists_(&self.id, type_name), err::reward_not_exist());
     }
 
-    /// Create
+    public fun assert_alive<X,Y>(self: &Gauge<X,Y>){
+        assert!(self.is_alive, err::dead_gauge());
+    }
+
     fun create_gauge<X,Y>(
         pool: &Pool<X,Y>,
         ctx: &mut TxContext
     ) {
         let b_id = internal_bribe::create_bribe(pool, ctx);
 
-        let gauge = Guage<X,Y>{
+        let gauge = Gauge<X,Y>{
             id: object::new(ctx),
+
+            is_alive: true,
+
             bribes: vec::singleton(b_id),
+            pool: object::id(pool),
+
+            rewards: vec_set::empty<String>(),
 
             total_supply: balance::zero<LP_TOKEN<X,Y>>(),
             balance_of: table::new<ID, u64>(ctx),
@@ -111,6 +129,9 @@ module suiDouBashiVest::gauge{
             supply_checkpoints: table::new<u64, SupplyCheckpoint>(ctx),
 
             checkpoints: table::new<ID, Table<u64, Checkpoint>>(ctx), // voting weights for each voter
+
+            supplu_index: 0,
+            claimable: 0
         };
 
         create_reward<X,Y,X>(&mut gauge, ctx);
@@ -121,8 +142,10 @@ module suiDouBashiVest::gauge{
 
 
     // ===== Getter =====
+    public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
+
     public fun get_prior_balance_index<X,Y>(
-        self: & Guage<X,Y>,
+        self: & Gauge<X,Y>,
         vsdb: &VSDB,
         ts:u64
     ):u64 {
@@ -162,7 +185,7 @@ module suiDouBashiVest::gauge{
     }
 
     public fun get_prior_supply_index<X,Y>(
-        self: & Guage<X,Y>,
+        self: & Gauge<X,Y>,
         ts:u64
     ):u64 {
         let len = table::length(&self.supply_checkpoints);
@@ -262,7 +285,7 @@ module suiDouBashiVest::gauge{
     }
 
     fun get_reward_per_token<X, Y, T>(
-        self: &Guage<X,Y>,
+        self: &Gauge<X,Y>,
         clock: &Clock
     ): u64{
         let reward = borrow_reward<X,Y,T>(self);
@@ -281,7 +304,7 @@ module suiDouBashiVest::gauge{
     }
 
      fun earned<X,Y,T>(
-        self: &Guage<X,Y>,
+        self: &Gauge<X,Y>,
         vsdb: &VSDB,
         clock: &Clock
     ):u64{
@@ -339,8 +362,11 @@ module suiDouBashiVest::gauge{
     }
 
     // ===== Setter =====
+    public (friend) fun kill_gauge_<X,Y>(self: &mut Gauge<X,Y> ){ self.is_alive = false }
+    public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
+
     fun write_checkpoint<X,Y>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         vsdb: &VSDB,
         balance: u64, // record down balance
         clock: &Clock,
@@ -396,7 +422,7 @@ module suiDouBashiVest::gauge{
     }
 
     fun write_supply_checkpoint<X,Y>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         clock: &Clock,
         //ctx: &mut TxContext
     ){
@@ -421,7 +447,7 @@ module suiDouBashiVest::gauge{
     /// 4. distribute
     /// update both global & plyaer state repsecitvley
     fun update_reward_per_token<X,Y,T>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         vsdb: &VSDB,
         max_run:u64,
         actual_last: bool,
@@ -482,7 +508,7 @@ module suiDouBashiVest::gauge{
 
     /// allows a player to claim reward for a given bribe
     fun get_reward<X, Y, T>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
@@ -515,7 +541,7 @@ module suiDouBashiVest::gauge{
 
     /// Stake LP_TOKEN
     fun deposit<X,Y,T>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         vsdb: &mut VSDB,
         lp_token: Coin<LP_TOKEN<X,Y>>,
         clock: &Clock,
@@ -553,7 +579,7 @@ module suiDouBashiVest::gauge{
     }
 
     fun withdraw_<X,Y,T>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         vsdb: &mut VSDB,
         amount: u64,
         clock: &Clock,
@@ -571,7 +597,7 @@ module suiDouBashiVest::gauge{
         // unstake the LP
         let lp_token = coin::take(&mut self.total_supply, amount, ctx);
         let lp_value = coin::value(&lp_token);
-        *table::borrow_mut(&mut self.balance_of, object::id(vsdb)) = *table::borrow(&self.balance_of, object::id(vsdb)) - lp_value;
+        *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(&self.balance_of, id) - lp_value;
 
         // detach & validation
         let sender = tx_context::sender(ctx);
@@ -594,7 +620,7 @@ module suiDouBashiVest::gauge{
     // TODO: whitelist check
     /// distribute the fees
     public fun notify_reward_amount<X,Y,T>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
         vsdb: &VSDB,
@@ -650,7 +676,7 @@ module suiDouBashiVest::gauge{
     // For voter distribure fees, LP trenasfer Fees to Internal Bribe
     /// Instead of receiving pairs of coins from each pool, LPs receive protocol emissions depending on votes each pool accumulate
     fun claim_fee<X,Y>(
-        self: &mut Guage<X,Y>,
+        self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
         vsdb: &VSDB,

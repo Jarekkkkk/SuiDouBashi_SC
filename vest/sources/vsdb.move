@@ -41,7 +41,12 @@ module suiDouBashiVest::vsdb{
 
         // Gauge Voting
         attachments: u64,
-        voted: bool
+        voted: bool,
+
+        // voter voting
+        pool_vote: vector<ID>,
+        used_weights: u64,
+        last_voted: u64 // ts
     }
 
     struct LockedSDB has store{
@@ -286,6 +291,8 @@ module suiDouBashiVest::vsdb{
 
     public fun owner(self: &VSDB):address { self.logical_owner }
 
+    public fun last_voted(self: &VSDB): u64{ self.last_voted }
+
     // - point
     public fun get_version(self: &VSDB): u64 { self.user_epoch }
     public fun get_latest_bias(self: &VSDB): I128{
@@ -443,7 +450,11 @@ module suiDouBashiVest::vsdb{
             },
 
             attachments: 0,
-            voted: false
+            voted: false,
+
+            pool_vote: vec::empty<ID>(),
+            used_weights: 0,
+            last_voted: 0
         };
 
         update_user_point(&mut vsdb, ts);
@@ -492,7 +503,10 @@ module suiDouBashiVest::vsdb{
             user_point_history,
             locked_balance,
             attachments: _,
-            voted: _
+            voted: _,
+            pool_vote: _,
+            used_weights: _,
+            last_voted: _
         } = self;
 
         let LockedSDB{

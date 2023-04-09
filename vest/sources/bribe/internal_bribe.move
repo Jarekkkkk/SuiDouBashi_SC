@@ -1,7 +1,6 @@
 // Internal Bribes represent pool fee distributed to LP holders
 module suiDouBashiVest::internal_bribe{
     use std::type_name::{Self, TypeName};
-    use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_object_field as dof;
