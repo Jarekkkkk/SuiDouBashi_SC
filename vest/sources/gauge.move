@@ -31,12 +31,17 @@ module suiDouBashiVest::gauge{
 
     struct Guage<phantom X, phantom Y> has key, store{
         id: UID,
+
         bribes: vector<ID>,//[ Internal, External ]
+
+        //TODO
+        //rewards:
+
         total_supply: Balance<LP_TOKEN<X,Y>>,
         // TODO: move to VSDB
         balance_of: Table<ID, u64>,
 
-        token_ids: Table<address, ID>, // each player cna only depoist once for each pool
+        token_ids: Table<address, ID>, // each player cna only stake once for each pool
 
         is_for_pair: bool,
 
@@ -114,6 +119,534 @@ module suiDouBashiVest::gauge{
         transfer::share_object(gauge);
     }
 
+
+    // ===== Getter =====
+    public fun get_prior_balance_index<X,Y>(
+        self: & Guage<X,Y>,
+        vsdb: &VSDB,
+        ts:u64
+    ):u64 {
+        let checkpoints = table::borrow(&self.checkpoints, object::id(vsdb));
+        let len = table::length(checkpoints);
+
+        if( len == 0){
+            return 0
+        };
+
+        if(!table::contains(&self.checkpoints, object::id(vsdb))){
+            return 0
+        };
+
+        if( checkpoints::balance_ts(table::borrow(checkpoints, len - 1)) <= ts ){
+            return len - 1
+        };
+
+        if( checkpoints::balance_ts(table::borrow(checkpoints, 0)) > ts){
+            return 0
+        };
+
+        let lower = 0;
+        let upper = len - 1;
+        while ( lower < upper){
+            let center = upper - (upper - lower) / 2;
+            let cp_ts = checkpoints::balance_ts(table::borrow(checkpoints, center));
+            if(cp_ts == ts ){
+                return center
+            }else if (cp_ts < ts){
+                lower = center;
+            }else{
+                upper = center -1 ;
+            }
+        };
+        return lower
+    }
+
+    public fun get_prior_supply_index<X,Y>(
+        self: & Guage<X,Y>,
+        ts:u64
+    ):u64 {
+        let len = table::length(&self.supply_checkpoints);
+
+        if( len == 0){
+            return 0
+        };
+
+        if( checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, len - 1)) <= ts ){
+            return len - 1
+        };
+
+        if( checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, 0)) > ts){
+            return 0
+        };
+
+        let lower = 0;
+        let upper = len - 1;
+        while ( lower < upper){
+            let center = upper - (upper - lower) / 2;
+            let sp_ts = checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, center));
+            if( sp_ts == ts ){
+                return center
+            }else if ( sp_ts < ts){
+                lower = center;
+            }else{
+                upper = center -1 ;
+            }
+        };
+
+        return lower
+    }
+
+    // move to REWARD
+    public fun get_prior_reward_per_token<X, Y, T>(
+        reward: &Reward<X, Y, T>,
+        vsdb: &VSDB,
+        ts:u64
+    ):(u64, u64) // ( ts, reward_per_token )
+    {
+        let id = object::id(vsdb);
+        let checkpoints = reward::reward_per_token_checkpoints(reward, id);
+        let len = table::length(checkpoints);
+
+        if( len == 0){
+            return ( 0, 0 )
+        };
+
+        if(!reward::reward_per_token_checkpoints_contains(reward, id)){
+            return ( 0, 0 )
+        };
+
+        // return the latest reward as of specific time
+        if( checkpoints::reward_ts(table::borrow(checkpoints, len - 1)) <= ts ){
+            let last_checkpoint = table::borrow(checkpoints, len - 1);
+            return ( checkpoints::reward_ts(last_checkpoint), checkpoints::reward(last_checkpoint))
+        };
+
+        if( checkpoints::reward_ts(table::borrow(checkpoints, 0)) > ts){
+            return ( 0, 0 )
+        };
+
+        let lower = 0;
+        let upper = len - 1;
+        while ( lower < upper){
+            let center = upper - (upper - lower) / 2;
+            let rp_ts = checkpoints::reward_ts(table::borrow(checkpoints, center));
+            let reward = checkpoints::reward(table::borrow(checkpoints, center));
+            if(rp_ts == ts ){
+                return (rp_ts, reward )
+            }else if (rp_ts < ts){
+                lower = center;
+            }else{
+                upper = center -1 ;
+            }
+        };
+        let rp = table::borrow(checkpoints, lower);
+        return ( checkpoints::reward_ts(rp), checkpoints::reward(rp))
+    }
+
+    public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+        math::min(clock::timestamp_ms(clock), reward::period_finish(reward))
+    }
+
+    // calculate reward between supply checkpoints
+    fun calc_reward_per_token<X, Y, T>(
+        reward: &Reward<X, Y, T>,
+        timestamp_1: u64,
+        timestamp_0: u64,
+        supply: u64,
+        start_timestamp: u64 // last update time
+    ):(u64, u64){
+        let end_time = math::max(timestamp_1, start_timestamp);
+        let reward =  (math::min(end_time, reward::period_finish(reward)) - math::min(math::max(timestamp_0, start_timestamp), reward::period_finish(reward))) * reward::reward_rate(reward) * PRECISION / supply ;
+
+        return ( reward, end_time )
+    }
+
+    fun get_reward_per_token<X, Y, T>(
+        self: &Guage<X,Y>,
+        clock: &Clock
+    ): u64{
+        let reward = borrow_reward<X,Y,T>(self);
+        let reward_stored = reward::reward_per_token_stored(reward);
+        let total_supply = balance::value(&self.total_supply);
+        // no accumualated voting
+        if(total_supply == 0){
+            return reward_stored
+        };
+
+        let last_update = reward::last_update_time(reward);
+        let period_finish = reward::period_finish(reward);
+        let reward_rate = reward::reward_rate(reward);
+
+        return  reward_stored + (last_time_reward_applicable(reward, clock) - math::min(last_update, period_finish)) * reward_rate * PRECISION / total_supply
+    }
+
+     fun earned<X,Y,T>(
+        self: &Guage<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock
+    ):u64{
+        assert_generic_type<X,Y,T>();
+
+        let reward = borrow_reward<X,Y,T>(self);
+        let id = object::id(vsdb);
+        // checking contains is sufficient, not allowing to exist any empty table
+        if(!reward::last_earn_contain(reward, id) || !table::contains(&self.checkpoints, id) || !reward::reward_per_token_checkpoints_contains(reward, id)){
+            return 0
+        };
+
+        let last_earn = reward::last_earn(reward, id);
+        let rps_borrow = reward::reward_per_token_checkpoints(reward, id);
+        let start_timestamp =  math::max(last_earn, checkpoints::reward_ts(table::borrow(rps_borrow, 0)));
+
+        let bps_borrow = table::borrow(&self.checkpoints, id);
+
+        let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
+        let end_idx = table::length(bps_borrow) - 1;
+        let earned_reward = 0;
+
+        // accumulate rewards in each reward checkpoints derived from balance checkpoints
+        if(end_idx > 0){
+            let i = start_idx;
+            while( i <= end_idx - 1){ // leave last one
+                let cp_0 = table::borrow(bps_borrow, i);
+                let cp_1 = table::borrow(bps_borrow, i + 1);
+                let ( _, reward_per_token_0) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp_0));
+                let ( _, reward_per_token_1 ) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp_1));
+                earned_reward =  earned_reward +  checkpoints::balance(cp_0) *  ( reward_per_token_1 - reward_per_token_0) / PRECISION;
+                i = i + 1;
+            }
+        };
+
+        let cp = table::borrow(bps_borrow, end_idx);
+        let ( _, reward_per_token ) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp));
+
+        // HOw ?
+        earned_reward = earned_reward + checkpoints::balance(cp) * (get_reward_per_token<X,Y,T>(self, clock) - math::max(reward_per_token, reward::user_reward_per_token_stored(reward, id))) / PRECISION;
+
+        return earned_reward
+    }
+
+    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+        let ts = clock::timestamp_ms(clock);
+        let period_finish = reward::period_finish(reward);
+        let reward_rate = reward::reward_rate(reward);
+
+        // no on bribing
+        if(ts >= period_finish) return 0;
+
+        let _remaining = period_finish - ts;
+        return _remaining * reward_rate
+    }
+
+    // ===== Setter =====
+    fun write_checkpoint<X,Y>(
+        self: &mut Guage<X,Y>,
+        vsdb: &VSDB,
+        balance: u64, // record down balance
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let vsdb = object::id(vsdb);
+        let timestamp = clock::timestamp_ms(clock);
+
+        // create table for new registry
+        if( !table::contains(&self.checkpoints, vsdb)){
+            let checkpoints = table::new(ctx);
+            table::add(&mut self.checkpoints, vsdb, checkpoints);
+        };
+
+        let player_checkpoint = table::borrow_mut(&mut self.checkpoints, vsdb);
+        let len = table::length(player_checkpoint);
+
+        if( len > 0 && checkpoints::balance_ts(table::borrow(player_checkpoint, len - 1)) == timestamp){
+            let cp_mut = table::borrow_mut(player_checkpoint, len - 1 );
+            checkpoints::update_balance(cp_mut, balance);
+        }else{
+            let checkpoint = checkpoints::new_cp(timestamp, balance);
+            table::add(player_checkpoint, len, checkpoint);
+        };
+    }
+
+    fun write_reward_per_token_checkpoint<X, Y, T>(
+        reward: &mut Reward<X, Y, T>,
+        vsdb: &VSDB,
+        reward_per_token: u64, // record down balance
+        timestamp: u64,
+        ctx: &mut TxContext
+    ){
+        let id = object::id(vsdb);
+
+        //register new table for new player
+        if( !reward::reward_per_token_checkpoints_contains(reward, id)){
+            reward::add_new_user_reward(reward, id, ctx);
+            let rp_s = reward::reward_per_token_checkpoints_mut(reward, id);
+            table::add(rp_s, 0, checkpoints::new_rp(timestamp, reward_per_token));
+            return
+        };
+
+        let rp_s = reward::reward_per_token_checkpoints_mut(reward, id);
+        let len = table::length(rp_s);
+
+        if( len > 0 && checkpoints::reward_ts(table::borrow(rp_s, len - 1)) == timestamp){
+            let cp_mut = table::borrow_mut(rp_s, len - 1 );
+            checkpoints::update_reward(cp_mut, reward_per_token);
+        }else{
+            table::add(rp_s, len, checkpoints::new_rp(timestamp, reward_per_token));
+        };
+    }
+
+    fun write_supply_checkpoint<X,Y>(
+        self: &mut Guage<X,Y>,
+        clock: &Clock,
+        //ctx: &mut TxContext
+    ){
+        let timestamp = clock::timestamp_ms(clock);
+        let supply = balance::value(&self.total_supply);
+
+        let len = table::length(&self.supply_checkpoints);
+
+        if( len > 0 && checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, len - 1)) == timestamp){
+            let cp_mut = table::borrow_mut(&mut self.supply_checkpoints, len - 1 );
+            checkpoints::update_supply(cp_mut, supply)
+        }else{
+            let checkpoint = checkpoints::new_sp(timestamp, supply);
+            table::add(&mut self.supply_checkpoints, len, checkpoint);
+        };
+    }
+
+    /// require when
+    /// 1. reward claims,
+    /// 2. deposit ( votes )
+    /// 3. withdraw ( revoke )
+    /// 4. distribute
+    /// update both global & plyaer state repsecitvley
+    fun update_reward_per_token<X,Y,T>(
+        self: &mut Guage<X,Y>,
+        vsdb: &VSDB,
+        max_run:u64,
+        actual_last: bool,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ):(u64, u64) // ( reward_per_token_stored, last_update_time)
+    {
+        assert_generic_type<X,Y,T>();
+
+        let start_timestamp = reward::last_update_time(borrow_reward<X,Y,T>(self));
+        let reward_ = reward::reward_per_token_stored(borrow_reward<X,Y,T>(self));
+
+        if(table::length(&self.supply_checkpoints) == 0){
+            return ( reward_, start_timestamp )
+        };
+
+        if(reward::reward_rate(borrow_reward<X,Y,T>(self)) == 0){
+            return ( reward_, clock::timestamp_ms(clock))
+        };
+
+        let start_idx = get_prior_supply_index(self, start_timestamp);
+        let end_idx = math::min(table::length(&self.supply_checkpoints) - 1, max_run);
+
+        // update reward_per_token_checkpoints
+        if(end_idx > 0){
+            let i = start_idx;
+            while( i <= end_idx - 1){
+                let sp_0_ts = checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, i));
+                let sp_0_supply = checkpoints::supply(table::borrow(&self.supply_checkpoints, i));
+                if(sp_0_supply > 0){
+                    let ts = checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, i + 1));
+                    let reward = borrow_reward_mut<X,Y,T>(self);
+                    let ( reward_per_token , end_time) = calc_reward_per_token(reward, ts, sp_0_ts, sp_0_supply, start_timestamp);
+                    reward_ = reward_ + reward_per_token;
+                    write_reward_per_token_checkpoint(reward, vsdb, reward_, end_time, ctx);
+                    start_timestamp = end_time;
+                };
+                i = i + 1;
+            }
+        };
+
+        if(actual_last){
+            let sp_supply = checkpoints::supply(table::borrow(&self.supply_checkpoints, end_idx));
+            let sp_ts = checkpoints::supply_ts(table::borrow(&self.supply_checkpoints, end_idx));
+            if(sp_supply > 0){
+                let reward = borrow_reward_mut<X,Y,T>(self);
+                let last_time_reward = last_time_reward_applicable(reward, clock);
+                let ( reward_per_token, _ ) = calc_reward_per_token(reward, last_time_reward, math::max(sp_ts, start_timestamp), sp_supply, start_timestamp);
+                reward_ = reward_ + reward_per_token;
+                let reward = borrow_reward_mut<X,Y,T>(self);
+                write_reward_per_token_checkpoint(reward, vsdb, reward_, clock::timestamp_ms(clock), ctx);
+                start_timestamp = clock::timestamp_ms(clock);
+            };
+        };
+
+        return ( reward_, start_timestamp )
+    }
+
+    /// allows a player to claim reward for a given bribe
+    fun get_reward<X, Y, T>(
+        self: &mut Guage<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert_generic_type<X,Y,T>();
+
+        let id = object::id(vsdb);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, vsdb, MAX_U64, true, clock, ctx);
+
+        let _reward = earned<X,Y,T>(self, vsdb, clock);
+
+        let reward = borrow_reward_mut<X,Y,T>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
+
+        reward::update_last_earn(reward, id, clock::timestamp_ms(clock));
+        reward::update_user_reward_per_token_stored(reward, id, reward_per_token_stored);
+
+        if(_reward > 0){
+            let coin_x = coin::take(reward::balance_mut(reward), _reward, ctx);
+            let value_x = coin::value(&coin_x);
+            transfer::public_transfer(
+                coin_x,
+                tx_context::sender(ctx)
+            );
+
+            event::claim_reward(tx_context::sender(ctx), value_x);
+        }
+    }
+
+    /// Stake LP_TOKEN
+    fun deposit<X,Y,T>(
+        self: &mut Guage<X,Y>,
+        vsdb: &mut VSDB,
+        lp_token: Coin<LP_TOKEN<X,Y>>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert_generic_type<X,Y,T>();
+
+        let id = object::id(vsdb);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, vsdb, MAX_U64, true, clock, ctx);
+
+        let reward = borrow_reward_mut<X,Y,T>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
+
+        let lp_value = coin::value(&lp_token);
+        coin::put(&mut self.total_supply, lp_token);
+        *table::borrow_mut(&mut self.balance_of, object::id(vsdb)) = *table::borrow(& self.balance_of, object::id(vsdb)) + lp_value;
+
+        //TODO: attach token to gauge, and move assertion in the front of respective functions
+        // each address can only register once for each pool
+        let sender = tx_context::sender(ctx);
+        assert!(vsdb::owner(vsdb) == sender, err::invalid_owner());
+        if(!table::contains(&self.token_ids, sender)){
+            table::add(&mut self.token_ids, sender, id);
+            // attahc
+            vsdb::attach(vsdb);
+        };
+        assert!(table::borrow(&self.token_ids, sender) == &id, err::already_stake());
+        //voter::attachTokenToGauge() // move to voter
+
+        write_checkpoint(self, vsdb, lp_value, clock, ctx);
+        write_supply_checkpoint(self, clock);
+
+        event::deposit_lp<X,Y>(tx_context::sender(ctx), id, lp_value);
+    }
+
+    fun withdraw_<X,Y,T>(
+        self: &mut Guage<X,Y>,
+        vsdb: &mut VSDB,
+        amount: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ):Coin<LP_TOKEN<X,Y>>{
+        assert_generic_type<X,Y,T>();
+
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, vsdb, MAX_U64, true, clock, ctx);
+        let id = object::id(vsdb);
+
+        let reward = borrow_reward_mut<X,Y,T>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
+
+        // unstake the LP
+        let lp_token = coin::take(&mut self.total_supply, amount, ctx);
+        let lp_value = coin::value(&lp_token);
+        *table::borrow_mut(&mut self.balance_of, object::id(vsdb)) = *table::borrow(&self.balance_of, object::id(vsdb)) - lp_value;
+
+        // detach & validation
+        let sender = tx_context::sender(ctx);
+        assert!(vsdb::owner(vsdb) == sender, err::invalid_owner());
+
+        let id = table::remove(&mut self.token_ids, sender);
+        // detach
+        vsdb::detach(vsdb);
+
+        assert!(table::borrow(&self.token_ids, sender) == &id, err::already_stake());
+
+        write_checkpoint(self, vsdb, lp_value, clock, ctx);
+        write_supply_checkpoint(self, clock);
+
+        event::withdraw_lp<X,Y>(tx_context::sender(ctx), id, lp_value);
+
+        lp_token
+    }
+
+    // TODO: whitelist check
+    /// distribute the fees
+    public fun notify_reward_amount<X,Y,T>(
+        self: &mut Guage<X,Y>,
+        bribe: &mut InternalBribe<X,Y>,
+        pool: &mut Pool<X,Y>,
+        vsdb: &VSDB,
+        coin: Coin<T>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert_generic_type<X,Y,T>();
+
+        let value = coin::value(&coin);
+        let reward = borrow_reward<X,Y,T>(self);
+        assert!(value > 0, 0);
+        assert!(reward::is_reward(reward), 0);
+
+        let ts = clock::timestamp_ms(clock);
+        if(reward::reward_rate(reward) == 0){
+            write_reward_per_token_checkpoint(borrow_reward_mut<X,Y,T>(self), vsdb, 0, ts, ctx);
+        };
+
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, vsdb, MAX_U64, true, clock, ctx);
+
+        reward::update_reward_per_token_stored(borrow_reward_mut<X,Y,T>(self), reward_per_token_stored);
+        reward::update_last_update_time(borrow_reward_mut<X,Y,T>(self), last_update_time);
+
+        // Charge fees when
+        claim_fee(self, bribe, pool, vsdb, clock, ctx);
+
+        let reward = borrow_reward_mut<X,Y,T>(self);
+        // initial bribe in each epoch
+        if(ts >= reward::period_finish(reward)){
+            coin::put(reward::balance_mut(reward), coin);
+            reward::update_reward_rate(reward, value / DURATION);
+        }else{
+        // accumulate bribes in each eopch
+            let _remaining = reward::period_finish(reward) - ts;
+            let _left = _remaining * reward::reward_rate(reward);
+            assert!(value > _left, 1);
+            coin::put(reward::balance_mut(reward), coin);
+            reward::update_reward_rate(reward, ( value + _left ) / DURATION);
+        };
+
+        assert!(reward::reward_rate(reward) > 0, err::invalid_reward_rate());
+        let bal_total = reward::balance(reward);
+        assert!( reward::reward_rate(reward) <= bal_total / DURATION, err::max_reward());
+
+        reward::update_period_finish(reward, ts + DURATION);
+
+        event::notify_reward<X>(tx_context::sender(ctx), value);
+    }
+
+
+    // ===== Other =====
     // For voter distribure fees, LP trenasfer Fees to Internal Bribe
     /// Instead of receiving pairs of coins from each pool, LPs receive protocol emissions depending on votes each pool accumulate
     fun claim_fee<X,Y>(
@@ -126,7 +659,6 @@ module suiDouBashiVest::gauge{
         ctx: &mut TxContext
     ){
         // assert pair exists
-
         let (coin_x, coin_y) = amm_v1::claim_fee_guage(pool, ctx);
         let value_x = coin::value(&coin_x);
         let value_y = coin::value(&coin_y);
@@ -148,7 +680,9 @@ module suiDouBashiVest::gauge{
                 let withdraw = balance::withdraw_all(&mut self.fees_y);
                 internal_bribe::notify_reward_amount(bribe, vsdb, coin::from_balance(withdraw, ctx), clock, ctx);
             }
-        }
+        };
 
+        event::claim_fees(tx_context::sender(ctx), value_x, value_y);
     }
+
 }

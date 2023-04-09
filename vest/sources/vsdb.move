@@ -37,8 +37,11 @@ module suiDouBashiVest::vsdb{
         /// the most recently recorded rate of voting power decrease for Player
         user_point_history: Table<u64, Point>, // epoch -> point_history // TableVec (?)
 
-        /// Should this assign UID (?)
-        locked_balance: LockedSDB
+        locked_balance: LockedSDB,
+
+        // Gauge Voting
+        attachments: u64,
+        voted: bool
     }
 
     struct LockedSDB has store{
@@ -193,6 +196,7 @@ module suiDouBashiVest::vsdb{
     ){
         assert_owner(self, ctx);
         assert_owner(&vsdb, ctx);
+        assert!(vsdb.attachments == 0 && vsdb.voted == false, err::pure_vsdb());
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let locked_bal_ = locked_balance(&vsdb);
@@ -279,6 +283,8 @@ module suiDouBashiVest::vsdb{
     public fun locked_end(self: &VSDB):u64{
         self.locked_balance.end
     }
+
+    public fun owner(self: &VSDB):address { self.logical_owner }
 
     // - point
     public fun get_version(self: &VSDB): u64 { self.user_epoch }
@@ -434,7 +440,10 @@ module suiDouBashiVest::vsdb{
                 id,
                 balance: coin::into_balance(locked_sdb),
                 end: unlock_time
-            }
+            },
+
+            attachments: 0,
+            voted: false
         };
 
         update_user_point(&mut vsdb, ts);
@@ -481,7 +490,9 @@ module suiDouBashiVest::vsdb{
             logical_owner: _,
             user_epoch: _,
             user_point_history,
-            locked_balance
+            locked_balance,
+            attachments: _,
+            voted: _
         } = self;
 
         let LockedSDB{
@@ -689,6 +700,21 @@ module suiDouBashiVest::vsdb{
         };
     }
 
+    // ===== Gauge Voting =====
+    public fun attach(self: &mut VSDB){
+        self.attachments = self.attachments + 1;
+    }
+
+    public fun detach(self: &mut VSDB){
+        self.attachments = self.attachments - 1;
+    }
+
+    public fun voting(self: &mut VSDB){
+        self.voted = true;
+    }
+    public fun abstain(self: &mut VSDB){
+        self.voted = false;
+    }
     fun img_url_(id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): Url {
         let vesdb = SVG_PREFIX;
         let encoded_b = vec::empty<u8>();

@@ -38,6 +38,9 @@ module suiDouBashiVest::internal_bribe{
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
 
+        // TODO:
+        //rewards: InternalBribe: 2, externalBribe: multiple
+
         // Voting Weight This Bribe receive
         total_supply: u64, // voting
         balace_of: Table<ID, u64>,
@@ -291,7 +294,7 @@ module suiDouBashiVest::internal_bribe{
 
     // get accumulated coins for individual players
     fun earned<X,Y,T>(
-        self: &mut InternalBribe<X,Y>,
+        self: &InternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock
     ):u64{
@@ -612,14 +615,12 @@ module suiDouBashiVest::internal_bribe{
             reward::update_reward_rate(reward, ( value + _left ) / DURATION);
         };
 
-        assert!(reward::reward_rate(reward) > 0, 1);
+        assert!(reward::reward_rate(reward) > 0,  err::invalid_reward_rate());
         let bal_total = reward::balance(reward);
-        assert!( reward::reward_rate(reward) <= bal_total / DURATION, 1);
+        assert!( reward::reward_rate(reward) <= bal_total / DURATION,  err::max_reward());
 
         reward::update_period_finish(reward, ts + DURATION);
 
         event::notify_reward<X>(tx_context::sender(ctx), value);
     }
-
-
 }

@@ -1,15 +1,16 @@
 module suiDouBashiVest::err{
     const Prefix: u64 = 000000;
 
-    public fun invalid_guardian():u64 { Prefix + 200 }
+    // - VSDB
+    public fun invalid_guardian(): u64 { Prefix + 200 }
 
     public fun zero_input(): u64{ Prefix + 201 }
 
-    public fun invalid_lock_time():u64 { Prefix + 202 }
+    public fun invalid_lock_time(): u64 { Prefix + 202 }
 
-    public fun locked():u64 { Prefix + 203 }
+    public fun locked(): u64 { Prefix + 203 }
 
-    public fun empty_locked_balance():u64{ Prefix + 204 }
+    public fun empty_locked_balance(): u64{ Prefix + 204 }
 
     public fun emptry_coin(): u64{ Prefix + 205 }
 
@@ -18,5 +19,15 @@ module suiDouBashiVest::err{
     public fun invalid_type_argument(): u64{ Prefix + 206 }
 
     public fun reward_not_exist(): u64 { Prefix + 207 }
+
+    public fun pure_vsdb(): u64 { Prefix + 208 }
+
+    // - Reward
+    public fun max_reward(): u64 { Prefix + 209 }
+
+    public fun invalid_reward_rate(): u64 { Prefix + 210 }
+
+    // - Gauge
+    public fun already_stake(): u64 { Prefix + 211 }
 
 }

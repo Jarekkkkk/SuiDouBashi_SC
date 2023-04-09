@@ -64,4 +64,51 @@ module suiDouBashiVest::event{
         )
     }
 
+    // - Gague
+    struct ClaimFees has copy, drop{
+        from: address,
+        claimed_x: u64,
+        claimed_y: u64
+    }
+
+    public fun claim_fees(from: address, claimed_x: u64, claimed_y: u64){
+        emit(
+            ClaimFees{
+                from,
+                claimed_x,
+                claimed_y
+            }
+        )
+    }
+
+    struct DepositLP<phantom X, phantom Y> has copy, drop{
+        from: address,
+        token_id: ID,
+        amount: u64
+    }
+
+    public fun deposit_lp<X,Y>(from: address, token_id: ID, amount: u64){
+        emit(
+            DepositLP<X,Y>{
+                from,
+                token_id,
+                amount
+            }
+        )
+    }
+    struct WithdrawLP<phantom X, phantom Y> has copy, drop{
+        from: address,
+        token_id: ID,
+        amount: u64
+    }
+
+    public fun withdraw_lp<X,Y>(from: address, token_id: ID, amount: u64){
+        emit(
+            WithdrawLP<X,Y>{
+                from,
+                token_id,
+                amount
+            }
+        )
+    }
 }
