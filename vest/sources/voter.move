@@ -134,6 +134,74 @@ module suiDouBashiVest::voter{
         self.emergency = new_emergency;
     }
 
+    // - Rewards
+    /// SDB emissions
+    entry fun claim_rewards<X,Y,T>(
+        gauge: &mut Gauge<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        gauge::get_reward<X,Y,T>(gauge, vsdb, clock, ctx);
+    }
+
+    /// External Bribe
+    entry fun claim_bribes<X,Y, T>(
+        internal_bribe: &mut InternalBribe<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        // external
+        internal_bribe::get_reward<X,Y,T>(internal_bribe, vsdb, clock, ctx);
+    }
+
+    /// Internal Bribe
+    entry fun claim_fees<X,Y, T>(
+        internal_bribe: &mut InternalBribe<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        internal_bribe::get_reward<X,Y,T>(internal_bribe, vsdb, clock, ctx);
+    }
+
+    // rebase
+    entry fun distribute_fees<X,Y>(
+        self: &Voter,
+        gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        pool: &mut Pool<X,Y>,
+        vsdb: &VSDB,
+        // LP_TOKEN
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        gauge::claim_fee(gauge, internal_bribe, pool, vsdb, clock, ctx);
+    }
+
+    fun distribute<X,Y>(
+        self: &Voter,
+        gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        pool: &mut Pool<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        //update_period
+        update_for_(self, gauge);
+
+        let claimable = gauge::get_claimable(gauge);
+        if( claimable > gauge::left(gauge::borrow_reward<X,Y,SDB>(gauge), clock) && claimable / DURATION > 0 ){
+            gauge::update_claimable(gauge, 0);
+
+            gauge::notify_reward_amount<X,Y,SDB>(gauge, internal_bribe, pool, vsdb, coin_sdb, clock, ctx);
+
+            event::distribute_reward<X,Y>(tx_context::sender(ctx), claimable);
+        }
+    }
+
 
     // ===== Internal =====
     /// update for each Gauge

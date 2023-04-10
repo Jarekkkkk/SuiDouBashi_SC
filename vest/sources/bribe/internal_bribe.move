@@ -500,7 +500,7 @@ module suiDouBashiVest::internal_bribe{
     }
 
     /// allows a player to claim reward for a given bribe
-    fun get_reward<X, Y, T>(
+    public (friend) fun get_reward<X, Y, T>(
         self: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,

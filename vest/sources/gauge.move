@@ -68,7 +68,7 @@ module suiDouBashiVest::gauge{
         dof::add(&mut self.id, type_name, reward);
     }
 
-    fun borrow_reward<X,Y,T>(self: &Gauge<X,Y>):&Reward<X, Y, T>{
+    public fun borrow_reward<X,Y,T>(self: &Gauge<X,Y>):&Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
         dof::borrow(&self.id, type_name)
@@ -515,7 +515,7 @@ module suiDouBashiVest::gauge{
     }
 
     /// allows a player to claim reward for a given bribe
-    fun get_reward<X, Y, T>(
+    public (friend) fun get_reward<X, Y, T>(
         self: &mut Gauge<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
@@ -683,7 +683,7 @@ module suiDouBashiVest::gauge{
     // ===== Other =====
     // For voter distribure fees, LP trenasfer Fees to Internal Bribe
     /// Instead of receiving pairs of coins from each pool, LPs receive protocol emissions depending on votes each pool accumulate
-    fun claim_fee<X,Y>(
+    public (friend) fun claim_fee<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,

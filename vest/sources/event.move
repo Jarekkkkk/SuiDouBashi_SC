@@ -177,4 +177,35 @@ module suiDouBashiVest::event{
         )
     }
 
+    struct DistributeReward<phantom X, phantom Y> has copy, drop{
+        from: address,
+        amount: u64
+    }
+    public fun distribute_reward<X,Y>(from: address, amount: u64){
+        emit(
+            DistributeReward<X,Y>{
+                from,
+                amount
+            }
+        )
+    }
+
+    // - Mint
+    struct Mint has copy, drop{
+        from: address,
+        weekly: u64,
+        circulating_supply: u64,
+        circulating_emission: u64
+    }
+    public fun mint(from: address, weekly: u64, circulating_supply: u64, circulating_emission: u64){
+        emit(
+            Mint{
+                from,
+                weekly,
+                circulating_supply,
+                circulating_emission
+            }
+        )
+    }
+
 }
