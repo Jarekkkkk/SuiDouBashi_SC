@@ -1,4 +1,4 @@
-module suiDouBashiVest::bribe{
+module suiDouBashiVest::external_bribe{
     use std::type_name::{Self, TypeName};
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};

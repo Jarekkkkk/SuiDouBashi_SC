@@ -12,7 +12,7 @@ module suiDouBashiVest::gauge{
     use std::vector as vec;
     use sui::vec_set::{Self, VecSet};
     use std::ascii::String;
-
+    use sui::table::{ Self, Table};
 
     use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashiVest::event;
@@ -21,8 +21,6 @@ module suiDouBashiVest::gauge{
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
 
-
-    use sui::table::{ Self, Table};
     use suiDouBashi::amm_v1::{Self, Pool, LP_TOKEN};
 
     const DURATION: u64 = { 7 * 86400 };
@@ -31,7 +29,6 @@ module suiDouBashiVest::gauge{
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     friend suiDouBashiVest::voter;
-
 
     struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,
@@ -55,11 +52,10 @@ module suiDouBashiVest::gauge{
 
         supply_checkpoints: Table<u64, SupplyCheckpoint>,
 
-
         checkpoints: Table<ID, Table<u64, Checkpoint>>,
 
         // voting, distributing, fee
-        supplu_index: u64,
+        supply_index: u64,
         claimable: u64
     }
 
@@ -100,18 +96,22 @@ module suiDouBashiVest::gauge{
         assert!(self.is_alive, err::dead_gauge());
     }
 
-    fun create_gauge<X,Y>(
+    public (friend) fun new<X,Y>(
         pool: &Pool<X,Y>,
         ctx: &mut TxContext
-    ) {
-        let b_id = internal_bribe::create_bribe(pool, ctx);
+    ):(Gauge<X,Y>, ID, ID){
+        let internal_id = internal_bribe::create_bribe(pool, ctx);
+        //external
+        let external_id = internal_bribe::create_bribe(pool, ctx);
+        let bribes = vec::singleton(internal_id);
+        vec::push_back(&mut bribes, external_id);
 
         let gauge = Gauge<X,Y>{
             id: object::new(ctx),
 
             is_alive: true,
 
-            bribes: vec::singleton(b_id),
+            bribes,
             pool: object::id(pool),
 
             rewards: vec_set::empty<String>(),
@@ -130,19 +130,27 @@ module suiDouBashiVest::gauge{
 
             checkpoints: table::new<ID, Table<u64, Checkpoint>>(ctx), // voting weights for each voter
 
-            supplu_index: 0,
+            supply_index: 0,
             claimable: 0
         };
 
         create_reward<X,Y,X>(&mut gauge, ctx);
         create_reward<X,Y,Y>(&mut gauge, ctx);
 
-        transfer::share_object(gauge);
+        (gauge, internal_id, external_id)
     }
 
 
     // ===== Getter =====
     public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
+
+    public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
+    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u64{ self.supply_index }
+    public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
+
+    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.supply_index = v; }
+    public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
+
 
     public fun get_prior_balance_index<X,Y>(
         self: & Gauge<X,Y>,
@@ -567,7 +575,7 @@ module suiDouBashiVest::gauge{
         if(!table::contains(&self.token_ids, sender)){
             table::add(&mut self.token_ids, sender, id);
             // attahc
-            vsdb::attach(vsdb);
+            vsdb::attach<X,Y>(vsdb, ctx);
         };
         assert!(table::borrow(&self.token_ids, sender) == &id, err::already_stake());
         //voter::attachTokenToGauge() // move to voter
@@ -605,7 +613,7 @@ module suiDouBashiVest::gauge{
 
         let id = table::remove(&mut self.token_ids, sender);
         // detach
-        vsdb::detach(vsdb);
+        vsdb::detach<X,Y>(vsdb, ctx);
 
         assert!(table::borrow(&self.token_ids, sender) == &id, err::already_stake());
 

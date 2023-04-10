@@ -25,6 +25,8 @@ module suiDouBashiVest::vsdb{
     const YEAR: u256 = { 365 * 86400 };
     const SVG_PREFIX: vector<u8> = b"data:image/svg+xml;base64,";
 
+    friend suiDouBashiVest::voter;
+
     // TODO: display pkg format rule
     struct VSDB has key, store {
         id: UID,
@@ -44,7 +46,7 @@ module suiDouBashiVest::vsdb{
         voted: bool,
 
         // voter voting
-        pool_vote: vector<ID>,
+        pool_votes: Table<ID, u64>, // pool -> votes
         used_weights: u64,
         last_voted: u64 // ts
     }
@@ -293,6 +295,8 @@ module suiDouBashiVest::vsdb{
 
     public fun last_voted(self: &VSDB): u64{ self.last_voted }
 
+    public fun pool_votes(self: &VSDB, pool:ID): u64{ *table::borrow(&self.pool_votes, pool) }
+
     // - point
     public fun get_version(self: &VSDB): u64 { self.user_epoch }
     public fun get_latest_bias(self: &VSDB): I128{
@@ -336,6 +340,20 @@ module suiDouBashiVest::vsdb{
 
 
     // ===== Setter  =====
+    // - voting
+    public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
+        table::add(&mut self.pool_votes, pool_id, value);
+    }
+     public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
+        *table::borrow_mut(&mut self.pool_votes, pool_id) = value;
+    }
+    public (friend) fun clear_pool_votes(self: &mut VSDB, pool_id: ID){
+        table::remove(&mut self.pool_votes, pool_id);
+    }
+
+    public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
+        self.used_weights = w;
+    }
     /// 1. increase version
     /// 2. update point
     ///
@@ -452,7 +470,7 @@ module suiDouBashiVest::vsdb{
             attachments: 0,
             voted: false,
 
-            pool_vote: vec::empty<ID>(),
+            pool_votes: table::new<ID, u64>(ctx),
             used_weights: 0,
             last_voted: 0
         };
@@ -504,7 +522,7 @@ module suiDouBashiVest::vsdb{
             locked_balance,
             attachments: _,
             voted: _,
-            pool_vote: _,
+            pool_votes,
             used_weights: _,
             last_voted: _
         } = self;
@@ -516,6 +534,7 @@ module suiDouBashiVest::vsdb{
         } = locked_balance;
 
         table::drop<u64, Point>(user_point_history);
+        table::drop<ID, u64>(pool_votes);
         balance::destroy_zero(balance);
         object::delete(id);
     }
@@ -715,12 +734,14 @@ module suiDouBashiVest::vsdb{
     }
 
     // ===== Gauge Voting =====
-    public fun attach(self: &mut VSDB){
+    public fun attach<X,Y>(self: &mut VSDB, ctx: &TxContext){
         self.attachments = self.attachments + 1;
+        event::attach<X,Y>(object::id(self), tx_context::sender(ctx))
     }
 
-    public fun detach(self: &mut VSDB){
+    public fun detach<X,Y>(self: &mut VSDB, ctx: &TxContext){
         self.attachments = self.attachments - 1;
+        event::detach<X,Y>(object::id(self), tx_context::sender(ctx))
     }
 
     public fun voting(self: &mut VSDB){

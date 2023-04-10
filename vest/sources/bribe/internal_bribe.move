@@ -19,6 +19,7 @@ module suiDouBashiVest::internal_bribe{
     use sui::table::{ Self, Table};
 
     friend suiDouBashiVest::gauge;
+    friend suiDouBashiVest::voter;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;
@@ -36,6 +37,7 @@ module suiDouBashiVest::internal_bribe{
     // per token_ads
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
+        pool:ID,
 
         // TODO:
         //rewards: InternalBribe: 2, externalBribe: multiple
@@ -91,11 +93,12 @@ module suiDouBashiVest::internal_bribe{
     }
     // being calling by voter, when creating guage
     public (friend )fun create_bribe<X,Y>(
-        _: & Pool<X,Y>,
+        pool: & Pool<X,Y>,
         ctx: &mut TxContext
     ):ID {
         let bribe = InternalBribe<X,Y>{
             id: object::new(ctx),
+            pool: object::id(pool),
             total_supply:0,
             balace_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table::new<u64, SupplyCheckpoint>(ctx),
@@ -530,7 +533,7 @@ module suiDouBashiVest::internal_bribe{
     }
 
     // called by voter
-    fun deposit<X,Y,T>(
+    public (friend) fun deposit<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
         amount: u64,
@@ -552,10 +555,10 @@ module suiDouBashiVest::internal_bribe{
         write_supply_checkpoint(self, clock);
     }
 
-    fun withdraw<X,Y,T>(
+    public (friend) fun withdraw<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
-        amount: u64,
+        amount: u64, // should be u256
         clock: &Clock,
         ctx: &mut TxContext
     ){

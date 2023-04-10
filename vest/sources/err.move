@@ -37,5 +37,6 @@ module suiDouBashiVest::err{
     public fun invalid_governor(): u64 { Prefix + 213 }
     public fun invalid_emergency(): u64 { Prefix + 214 }
     public fun non_whitelist(): u64 { Prefix + 215 }
+    public fun invalid_weight(): u64 { Prefix + 216 }
 
 }
