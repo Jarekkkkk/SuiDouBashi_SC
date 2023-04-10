@@ -66,7 +66,7 @@ module suiDouBashiVest::vsdb{
         gov: address,
 
         minted_vsdb: u64,
-        locked_total: u256,
+        locked_total: u64,
 
         /// acts like version, count down the times of checktime execution
         epoch: u256,
@@ -121,7 +121,7 @@ module suiDouBashiVest::vsdb{
         let amount = coin::value(&self);
         let vsdb = new( self, unlock_time, ts, ctx);
         reg.minted_vsdb = reg.minted_vsdb + 1;
-        reg.locked_total = reg.locked_total + (amount as u256);
+        reg.locked_total = reg.locked_total + amount;
 
         // 3. udpate global checkpoint
         checkpoint_(false, reg, &vsdb, 0, 0, ts);
@@ -277,6 +277,8 @@ module suiDouBashiVest::vsdb{
 
     // ===== Getter  =====
 
+    // - Reg
+    public fun total_supply(reg: &VSDBRegistry ): u64 { reg.locked_total }
 
     // - Self
     public fun user_epoch(self: &VSDB): u64{
@@ -294,6 +296,8 @@ module suiDouBashiVest::vsdb{
     public fun owner(self: &VSDB):address { self.logical_owner }
 
     public fun last_voted(self: &VSDB): u64{ self.last_voted }
+
+
 
     public fun pool_votes(self: &VSDB, pool:ID): u64{ *table::borrow(&self.pool_votes, pool) }
 

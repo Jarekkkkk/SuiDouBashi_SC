@@ -21,8 +21,6 @@ module suiDouBashiVest::voter{
     use suiDouBashiVest::gauge::{Self, Gauge};
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
-    use suiDouBashiVest::reward::{Self, Reward};
-    use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
@@ -36,8 +34,6 @@ module suiDouBashiVest::voter{
 
         total_weight: u64, // enought
         weights: Table<ID, u64>,
-
-        sdb_supply: Supply<SDB>,
 
         // TODO: vecset will be too expensive ?
         whitelist: VecSet<String>,
@@ -70,8 +66,6 @@ module suiDouBashiVest::voter{
             emergency: sender,
 
             total_weight: 0,
-
-            sdb_supply: sdb::new(ctx),
 
             whitelist: vec_set::empty<String>(),
 

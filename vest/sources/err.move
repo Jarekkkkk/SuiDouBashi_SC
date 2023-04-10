@@ -36,7 +36,11 @@ module suiDouBashiVest::err{
     public fun already_voted(): u64 { Prefix + 212 }
     public fun invalid_governor(): u64 { Prefix + 213 }
     public fun invalid_emergency(): u64 { Prefix + 214 }
+    public fun invalid_team(): u64 { Prefix + 215 }
     public fun non_whitelist(): u64 { Prefix + 215 }
     public fun invalid_weight(): u64 { Prefix + 216 }
+
+    // - Minter
+    public fun max_rate(): u64{ Prefix + 217 }
 
 }

@@ -7,7 +7,7 @@ module suiDouBashiVest::sdb{
     use sui::balance::Supply;
 
 
-    friend suiDouBashiVest::voter;
+    friend suiDouBashiVest::minter;
 
     struct SDB has drop {}
 
