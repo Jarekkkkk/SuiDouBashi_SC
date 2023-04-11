@@ -1,8 +1,6 @@
 module suiDouBashiVest::point{
     use suiDouBashi::i128::{ I128};
 
-
-
     struct Point has store, copy, drop{
         bias: I128,
         slope: I128, // # -dweight / dt

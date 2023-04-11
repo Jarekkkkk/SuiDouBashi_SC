@@ -298,7 +298,7 @@ module suiDouBashiVest::vsdb{
     public fun user_epoch(self: &VSDB): u64{
         self.user_epoch
     }
-    public fun user_point_history(self: &VSDB, epoch: u64): &Point{
+    public fun user_point_history(self: &VSDB, epoch: u64):&Point{
         table::borrow(&self.user_point_history, epoch)
     }
 
@@ -693,8 +693,6 @@ module suiDouBashiVest::vsdb{
             };
         };
 
-        let _foo = last_point_slope;
-        let _fo = last_point_bias;
 
         // Record the changed point into history
         // let last_point = point::from(last_point_bias, last_point_slope, last_point_ts);
@@ -740,6 +738,81 @@ module suiDouBashiVest::vsdb{
                 };
             };
         };
+    }
+
+    public fun global_checkpoint_(
+        self: &mut VSDBRegistry,
+        clock: &Clock
+    ){
+        let time_stamp = clock::timestamp_ms(clock);
+        let epoch = self.epoch;
+         // get the latest point
+        let last_point = if(self.epoch > 0){
+            // copy the value in table
+            *table::borrow(&self.point_history, self.epoch)
+        }else{
+            point::from( i128::zero(), i128::zero(), time_stamp )
+        };
+
+        let last_point_bias = point::bias(&last_point);
+        let last_point_slope = point::slope(&last_point);
+        let last_point_ts = point::ts(&last_point);
+
+        // incremntal period by week
+        let t_i = (last_point_ts / WEEK) * WEEK;
+        // update the weekly checkpoint
+        let i = 0;
+        while( i < 255 ){
+            // Hopefully it won't happen that this won't get used in 5 years!
+            // If it does, users will be able to withdraw but vote weight will be broken
+            t_i = t_i + WEEK; // jump to endpoint of interval where checkpoint at
+            let d_slope = i128::zero();
+
+            if( t_i > time_stamp ){
+                //latest, all histroy has been filled, no need of recording point_history
+                t_i = time_stamp;
+            }else{
+                // get the d_slope of this interval, only update when the period is passed
+                if(table::contains(&self.slope_changes, t_i)){
+                    d_slope = *table::borrow(&self.slope_changes, t_i);
+                };
+            };
+
+            let time_left = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
+
+            // update ned bias & slope as we insert new checkpoint
+            last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left));
+            last_point_slope = i128::add(&last_point_slope, &d_slope);
+
+            let compare_bias = i128::compare(&last_point_bias, &i128::zero());
+            // if last_point_bais <= 0
+            if(compare_bias == 1 || compare_bias == 0){
+                // this could be negative as current interval of 2 checkpoint is larger than previous interval
+                last_point_bias = i128::zero();
+            };
+            let compare_slope = i128::compare(&last_point_slope, &i128::zero());
+            // if last_point_slope <= 0
+            if(compare_slope == 1 || compare_slope == 0){
+                // this won't happen, just make sure
+                last_point_slope = i128::zero();
+            };
+
+            last_point_ts = t_i;
+
+            epoch = epoch + 1;
+            if(t_i == time_stamp){
+                break
+            }else{
+                // update if checkpoint is in obsolete weekly interval
+                let point = point::from(last_point_bias, last_point_slope, last_point_ts);
+                table::add(&mut self.point_history, epoch, point);
+            };
+
+            i = i + 1;
+        };
+
+        self.epoch = epoch;
+        table::add(&mut self.point_history, epoch, last_point);
     }
 
     // ===== Gauge Voting =====

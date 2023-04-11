@@ -234,4 +234,21 @@ module suiDouBashiVest::event{
         )
     }
 
+    struct RewardClaimed has copy, drop{
+        vsdb: ID,
+        to_distribute: u64,
+        user_epoch: u64,
+        max_user_epoch: u64
+    }
+    public fun reward_claimed(vsdb: ID, to_distribute: u64, user_epoch: u64, max_user_epoch: u64){
+        emit(
+            RewardClaimed{
+                vsdb,
+                to_distribute,
+                user_epoch,
+                max_user_epoch,
+            }
+        )
+    }
+
 }
