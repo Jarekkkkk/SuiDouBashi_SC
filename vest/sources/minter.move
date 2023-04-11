@@ -2,12 +2,14 @@ module suiDouBashiVest::minter{
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Supply, Balance};
     use sui::clock::{Self, Clock};
-
+    use sui::coin::{Self, Coin};
+    use sui::transfer;
+    use std::option::{Self, Option};
 
     use suiDouBashiVest::sdb::{Self, SDB};
     use suiDouBashiVest::err;
+    use suiDouBashiVest::event;
     use suiDouBashiVest::vsdb::{Self, VSDBRegistry};
-    use suiDouBashiVest::voter::Voter;
 
 
     use sui::math;
@@ -84,7 +86,12 @@ module suiDouBashiVest::minter{
     }
 
      /// update period can only be called once per epoch (1 week)
-     public fun update_period (self: &mut Minter, vsdb_reg: &VSDBRegistry , clock: &Clock): u64{
+     public (friend) fun update_period (
+        self: &mut Minter,
+        vsdb_reg: &VSDBRegistry ,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ):  Option<Coin<SDB>>{
         let period = self.active_period;
 
         // new week
@@ -104,12 +111,21 @@ module suiDouBashiVest::minter{
             };
 
             //transfer to team
-            let team_coin = coin::take(&mut self.balance, team_emission);
+            let team_coin = coin::take(&mut self.balance, team_emission, ctx);
+            transfer::public_transfer(team_coin, self.team);
             // rebase
-            let rewards_coin = coin::take(&mut self.balance, team_emission);
+            let rewards_coin = coin::take(&mut self.balance, team_emission, ctx);
+            reward_distributor::deposit( distributor, rewards_coin);
+
+            reward_distributor::checkpoint_token();
+            reward_distributor::checkpoint_total_supply();
+
+            event::mint(tx_context::sender(ctx), weekly, circulating_supply(self, vsdb_reg), circulating_emission(self, vsdb_reg));
+
+            return option::some(coin::take(&mut self.balance, self.weekly, ctx))
         };
 
-        period
+        option::none()
      }
 
 

@@ -109,17 +109,17 @@ module suiDouBashiVest::vsdb{
         )
     }
 
-    public entry fun lock(reg: &mut VSDBRegistry, self:Coin<SDB>, duration: u64, clock: &Clock, ctx: &mut TxContext){
+    public entry fun lock(reg: &mut VSDBRegistry, coin:Coin<SDB>, duration: u64, clock: &Clock, ctx: &mut TxContext){
         // 1. assert
         let ts = clock::timestamp_ms(clock);
         let unlock_time = (duration + ts) / WEEK * WEEK;
 
-        assert!( coin::value(&self) > 0 ,err::zero_input());
+        assert!( coin::value(&coin) > 0 ,err::zero_input());
         assert!( unlock_time > ts && unlock_time <= ts + MAX_TIME, err::invalid_lock_time());
 
         // 2. create vsdb & update registry
-        let amount = coin::value(&self);
-        let vsdb = new( self, unlock_time, ts, ctx);
+        let amount = coin::value(&coin);
+        let vsdb = new( coin, unlock_time, ts, ctx);
         reg.minted_vsdb = reg.minted_vsdb + 1;
         reg.locked_total = reg.locked_total + amount;
 
@@ -280,9 +280,26 @@ module suiDouBashiVest::vsdb{
     // - Reg
     public fun total_supply(reg: &VSDBRegistry ): u64 { reg.locked_total }
 
+    public fun epoch(reg: &VSDBRegistry ): u256 { reg.epoch }
+
+    public fun get_global_slope_change( reg: &VSDBRegistry, epoch: u64): &I128{
+        table::borrow( &reg.slope_changes, epoch)
+    }
+
+    public fun get_latest_global_point_history(reg: &VSDBRegistry): &Point{
+        get_global_point_history(reg, reg.epoch)
+    }
+
+    public fun get_global_point_history(reg: &VSDBRegistry, epoch: u256): &Point{
+        table::borrow(&reg.point_history, epoch)
+    }
+
     // - Self
     public fun user_epoch(self: &VSDB): u64{
         self.user_epoch
+    }
+    public fun user_point_history(self: &VSDB, epoch: u64): &Point{
+        table::borrow(&self.user_point_history, epoch)
     }
 
     public fun locked_balance(self: &VSDB): u64{
@@ -296,8 +313,6 @@ module suiDouBashiVest::vsdb{
     public fun owner(self: &VSDB):address { self.logical_owner }
 
     public fun last_voted(self: &VSDB): u64{ self.last_voted }
-
-
 
     public fun pool_votes(self: &VSDB, pool:ID): u64{ *table::borrow(&self.pool_votes, pool) }
 
@@ -329,17 +344,7 @@ module suiDouBashiVest::vsdb{
         point::ts( point )
     }
 
-    // - reg
-    public fun get_global_slope_change( reg: &VSDBRegistry, epoch: u64): &I128{
-        table::borrow( &reg.slope_changes, epoch)
-    }
 
-    public fun get_latest_global_point_history(reg: &VSDBRegistry): &Point{
-        get_global_point_history(reg, reg.epoch)
-    }
-    public fun get_global_point_history(reg: &VSDBRegistry, epoch: u256): &Point{
-        table::borrow(&reg.point_history, epoch)
-    }
 
 
 

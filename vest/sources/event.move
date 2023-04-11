@@ -208,4 +208,30 @@ module suiDouBashiVest::event{
         )
     }
 
+    // - Distribute Fee
+    struct VoterNotifyReward has copy, drop{
+        amount: u64
+    }
+    public fun voter_notify_reward(amount: u64){
+        emit(
+            VoterNotifyReward{
+                amount
+            }
+        )
+    }
+
+    // - Distributor
+    struct CheckPointToken has copy, drop{
+        ts: u64,
+        amount: u64
+    }
+    public fun checkopint_token(ts: u64, amount: u64){
+        emit(
+            CheckPointToken{
+                ts,
+                amount
+            }
+        )
+    }
+
 }

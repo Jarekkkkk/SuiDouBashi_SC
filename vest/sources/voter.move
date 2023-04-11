@@ -1,6 +1,7 @@
 module suiDouBashiVest::voter{
     use std::type_name::{Self, TypeName};
     use std::ascii::String;
+    use std::option;
     use sui::balance::{Self, Balance, Supply};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
@@ -16,11 +17,12 @@ module suiDouBashiVest::voter{
     use suiDouBashi::amm_v1::Pool  ;
     use suiDouBashi::type;
 
-    use suiDouBashiVest::vsdb::{Self, VSDB};
+    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
     use suiDouBashiVest::sdb::{Self, SDB};
     use suiDouBashiVest::gauge::{Self, Gauge};
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
+    use suiDouBashiVest::minter::{Self, Minter};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
@@ -28,6 +30,7 @@ module suiDouBashiVest::voter{
 
     struct Voter has key, store{
         id: UID,
+        balance: Balance<SDB>,
 
         governor: address,
         emergency: address,
@@ -39,7 +42,7 @@ module suiDouBashiVest::voter{
         whitelist: VecSet<String>,
         registry: Table<ID, VecSet<ID>>, // registered_pool -> <gauges, Internal_bribe, external_bribe>
 
-        index: u64
+        index: u64 // weekly sdb rebase * 10e18 / total_weight
     }
 
     // assertion
@@ -62,6 +65,7 @@ module suiDouBashiVest::voter{
         let sender = tx_context::sender(ctx);
         let voter = Voter{
             id: object::new(ctx),
+            balance: balance::zero<SDB>(),
             governor: sender,
             emergency: sender,
 
@@ -175,14 +179,23 @@ module suiDouBashiVest::voter{
     }
 
     fun distribute<X,Y>(
-        self: &Voter,
+        self: &mut Voter,
+        minter: &mut Minter,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
+        vsdb_reg: &VSDBRegistry,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        // weekly reabse
+        let coin_option = minter::update_period(minter, vsdb_reg, clock, ctx);
+        if(option::is_some(&coin_option)){
+            notify_reward_amount_(self , option::extract(&mut coin_option))
+        };
+        option::destroy_none(coin_option);
+
         //update_period
         update_for_(self, gauge);
 
@@ -190,6 +203,8 @@ module suiDouBashiVest::voter{
         if( claimable > gauge::left(gauge::borrow_reward<X,Y,SDB>(gauge), clock) && claimable / DURATION > 0 ){
             gauge::update_claimable(gauge, 0);
 
+            // deposit the rebase to gauge
+            let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
             gauge::notify_reward_amount<X,Y,SDB>(gauge, internal_bribe, pool, vsdb, coin_sdb, clock, ctx);
 
             event::distribute_reward<X,Y>(tx_context::sender(ctx), claimable);
@@ -313,5 +328,18 @@ module suiDouBashiVest::voter{
 
         // clear all the pool votes
         vsdb::clear_pool_votes(vsdb, pool_id);
+    }
+
+    // - Fee distribution
+    fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
+        // update global index
+        let value = coin::value(&sdb);
+        let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
+        if(ratio > 0){
+            self.index = self.index + (ratio as u64);
+        };
+        coin::put(&mut self.balance, sdb);
+
+        event::voter_notify_reward(value);
     }
 }

@@ -43,4 +43,7 @@ module suiDouBashiVest::err{
     // - Minter
     public fun max_rate(): u64{ Prefix + 217 }
 
+    // - Distributor
+    public fun invalid_depositor(): u64{ Prefix + 218 }
+
 }
