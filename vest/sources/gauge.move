@@ -21,7 +21,7 @@ module suiDouBashiVest::gauge{
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
 
-    use suiDouBashi::amm_v1::{Self, Pool, LP_TOKEN};
+    use suiDouBashi::pool::{Self, Pool, LP_Position};
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;
@@ -39,7 +39,7 @@ module suiDouBashiVest::gauge{
 
         rewards: VecSet<String>,
 
-        total_supply: Balance<LP_TOKEN<X,Y>>,
+        total_supply: LP_Position<X,Y>,
         // TODO: move to VSDB
         balance_of: Table<ID, u64>,
 
@@ -116,7 +116,7 @@ module suiDouBashiVest::gauge{
 
             rewards: vec_set::empty<String>(),
 
-            total_supply: balance::zero<LP_TOKEN<X,Y>>(),
+            total_supply: pool::create_lp_position(pool, ctx), // no owner
             balance_of: table::new<ID, u64>(ctx),
 
             token_ids: table::new<address, ID>(ctx),
@@ -298,7 +298,7 @@ module suiDouBashiVest::gauge{
     ): u64{
         let reward = borrow_reward<X,Y,T>(self);
         let reward_stored = reward::reward_per_token_stored(reward);
-        let total_supply = balance::value(&self.total_supply);
+        let total_supply = pool::get_lp_balance(&self.total_supply);
         // no accumualated voting
         if(total_supply == 0){
             return reward_stored
@@ -435,7 +435,7 @@ module suiDouBashiVest::gauge{
         //ctx: &mut TxContext
     ){
         let timestamp = clock::timestamp_ms(clock);
-        let supply = balance::value(&self.total_supply);
+        let supply = pool::get_lp_balance(&self.total_supply);
 
         let len = table::length(&self.supply_checkpoints);
 
@@ -550,8 +550,10 @@ module suiDouBashiVest::gauge{
     /// Stake LP_TOKEN
     fun deposit<X,Y,T>(
         self: &mut Gauge<X,Y>,
+        pool: &Pool<X,Y>,
         vsdb: &mut VSDB,
-        lp_token: Coin<LP_TOKEN<X,Y>>,
+        lp_position: &mut LP_Position<X,Y>,
+        value: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -564,8 +566,13 @@ module suiDouBashiVest::gauge{
         reward::update_reward_per_token_stored(reward, reward_per_token_stored);
         reward::update_last_update_time(reward, last_update_time);
 
-        let lp_value = coin::value(&lp_token);
-        coin::put(&mut self.total_supply, lp_token);
+        // UGLY !!
+        pool::update_lp_position(pool, lp_position);
+        pool::update_lp_position(pool, &mut self.total_supply);
+        pool::top_up_claim_lp_balance(&mut self.total_supply, lp_position, value );
+
+        let lp_value = pool::get_lp_balance(lp_position);
+
         *table::borrow_mut(&mut self.balance_of, object::id(vsdb)) = *table::borrow(& self.balance_of, object::id(vsdb)) + lp_value;
 
         //TODO: attach token to gauge, and move assertion in the front of respective functions
@@ -586,13 +593,15 @@ module suiDouBashiVest::gauge{
         event::deposit_lp<X,Y>(tx_context::sender(ctx), id, lp_value);
     }
 
+    // unstake
     fun withdraw_<X,Y,T>(
         self: &mut Gauge<X,Y>,
+        pool: &Pool<X,Y>,
         vsdb: &mut VSDB,
-        amount: u64,
+        value: u64,
         clock: &Clock,
         ctx: &mut TxContext
-    ):Coin<LP_TOKEN<X,Y>>{
+    ):LP_Position<X,Y>{
         assert_generic_type<X,Y,T>();
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, vsdb, MAX_U64, true, clock, ctx);
@@ -602,9 +611,16 @@ module suiDouBashiVest::gauge{
         reward::update_reward_per_token_stored(reward, reward_per_token_stored);
         reward::update_last_update_time(reward, last_update_time);
 
-        // unstake the LP
-        let lp_token = coin::take(&mut self.total_supply, amount, ctx);
-        let lp_value = coin::value(&lp_token);
+        // unstake the LP from pool
+        let lp_position = pool::create_lp_position(pool, ctx);
+        // UGLY !!
+        pool::update_lp_position(pool, &mut lp_position);
+        pool::update_lp_position(pool, &mut self.total_supply);
+        pool::top_down_claim_lp_balance(&mut self.total_supply, &mut lp_position, value);
+        let lp_value = pool::get_lp_balance(&lp_position);
+
+
+        // record check
         *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(&self.balance_of, id) - lp_value;
 
         // detach & validation
@@ -622,7 +638,7 @@ module suiDouBashiVest::gauge{
 
         event::withdraw_lp<X,Y>(tx_context::sender(ctx), id, lp_value);
 
-        lp_token
+        lp_position
     }
 
     // TODO: whitelist check
@@ -693,7 +709,7 @@ module suiDouBashiVest::gauge{
         ctx: &mut TxContext
     ){
         // assert pair exists
-        let (coin_x, coin_y) = amm_v1::claim_fee_guage(pool, ctx);
+        let (coin_x, coin_y) = pool::claim_fees_gauge(pool, &mut self.total_supply, ctx);
         let value_x = coin::value(&coin_x);
         let value_y = coin::value(&coin_y);
 

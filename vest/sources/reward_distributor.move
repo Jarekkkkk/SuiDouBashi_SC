@@ -3,7 +3,7 @@ module suiDouBashiVest::reward_distributor{
     use std::vector as vec;
     use sui::clock::{Self, Clock};
     use sui::balance::{Self, Balance};
-    use sui::coin;
+    use sui::coin::{Self, Coin};
     use sui::math;
     use sui::object::{Self, ID};
     use sui::table::{Self, Table};
@@ -74,7 +74,10 @@ module suiDouBashiVest::reward_distributor{
     }
 
     // ===== Entry =====
-    public entry fun checkopint_token(self: &mut Distributor, clock: &Clock, ctx: &mut TxContext){
+    public (friend) fun deposit_reward(self: &mut Distributor, coin: Coin<SDB>){
+        coin::put(&mut self.balance, coin);
+    }
+    public entry fun checkpoint_token(self: &mut Distributor, clock: &Clock, ctx: &mut TxContext){
         assert!(tx_context::sender(ctx) == self.depositor, err::invalid_depositor());
         checkpoint_token_(self, clock);
     }
@@ -113,7 +116,6 @@ module suiDouBashiVest::reward_distributor{
     public entry fun claimable(
         self: & Distributor,
         vsdb: & VSDB,
-        last_token_time: u64
     ){
         let last_token_time_ = self.last_token_time / WEEK * WEEK;
         claimable_(self, vsdb, last_token_time_);
@@ -144,6 +146,7 @@ module suiDouBashiVest::reward_distributor{
                 self.token_last_balance = self.token_last_balance - amount;
                 total = total + amount;
             };
+
             i = i + 1;
         };
 
@@ -292,7 +295,7 @@ module suiDouBashiVest::reward_distributor{
         let i = 0;
         while( i < 20 ){
             if( t > rounded_timestamp ){
-                break;
+                break
             }else{
                 let epoch = find_timestamp_epoch_(vsdb_reg, t);
                 let pt = *vsdb::get_global_point_history(vsdb_reg, epoch);
@@ -325,7 +328,7 @@ module suiDouBashiVest::reward_distributor{
         last_token_time: u64
     ): u64{
         let id = object::id(vsdb);
-        let user_epoch = 0;
+
         let to_distribute = 0;
 
         let max_user_epoch = vsdb::user_epoch(vsdb);
@@ -339,10 +342,10 @@ module suiDouBashiVest::reward_distributor{
             0
         };
 
-        if(week_cursor == 0){
-            user_epoch = find_timestamp_user_epoch_(vsdb, start_time_, max_user_epoch);
+        let user_epoch = if(week_cursor == 0){
+            find_timestamp_user_epoch_(vsdb, start_time_, max_user_epoch)
         }else{
-            user_epoch = if(table::contains(&self.user_epoch_of, id)){
+            if(table::contains(&self.user_epoch_of, id)){
                 *table::borrow(&self.user_epoch_of, id)
             }else{
                 0
@@ -416,7 +419,6 @@ module suiDouBashiVest::reward_distributor{
         last_token_time: u64
     ): u64{
         let id = object::id(vsdb);
-        let user_epoch = 0;
         let to_distribute = 0;
 
         let max_user_epoch = vsdb::user_epoch(vsdb);
@@ -430,10 +432,10 @@ module suiDouBashiVest::reward_distributor{
             0
         };
 
-        if(week_cursor == 0){
-            user_epoch = find_timestamp_user_epoch_(vsdb, start_time_, max_user_epoch);
+        let user_epoch = if(week_cursor == 0){
+            find_timestamp_user_epoch_(vsdb, start_time_, max_user_epoch)
         }else{
-            user_epoch = if(table::contains(&self.user_epoch_of, id)){
+            if(table::contains(&self.user_epoch_of, id)){
                 *table::borrow(&self.user_epoch_of, id)
             }else{
                 0

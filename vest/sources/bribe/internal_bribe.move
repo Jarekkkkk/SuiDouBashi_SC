@@ -9,7 +9,7 @@ module suiDouBashiVest::internal_bribe{
     use sui::clock::{Self, Clock};
     use sui::math;
 
-    use suiDouBashi::amm_v1::Pool;
+    use suiDouBashi::pool::Pool;
     use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;

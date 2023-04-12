@@ -233,7 +233,7 @@ module suiDouBashiVest::vsdb{
         event::deposit(object::id(self), locked_balance(self), end_);
     }
 
-    // /// Withdraw all the unlocked coin only when the due date is attained
+    // /// Withdraw all the unlocked coin only when due date is attained
     public entry fun unlock(self: &mut VSDBRegistry, vsdb: VSDB, clock: &Clock, ctx: &mut TxContext){
         let locked_bal = locked_balance(&vsdb);
         let locked_end = locked_end(&vsdb);
@@ -353,15 +353,17 @@ module suiDouBashiVest::vsdb{
     public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
         table::add(&mut self.pool_votes, pool_id, value);
     }
-     public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
+    public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
         *table::borrow_mut(&mut self.pool_votes, pool_id) = value;
     }
     public (friend) fun clear_pool_votes(self: &mut VSDB, pool_id: ID){
         table::remove(&mut self.pool_votes, pool_id);
     }
-
     public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
         self.used_weights = w;
+    }
+    public (friend) fun update_last_voted(self: &mut VSDB, v: u64){
+        self.last_voted = v;
     }
     /// 1. increase version
     /// 2. update point
@@ -695,12 +697,7 @@ module suiDouBashiVest::vsdb{
 
 
         // Record the changed point into history
-        // let last_point = point::from(last_point_bias, last_point_slope, last_point_ts);
-        // if(table::contains(&self.point_history, epoch)){
-        //     *table::borrow_mut(&mut self.point_history, epoch) = last_point;
-        // }else{
-
-        // };
+        let last_point = point::from(last_point_bias, last_point_slope, last_point_ts);
         // update latest epoch
         table::add(&mut self.point_history, epoch, last_point);
 
@@ -812,6 +809,10 @@ module suiDouBashiVest::vsdb{
         };
 
         self.epoch = epoch;
+
+        // Record the changed point into history
+        let last_point = point::from(last_point_bias, last_point_slope, last_point_ts);
+        // update latest epoch
         table::add(&mut self.point_history, epoch, last_point);
     }
 

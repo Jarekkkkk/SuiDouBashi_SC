@@ -11,20 +11,7 @@ module suiDouBashi::err{
 
 
 
-    // === Profile ===
-    public fun invalid_name(): u64{
-        Prefix + 100
-    }
-    public fun invalid_img_url(): u64{
-        Prefix + 101
-    }
-    // === Registry ===
-    public fun alreday_registered(): u64{
-        Prefix + 102
-    }
-
-
-    // === AMM_v1 ===
+    // === Pool ===
     public fun invalid_guardian():u64{
         Prefix + 200
     }
@@ -64,4 +51,9 @@ module suiDouBashi::err{
     public fun k_value():u64{
         Prefix + 212
     }
+    public fun invalid_type_argument(): u64 { Prefix + 213 }
+
+    public fun invalid_owner(): u64 { Prefix + 214 }
+
+    public fun empty_fee(): u64 { Prefix + 215 }
 }

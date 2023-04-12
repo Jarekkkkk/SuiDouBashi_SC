@@ -1,29 +1,27 @@
 module suiDouBashiVest::voter{
-    use std::type_name::{Self, TypeName};
+    use std::type_name::{Self};
     use std::ascii::String;
     use std::option;
-    use sui::balance::{Self, Balance, Supply};
+    use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_object_field as dof;
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::clock::{Self, Clock};
-    use sui::math;
-    use std::vector as vec;
     use sui::vec_set::{Self, VecSet};
     use sui::table::{Self, Table};
 
-    use suiDouBashi::amm_v1::Pool  ;
-    use suiDouBashi::type;
+    use suiDouBashi::pool::Pool;
 
     use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
-    use suiDouBashiVest::sdb::{Self, SDB};
+    use suiDouBashiVest::sdb::{SDB};
     use suiDouBashiVest::gauge::{Self, Gauge};
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
     use suiDouBashiVest::minter::{Self, Minter};
+    use suiDouBashiVest::reward_distributor::Distributor;
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
+
 
     const DURATION: u64 = { 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
@@ -83,9 +81,44 @@ module suiDouBashiVest::voter{
     }
 
     // - player
-    public entry fun vote(){}
-    public entry fun poke(){}
-    public entry fun reset(){}
+    public entry fun vote<X,Y,T>(
+        self: &mut Voter,
+        vsdb: &mut VSDB,
+        gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        // external_bribe
+        weights: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
+        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, weights, clock, ctx);
+    }
+    public entry fun poke<X,Y,T>(
+        self: &mut Voter,
+        vsdb: &mut VSDB,
+        gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        // external_bribe
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
+        let weights = vsdb::pool_votes(vsdb, gauge::pool_id(gauge));
+        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, weights, clock, ctx);
+    }
+    public entry fun reset<X,Y,T>(
+        self: &mut Voter,
+        vsdb: &mut VSDB,
+        gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        // external_bribe
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
+        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, clock, ctx);
+    }
 
     // - Gauge
     public entry fun create_gauge<X,Y>(self: &mut Voter, pool: &Pool<X,Y>, ctx: &mut TxContext){
@@ -166,7 +199,6 @@ module suiDouBashiVest::voter{
 
     // rebase
     entry fun distribute_fees<X,Y>(
-        self: &Voter,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
@@ -181,16 +213,17 @@ module suiDouBashiVest::voter{
     fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
+        distributor: &mut Distributor,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
-        vsdb_reg: &VSDBRegistry,
+        vsdb_reg: &mut VSDBRegistry,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         // weekly reabse
-        let coin_option = minter::update_period(minter, vsdb_reg, clock, ctx);
+        let coin_option = minter::update_period(minter, distributor, vsdb_reg, clock, ctx);
         if(option::is_some(&coin_option)){
             notify_reward_amount_(self , option::extract(&mut coin_option))
         };
