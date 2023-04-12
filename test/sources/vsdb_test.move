@@ -2,7 +2,7 @@
 module test::vasdb_test{
     use sui::coin::{ Self, Coin, mint_for_testing as mint};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
-    use sui::clock::{Self, Clock, timestamp_ms as ts};
+    use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time};
     use sui::math;
     use suiDouBashiVest::vsdb;
     use suiDouBashiVest::sdb::{ Self, SDB};
@@ -16,29 +16,25 @@ module test::vasdb_test{
         test_lock_(coin, (2 * vsdb::week()), &mut scenario);
         test::end(scenario);
     }
-    fun setup(scenario: &mut Scenario){
-        clock::create_for_testing(ctx(scenario));
-        tran
-    }
+
     fun test_lock_( sdb: Coin<SDB>, duration: u64, s: &mut Scenario){
         let jarek = person();
         let locked_value = coin::value(&sdb);
         let _locked_end = 0;
         let _g_t = 0;  // published at 2023/01/01 00:00
-        next_tx(s, jarek);{
-            setup(s);
-        };
+        let clock = clock::create_for_testing(ctx(s));
+
+
         next_tx(s, jarek);{ // test init
-            _g_t = add_time(s, 1672531200);
+            add_time(&mut clock, 1672531200);
+            _g_t = get_time(&clock);
             vsdb::init_for_testing(ctx(s));
         };
         next_tx(s, jarek);
         { // test create
-            let clock = test::take_shared<Clock>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::lock(&mut reg, sdb, duration, &clock, ctx(s));
             test::return_shared(reg);
-            test::return_shared(clock);
         };
         next_tx(s, jarek);{
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -53,14 +49,12 @@ module test::vasdb_test{
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, jarek);{ // test extend unlocked time
-            let clock = test::take_shared<Clock>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             let extended = 2 * vsdb::week();
             _locked_end  = _locked_end + extended;
             vsdb::increase_unlock_time(&mut reg, &mut vsdb, extended, &clock, ctx(s));
             test::return_shared(reg);
-            test::return_shared(clock);
             test::return_to_sender(s, vsdb);
         };
      next_tx(s, jarek);{
@@ -74,7 +68,6 @@ module test::vasdb_test{
             test::return_to_sender(s, vsdb);
         };
          next_tx(s, jarek);{ // test extend unlocked amount
-            let clock = test::take_shared<Clock>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             let extended = mint<SDB>(2_000 * math::pow(10, sdb::decimals()), ctx(s));
@@ -82,7 +75,6 @@ module test::vasdb_test{
             locked_value = locked_value + value;
             vsdb::increase_unlock_amount(&mut reg, &mut vsdb, extended, &clock, ctx(s));
             test::return_shared(reg);
-            test::return_shared(clock);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, jarek);{
@@ -96,29 +88,16 @@ module test::vasdb_test{
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, jarek);{
-            add_time(s, 8 * vsdb::week());
+            add_time(&mut clock, 8 * vsdb::week());
         };
         next_tx(s, jarek);{
-            let clock = test::take_shared<Clock>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::unlock(&mut reg, vsdb, &clock, ctx(s));
             test::return_shared(reg);
-            test::return_shared(clock);
         };
-    }
-    fun get_time(s: &mut Scenario): u64{
-        let clock = test::take_shared<Clock>(s);
-        let ts = ts(&clock);
-        test::return_shared(clock);
-        ts
-    }
-    fun add_time(s: &mut Scenario, increment: u64): u64{
-        let clock = test::take_shared<Clock>(s);
-        clock::increment_for_testing(&mut clock, increment);
-        let ts = ts(&clock);
-        test::return_shared(clock);
-        ts
+
+        clock::destroy_for_testing(clock);
     }
     fun person(): address{ ( @0xABCD ) }
 }
