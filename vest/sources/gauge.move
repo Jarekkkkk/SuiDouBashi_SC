@@ -13,6 +13,7 @@ module suiDouBashiVest::gauge{
     use sui::vec_set::{Self, VecSet};
     use std::ascii::String;
     use sui::table::{ Self, Table};
+    use std::option;
 
     use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashiVest::event;
@@ -106,8 +107,10 @@ module suiDouBashiVest::gauge{
         let bribes = vec::singleton(internal_id);
         vec::push_back(&mut bribes, external_id);
 
+        let id = object::new(ctx);
+        let id_ads = object::uid_to_address(&id);
         let gauge = Gauge<X,Y>{
-            id: object::new(ctx),
+            id,
 
             is_alive: true,
 
@@ -116,7 +119,7 @@ module suiDouBashiVest::gauge{
 
             rewards: vec_set::empty<String>(),
 
-            total_supply: pool::create_lp_position(pool, ctx), // no owner
+            total_supply: pool::create_lp_position(pool, id_ads, ctx), // no owner
             balance_of: table::new<ID, u64>(ctx),
 
             token_ids: table::new<address, ID>(ctx),
@@ -226,7 +229,6 @@ module suiDouBashiVest::gauge{
 
         return lower
     }
-
     // move to REWARD
     public fun get_prior_reward_per_token<X, Y, T>(
         reward: &Reward<X, Y, T>,
@@ -566,10 +568,7 @@ module suiDouBashiVest::gauge{
         reward::update_reward_per_token_stored(reward, reward_per_token_stored);
         reward::update_last_update_time(reward, last_update_time);
 
-        // UGLY !!
-        pool::update_lp_position(pool, lp_position);
-        pool::update_lp_position(pool, &mut self.total_supply);
-        pool::top_up_claim_lp_balance(&mut self.total_supply, lp_position, value );
+        pool::top_up_claim_lp_balance(pool, &mut self.total_supply, lp_position, value );
 
         let lp_value = pool::get_lp_balance(lp_position);
 
@@ -612,13 +611,10 @@ module suiDouBashiVest::gauge{
         reward::update_last_update_time(reward, last_update_time);
 
         // unstake the LP from pool
-        let lp_position = pool::create_lp_position(pool, ctx);
-        // UGLY !!
-        pool::update_lp_position(pool, &mut lp_position);
-        pool::update_lp_position(pool, &mut self.total_supply);
-        pool::top_down_claim_lp_balance(&mut self.total_supply, &mut lp_position, value);
-        let lp_value = pool::get_lp_balance(&lp_position);
+        let lp_position = pool::create_lp_position(pool, tx_context::sender(ctx), ctx);
 
+        pool::top_up_claim_lp_balance(pool, &mut lp_position, &mut self.total_supply, value);
+        let lp_value = pool::get_lp_balance(&lp_position);
 
         // record check
         *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(&self.balance_of, id) - lp_value;
@@ -710,11 +706,26 @@ module suiDouBashiVest::gauge{
     ){
         // assert pair exists
         let (coin_x, coin_y) = pool::claim_fees_gauge(pool, &mut self.total_supply, ctx);
-        let value_x = coin::value(&coin_x);
-        let value_y = coin::value(&coin_y);
+        let value_x = if(option::is_some(&coin_x)){
+            let coin_x = option::extract(&mut coin_x);
+            let value_x = coin::value(&coin_x);
+            coin::put(&mut self.fees_x, coin_x);
+            value_x
+        }else{
+            0
+        };
+        let value_y = if(option::is_some(&coin_y)){
+            let coin_y = option::extract(&mut coin_y);
+            let value_y = coin::value(&coin_y);
+            coin::put(&mut self.fees_y, coin_y);
+            value_y
+        }else{
+            0
+        };
 
-        coin::put(&mut self.fees_x, coin_x);
-        coin::put(&mut self.fees_y, coin_y);
+        option::destroy_none(coin_x);
+        option::destroy_none(coin_y);
+
 
         if(value_x > 0 || value_y > 0){
             let bal_x = balance::value(&self.fees_x);

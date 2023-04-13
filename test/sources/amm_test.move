@@ -80,17 +80,17 @@ module test::amm_test{
         clock::destroy_for_testing(clock);
         test::end(scenario);
     }
-    // #[test]
-    // fun test_zap_x(){
-    //     let scenario = test::begin(@0x1);
-    //     let clock = clock::create_for_testing(ctx(&mut scenario));
-    //     dai::deploy_coin(ctx(&mut scenario));
-    //     usdc::deploy_coin(ctx(&mut scenario));
-    //     zap_x_<DAI, USDC>(DAI_AMT, USDC_AMT,&mut  clock, &mut scenario);
+    #[test]
+    fun test_zap_x(){
+        let scenario = test::begin(@0x1);
+        let clock = clock::create_for_testing(ctx(&mut scenario));
+        dai::deploy_coin(ctx(&mut scenario));
+        usdc::deploy_coin(ctx(&mut scenario));
+        zap_x_<DAI, USDC>(DAI_AMT, USDC_AMT,&mut  clock, &mut scenario);
 
-    //     clock::destroy_for_testing(clock);
-    //     test::end(scenario);
-    // }
+        clock::destroy_for_testing(clock);
+        test::end(scenario);
+    }
     fun test_init_pool_<X, Y>(_clock: &mut Clock, test:&mut Scenario) {
         let ( creator, _) = people();
 
@@ -175,7 +175,7 @@ module test::amm_test{
 
             let scale_x = math::pow(10, pool::get_decimals_x(&pool));
             let scale_y = math::pow(10, pool::get_decimals_y(&pool));
-            let dx = input_x - pool::calculate_fee(input_x, 3, 10000);
+            let dx = input_x - pool::calculate_fee(input_x, 3);
 
             let desired_y = if(pool::get_stable<X,Y>(&pool)){
              (formula::stable_swap_output((dx as u256),( res_x as u256), (res_y as u256), (scale_x as u256), (scale_y as u256)) as u64)
@@ -204,13 +204,12 @@ module test::amm_test{
         let swap_x = {// swap Y for X
             let pool = test::take_shared<Pool< X, Y>>(test);
 
-
             let (res_x, res_y, _) = pool::get_reserves< X, Y>(&mut pool);
             let coin_y=  mint<Y>(input_y, ctx(test));
 
             let scale_x = math::pow(10, pool::get_decimals_x(&pool));
             let scale_y = math::pow(10, pool::get_decimals_y(&pool));
-            let dy = input_y - pool::calculate_fee(input_y, 3, 10000);
+            let dy = input_y - pool::calculate_fee(input_y, 3);
 
             let desired_x = if(pool::get_stable<X,Y>(&pool)){
              (formula::stable_swap_output((dy as u256),( res_y as u256), (res_x as u256), (scale_y as u256), (scale_x as u256)) as u64)
@@ -246,11 +245,12 @@ module test::amm_test{
             let (res_x, res_y, lp_supply) = pool::get_reserves(&mut pool);
             let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
             let lp_value = pool::get_lp_balance(&lp_position);
-            //let lp_value = pool::get_player_balance<X,Y>(&pool, creator);
+
             let withdraw_x = pool::quote(lp_supply, res_x, lp_value);
             let withdraw_y = pool::quote(lp_supply, res_y, lp_value);
 
             pool::remove_liquidity<X,Y>(&mut pool, &mut lp_position, lp_value, 0, 0, clock, ctx(test));
+            test::return_to_sender(test, lp_position);
             test::return_shared(pool);
 
             (withdraw_x, withdraw_y)
@@ -268,36 +268,41 @@ module test::amm_test{
             test::return_to_sender(test, coin_y);
             test::return_shared(pool);
         };
+
     }
-    // fun zap_x_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-    //     let (creator, trader) = people();
-    //     let deposit_x = 30000;
+    fun zap_x_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
+        let (creator, trader) = people();
+        let deposit_x = 30000;
 
-    //     next_tx(test, creator);{
-    //         add_liquidity_< X, Y>(amt_x, amt_y, clock, test);
-    //     };
-    //     next_tx(test, trader);{
-    //         test_swap_for_y_< X, Y>(amt_x, amt_y, clock, test);
-    //     };
-    //     next_tx(test, trader);{// single zap
-    //         let pool = test::take_shared<Pool< X, Y>>(test);
-    //         let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
-    //         let lp_value = pool::get_lp_balance(&lp_position);
+        next_tx(test, creator);{
+            add_liquidity_< X, Y>(amt_x, amt_y, clock, test);
+        };
+        next_tx(test, trader);{
+            test_swap_for_y_< X, Y>(amt_x, amt_y, clock, test);
+        };
+        next_tx(test, trader);{// single zap
+            let pool = test::take_shared<Pool< X, Y>>(test);
 
-    //         pool::zap_x(&mut pool, mint<X>(deposit_x, ctx(test)), &meta_x, &meta_y, 0, 0,0, clock, ctx(test));
+            pool::zap_x(&mut pool, mint<X>(deposit_x, ctx(test)), 0, 0,0, clock, ctx(test));
 
-    //         test::return_shared(pool);
-    //     };
-    //     next_tx(test, trader);{// mul_coin zap
-    //         let pool = test::take_shared<Pool< X, Y>>(test);
-    //         let vec = vector::empty<Coin<X>>();
+            test::return_shared(pool);
+        };
+        // next_tx(test, creator);{
+        //     let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
 
-    //         vector::push_back(&mut vec, mint<X>(1000, ctx(test)));
-    //         vector::push_back(&mut vec, mint<X>(1250, ctx(test)));
-    //         pool::zap_x_pay(&mut pool, vec, 1500, &meta_x, &meta_y, 0, 0,0, clock, ctx(test));
+        //     std::debug::print(&pool::get_lp_balance(&lp_position));
+        //     std::debug::print(&pool::get_claimable_x(&lp_position));
 
-    //         test::return_shared(pool);
-    //     }
-    // }
+        //     test::return_to_sender(test, lp_position);
+        // };
+        next_tx(test, creator);{
+            let pool = test::take_shared<Pool< X, Y>>(test);
+            let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
+            pool::claim_fees_player(&mut pool, &mut lp_position, ctx(test));
+
+            test::return_shared(pool);
+            test::return_to_sender(test, lp_position);
+        }
+    }
     fun people(): (address, address) { (@0xABCD, @0x1234 ) }
 }
