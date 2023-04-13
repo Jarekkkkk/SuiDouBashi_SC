@@ -103,7 +103,7 @@ module suiDouBashi::pool{
         claimable_y: u64
     }
     // not entry, each address cna only have one lp_position
-    public fun top_up_claim_lp_balance<X,Y>(self: &Pool<X,Y>, payee: &mut LP_Position<X,Y>, payer: &mut LP_Position<X,Y>, value: u64){
+    public entry fun top_up_claim_lp_balance<X,Y>(self: &Pool<X,Y>, payee: &mut LP_Position<X,Y>, payer: &mut LP_Position<X,Y>, value: u64){
         update_lp_position(self, payee);
         update_lp_position(self, payer);
         let balance = balance::split(&mut payer.lp_balance, value);
@@ -113,6 +113,20 @@ module suiDouBashi::pool{
         assert_lp_owner(&lp_position, ctx);
         lp_position.owner = to;
         transfer::transfer(lp_position, to);
+    }
+    public entry fun delete_empty_lp_position<X,Y>(lp: LP_Position<X,Y>){
+        let LP_Position {
+            id,
+            owner: _,
+            lp_balance,
+            position_x: _,
+            position_y: _,
+            claimable_x: _,
+            claimable_y: _
+        } = lp;
+
+        balance::destroy_zero(lp_balance);
+        object::delete(id);
     }
     public fun get_lp_balance<X,Y>(claim: &LP_Position<X,Y>):u64{ balance::value(&claim.lp_balance) }
     public fun get_claimable_x<X,Y>(lp: &LP_Position<X,Y>):u64{ lp.claimable_x }
@@ -155,6 +169,7 @@ module suiDouBashi::pool{
 
     public fun get_decimals_y<X, Y>(pool: &Pool<X,Y>): u8 { pool.decimal_y }
 
+    // REFACTOR: Insufficient
     public fun get_total_supply<X,Y>(self: &Pool<X,Y>): u64 { balance::supply_value(&self.lp_supply)}
 
     public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u64{ pool.last_block_timestamp }
@@ -244,7 +259,6 @@ module suiDouBashi::pool{
             lp_position.position_x = self.fee.index_x;
             lp_position.position_y = self.fee.index_y;
 
-
             if(delta_x > 0){
                 let share = (lp_balance as u256) * delta_x / SCALE_FACTOR;
                 lp_position.claimable_x = lp_position.claimable_x + (share as u64);
@@ -266,9 +280,7 @@ module suiDouBashi::pool{
     }
     fun update_fee_index_y<X,Y>(self: &mut Pool<X,Y>, fee_y: u64 ){
         let ratio_y = (fee_y as u256) * SCALE_FACTOR / (get_total_supply(self) as u256);
-
         self.fee.index_y = self.fee.index_y + ratio_y;
-
         event::fee<Y>(fee_y);
     }
 
@@ -372,7 +384,6 @@ module suiDouBashi::pool{
 
         event::swap<X,Y>(input, output);
     }
-
     public entry fun swap_for_x<X, Y>(
         pool: &mut Pool<X, Y>,
         coin_y: Coin<Y>,
@@ -438,7 +449,6 @@ module suiDouBashi::pool{
     ):(Pool<X, Y>){
         let lp_supply = balance::create_supply(LP_TOKEN<X, Y>{});
         let ts = tx_context::epoch_timestamp_ms(ctx);
-
         let fee = Fee{
             fee_x: balance::zero<X>(),
             fee_y: balance::zero<Y>(),
@@ -659,7 +669,6 @@ module suiDouBashi::pool{
         };
 
         assert!(output_y > output_y_min, err::slippage());
-        // store prev value to verify after tx execution
         let _res_x = balance::value(&self.reserve_x);
         let _res_y = balance::value(&self.reserve_y);
         update_timestamp_(self, clock);
@@ -670,7 +679,6 @@ module suiDouBashi::pool{
 
         let coin_fee = coin::take(&mut self.reserve_x, fee_x, ctx);
         coin::put(&mut self.fee.fee_x, coin_fee);
-
         update_fee_index_x(self, fee_x);
 
         assert!(amm_math::mul_to_u128(_res_x + value_x, _res_y) >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
@@ -747,12 +755,10 @@ module suiDouBashi::pool{
 
         if(option::is_some(&coin_x)){
             let coin_x = option::extract(&mut coin_x);
-            std::debug::print(&coin::value(&coin_x));
             transfer::public_transfer(coin_x, tx_context::sender(ctx));
         };
         if(option::is_some(&coin_y)){
             let coin_y = option::extract(&mut coin_y);
-            std::debug::print(&coin::value(&coin_y));
             transfer::public_transfer(coin_y, tx_context::sender(ctx));
         };
 

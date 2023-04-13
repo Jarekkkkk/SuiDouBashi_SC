@@ -216,7 +216,7 @@ module suiDouBashiVest::reward_distributor{
     fun find_timestamp_epoch_(
         vsdb_reg: &VSDBRegistry,
         timestamp: u64
-    ): u256{
+    ): u64{
         let min_ = 0;
         let max_ = vsdb::epoch(vsdb_reg);
 
@@ -364,7 +364,7 @@ module suiDouBashiVest::reward_distributor{
 
         if(week_cursor < start_time_) week_cursor = start_time_;
 
-        let old_user_point = point::from(i128::zero(), i128::zero(), 0);
+        let old_user_point = point::new(i128::zero(), i128::zero(), 0);
 
         let i = 0;
         while( i < 50 ){
@@ -375,7 +375,7 @@ module suiDouBashiVest::reward_distributor{
                 old_user_point = user_point;
 
                 if(user_epoch > max_user_epoch){
-                    user_point = point::from(i128::zero(), i128::zero(), 0);
+                    user_point = point::new(i128::zero(), i128::zero(), 0);
                 }else{
                     user_point = *vsdb::user_point_history(vsdb, user_epoch);
                 }
@@ -454,7 +454,7 @@ module suiDouBashiVest::reward_distributor{
 
         if(week_cursor < start_time_) week_cursor = start_time_;
 
-        let old_user_point = point::from(i128::zero(), i128::zero(), 0);
+        let old_user_point = point::new(i128::zero(), i128::zero(), 0);
 
         let i = 0;
         while( i < 50 ){
@@ -465,7 +465,7 @@ module suiDouBashiVest::reward_distributor{
                 old_user_point = user_point;
 
                 if(user_epoch > max_user_epoch){
-                    user_point = point::from(i128::zero(), i128::zero(), 0);
+                    user_point = point::new(i128::zero(), i128::zero(), 0);
                 }else{
                     user_point = *vsdb::user_point_history(vsdb, user_epoch);
                 }

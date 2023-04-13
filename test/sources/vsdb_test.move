@@ -24,7 +24,6 @@ module test::vasdb_test{
         let _g_t = 0;  // published at 2023/01/01 00:00
         let clock = clock::create_for_testing(ctx(s));
 
-
         next_tx(s, jarek);{ // test init
             add_time(&mut clock, 1672531200);
             _g_t = get_time(&clock);
@@ -40,10 +39,10 @@ module test::vasdb_test{
             let vsdb = test::take_from_sender<VSDB>(s);
             let end = vsdb::round_down_week(_g_t + duration);
             _locked_end = end;
-            let slope = vsdb::calculate_slope(locked_value, vsdb::max_time());
-            let bias = vsdb::calculate_bias(locked_value, vsdb::max_time(), end, _g_t);
+            let slope = vsdb::calculate_slope(locked_value);
+            let bias = vsdb::calculate_bias(locked_value, end, _g_t);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
-            assert!( vsdb::get_version(&vsdb) == 1, 0);
+            assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
             test::return_to_sender(s, vsdb);
@@ -52,17 +51,17 @@ module test::vasdb_test{
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             let extended = 2 * vsdb::week();
-            _locked_end  = _locked_end + extended;
+            _locked_end  = vsdb::round_down_week(get_time(&clock) + extended);
             vsdb::increase_unlock_time(&mut reg, &mut vsdb, extended, &clock, ctx(s));
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
-     next_tx(s, jarek);{
+        next_tx(s, jarek);{
             let vsdb = test::take_from_sender<VSDB>(s);
-            let slope = vsdb::calculate_slope(locked_value, vsdb::max_time()); // slope is unchanged
-            let bias = vsdb::calculate_bias(locked_value, vsdb::max_time(), _locked_end, _g_t);
+            let slope = vsdb::calculate_slope(locked_value); // slope is unchanged
+            let bias = vsdb::calculate_bias(locked_value, _locked_end, _g_t);
             assert!( vsdb::locked_end(&vsdb) == _locked_end, 0);
-            assert!( vsdb::get_version(&vsdb) == 2, 0);
+            assert!( vsdb::get_user_epoch(&vsdb) == 2, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);
@@ -79,10 +78,10 @@ module test::vasdb_test{
         };
         next_tx(s, jarek);{
             let vsdb = test::take_from_sender<VSDB>(s);
-            let slope = vsdb::calculate_slope(locked_value, vsdb::max_time()); // slope is unchanged
-            let bias = vsdb::calculate_bias(locked_value, vsdb::max_time(), _locked_end, _g_t);
+            let slope = vsdb::calculate_slope(locked_value); // slope is unchanged
+            let bias = vsdb::calculate_bias(locked_value, _locked_end, _g_t);
                      assert!( vsdb::locked_end(&vsdb) == _locked_end, 0);
-            assert!( vsdb::get_version(&vsdb) == 3, 0);
+            assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);
@@ -93,6 +92,8 @@ module test::vasdb_test{
         next_tx(s, jarek);{
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
+            let point = vsdb::epoch(&reg);
+            std::debug::print(&point);
             vsdb::unlock(&mut reg, vsdb, &clock, ctx(s));
             test::return_shared(reg);
         };

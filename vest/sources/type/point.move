@@ -7,7 +7,7 @@ module suiDouBashiVest::point{
         ts: u64, // t_i (week_based)
     }
 
-    public fun from(bias: I128, slope: I128, ts: u64): Point{
+    public fun new(bias: I128, slope: I128, ts: u64): Point{
         Point{
             bias,
             slope,
