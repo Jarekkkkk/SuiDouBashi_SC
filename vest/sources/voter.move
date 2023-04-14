@@ -21,7 +21,7 @@ module suiDouBashiVest::voter{
     use suiDouBashiVest::minter::{Self, Minter};
     use suiDouBashiVest::reward_distributor::Distributor;
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
-
+    use suiDouBashiVest::external_bribe::{Self, ExternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
@@ -86,38 +86,38 @@ module suiDouBashiVest::voter{
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
-        // external_bribe
+        external_bribe: &mut ExternalBribe<X,Y>,
         weights: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, weights, clock, ctx);
+        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
     }
     public entry fun poke<X,Y,T>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
-        // external_bribe
+        external_bribe: &mut ExternalBribe<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
         let weights = vsdb::pool_votes(vsdb, gauge::pool_id(gauge));
-        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, weights, clock, ctx);
+        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
     }
     public entry fun reset<X,Y,T>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
-        // external_bribe
+        external_bribe: &mut ExternalBribe<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, clock, ctx);
+        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, clock, ctx);
     }
 
     // - Gauge
@@ -166,28 +166,29 @@ module suiDouBashiVest::voter{
     }
 
     // - Rewards
-    /// SDB emissions
+    /// weekly minted SDB to incentivize pools --> LP_Staker
     entry fun claim_rewards<X,Y,T>(
         gauge: &mut Gauge<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        distribute()
         gauge::get_reward<X,Y,T>(gauge, vsdb, clock, ctx);
     }
 
-    /// External Bribe
+    /// External Bribe --> voter
     entry fun claim_bribes<X,Y, T>(
-        internal_bribe: &mut InternalBribe<X,Y>,
+        external_bribe: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         // external
-        internal_bribe::get_reward<X,Y,T>(internal_bribe, vsdb, clock, ctx);
+        external_bribe::get_reward<X,Y,T>(external_bribe, vsdb, clock, ctx);
     }
 
-    /// Internal Bribe
+    /// Internal Bribe --> voter
     entry fun claim_fees<X,Y, T>(
         internal_bribe: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
@@ -197,19 +198,18 @@ module suiDouBashiVest::voter{
         internal_bribe::get_reward<X,Y,T>(internal_bribe, vsdb, clock, ctx);
     }
 
-    // rebase
+    // collect Fees from Pool
     entry fun distribute_fees<X,Y>(
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
-        vsdb: &VSDB,
-        // LP_TOKEN
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        gauge::claim_fee(gauge, internal_bribe, pool, vsdb, clock, ctx);
+        gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
+    // rebase
     fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
@@ -218,7 +218,6 @@ module suiDouBashiVest::voter{
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
         vsdb_reg: &mut VSDBRegistry,
-        vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -238,7 +237,7 @@ module suiDouBashiVest::voter{
 
             // deposit the rebase to gauge
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
-            gauge::notify_reward_amount<X,Y,SDB>(gauge, internal_bribe, pool, vsdb, coin_sdb, clock, ctx);
+            gauge::notify_reward_amount<X,Y,SDB>(gauge, internal_bribe, pool, coin_sdb, clock, ctx);
 
             event::distribute_reward<X,Y>(tx_context::sender(ctx), claimable);
         }
@@ -275,12 +274,12 @@ module suiDouBashiVest::voter{
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
-        // external_bribe
+        external_bribe: &mut ExternalBribe<X,Y>,
         weights: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, clock, ctx);
+        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, clock, ctx);
         let pool_id = gauge::pool_id(gauge);
 
         let player_weight = vsdb::latest_voting_weight(vsdb, clock);
@@ -305,6 +304,7 @@ module suiDouBashiVest::voter{
 
         // vote for voting power
         internal_bribe::deposit<X,Y,T>(internal_bribe, vsdb, pool_weight, clock, ctx);
+        external_bribe::deposit<X,Y,T>(external_bribe, vsdb, pool_weight, clock, ctx);
 
         used_weight = used_weight + pool_weight;
         total_weight = total_weight + pool_weight;
@@ -325,14 +325,13 @@ module suiDouBashiVest::voter{
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
-        // external_bribe
+        external_bribe: &mut ExternalBribe<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         let pool_id = gauge::pool_id(gauge);
         let votes = vsdb::pool_votes(vsdb, pool_id);
         let total_weight = 0;
-
 
         if(votes > 0){
             update_for_(self, gauge);
@@ -343,7 +342,7 @@ module suiDouBashiVest::voter{
             // WHY ?
             if(votes > 0){
                 internal_bribe::withdraw<X,Y,T>(internal_bribe, vsdb, votes, clock, ctx);
-                // withdraw(internal_bribe, vsdb, votes, clock, ctx);
+                external_bribe::withdraw<X,Y,T>(external_bribe, vsdb, votes, clock, ctx);
                 total_weight = total_weight + votes;
             }else{
                 total_weight = total_weight - votes;

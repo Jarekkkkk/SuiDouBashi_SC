@@ -14,7 +14,7 @@ module suiDouBashiVest::gauge{
     use sui::vec_set::{Self, VecSet};
     use std::ascii::String;
     use sui::table::{ Self, Table};
-    use sui::table_vec::{Self, TableVec};
+    use sui::table_vec::{Self};
 
     use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashiVest::event;
@@ -22,6 +22,7 @@ module suiDouBashiVest::gauge{
     use suiDouBashiVest::reward::{Self, Reward};
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
+    use suiDouBashiVest::external_bribe::{Self};
 
     use suiDouBashi::pool::{Self, Pool, LP_Position};
 
@@ -42,7 +43,7 @@ module suiDouBashiVest::gauge{
         rewards: VecSet<String>,
 
         total_supply: LP_Position<X,Y>,
-        // TODO: move to VSDB
+
         balance_of: Table<ID, u64>,
 
         token_ids: Table<address, ID>, // each player cna only stake once for each pool
@@ -103,8 +104,8 @@ module suiDouBashiVest::gauge{
         ctx: &mut TxContext
     ):(Gauge<X,Y>, ID, ID){
         let internal_id = internal_bribe::create_bribe(pool, ctx);
-        //external
-        let external_id = internal_bribe::create_bribe(pool, ctx);
+        let external_id = external_bribe::create_bribe(pool, ctx);
+
         let bribes = vec::singleton(internal_id);
         vec::push_back(&mut bribes, external_id);
 
@@ -233,11 +234,9 @@ module suiDouBashiVest::gauge{
     // move to REWARD
     public fun get_prior_reward_per_token<X, Y, T>(
         reward: &Reward<X, Y, T>,
-        vsdb: &VSDB,
         ts:u64
     ):(u64, u64) // ( ts, reward_per_token )
     {
-        let id = object::id(vsdb);
         let checkpoints = reward::reward_per_token_checkpoints_borrow(reward);
         let len = table_vec::length(checkpoints);
 
@@ -340,15 +339,15 @@ module suiDouBashiVest::gauge{
             while( i <= end_idx - 1){ // leave last one
                 let cp_0 = table::borrow(bps_borrow, i);
                 let cp_1 = table::borrow(bps_borrow, i + 1);
-                let ( _, reward_per_token_0) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp_0));
-                let ( _, reward_per_token_1 ) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp_1));
+                let ( _, reward_per_token_0) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_0));
+                let ( _, reward_per_token_1 ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_1));
                 earned_reward =  earned_reward +  checkpoints::balance(cp_0) *  ( reward_per_token_1 - reward_per_token_0) / PRECISION;
                 i = i + 1;
             }
         };
 
         let cp = table::borrow(bps_borrow, end_idx);
-        let ( _, reward_per_token ) = get_prior_reward_per_token(reward, vsdb, checkpoints::balance_ts(cp));
+        let ( _, reward_per_token ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
 
         // HOw ?
         earned_reward = earned_reward + checkpoints::balance(cp) * (get_reward_per_token<X,Y,T>(self, clock) - math::max(reward_per_token, reward::user_reward_per_token_stored(reward, id))) / PRECISION;
@@ -404,7 +403,6 @@ module suiDouBashiVest::gauge{
         reward: &mut Reward<X, Y, T>,
         reward_per_token: u64, // record down balance
         timestamp: u64,
-        ctx: &mut TxContext
     ){
         //register new one
         let rp_s = reward::reward_per_token_checkpoints_borrow_mut(reward);
@@ -446,8 +444,7 @@ module suiDouBashiVest::gauge{
         self: &mut Gauge<X,Y>,
         max_run:u64,
         actual_last: bool,
-        clock: &Clock,
-        ctx: &mut TxContext
+        clock: &Clock
     ):(u64, u64) // ( reward_per_token_stored, last_update_time)
     {
         assert_generic_type<X,Y,T>();
@@ -477,7 +474,7 @@ module suiDouBashiVest::gauge{
                     let reward = borrow_reward_mut<X,Y,T>(self);
                     let ( reward_per_token , end_time) = calc_reward_per_token(reward, ts, sp_0_ts, sp_0_supply, start_timestamp);
                     reward_ = reward_ + reward_per_token;
-                    write_reward_per_token_checkpoint(reward, reward_, end_time, ctx);
+                    write_reward_per_token_checkpoint(reward, reward_, end_time);
                     start_timestamp = end_time;
                 };
                 i = i + 1;
@@ -493,7 +490,7 @@ module suiDouBashiVest::gauge{
                 let ( reward_per_token, _ ) = calc_reward_per_token(reward, last_time_reward, math::max(sp_ts, start_timestamp), sp_supply, start_timestamp);
                 reward_ = reward_ + reward_per_token;
                 let reward = borrow_reward_mut<X,Y,T>(self);
-                write_reward_per_token_checkpoint(reward, reward_, clock::timestamp_ms(clock), ctx);
+                write_reward_per_token_checkpoint(reward, reward_, clock::timestamp_ms(clock));
                 start_timestamp = clock::timestamp_ms(clock);
             };
         };
@@ -501,7 +498,6 @@ module suiDouBashiVest::gauge{
         return ( reward_, start_timestamp )
     }
 
-    /// allows a player to claim reward for a given bribe
     public (friend) fun get_reward<X, Y, T>(
         self: &mut Gauge<X,Y>,
         vsdb: &VSDB,
@@ -511,7 +507,7 @@ module suiDouBashiVest::gauge{
         assert_generic_type<X,Y,T>();
 
         let id = object::id(vsdb);
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock, ctx);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock);
 
         let _reward = earned<X,Y,T>(self, vsdb, clock);
 
@@ -539,7 +535,7 @@ module suiDouBashiVest::gauge{
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         vsdb: &mut VSDB,
-        lp_position: &mut LP_Position<X,Y>,
+        lp_position: &mut LP_Position<X,Y>, // borrow_mut or take ?
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
@@ -547,7 +543,7 @@ module suiDouBashiVest::gauge{
         assert_generic_type<X,Y,T>();
 
         let id = object::id(vsdb);
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock, ctx);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock);
 
         let reward = borrow_reward_mut<X,Y,T>(self);
         reward::update_reward_per_token_stored(reward, reward_per_token_stored);
@@ -588,7 +584,7 @@ module suiDouBashiVest::gauge{
     ):LP_Position<X,Y>{
         assert_generic_type<X,Y,T>();
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock, ctx);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock);
         let id = object::id(vsdb);
 
         let reward = borrow_reward_mut<X,Y,T>(self);
@@ -623,12 +619,11 @@ module suiDouBashiVest::gauge{
     }
 
     // TODO: whitelist check
-    /// distribute the fees
+    /// distribute the weekly rebase amonut
     public fun notify_reward_amount<X,Y,T>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
-        vsdb: &VSDB,
         coin: Coin<T>,
         clock: &Clock,
         ctx: &mut TxContext
@@ -641,16 +636,16 @@ module suiDouBashiVest::gauge{
 
         let ts = clock::timestamp_ms(clock);
         if(reward::reward_rate(reward) == 0){
-            write_reward_per_token_checkpoint(borrow_reward_mut<X,Y,T>(self), 0, ts, ctx);
+            write_reward_per_token_checkpoint(borrow_reward_mut<X,Y,T>(self), 0, ts);
         };
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock, ctx);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock);
 
         reward::update_reward_per_token_stored(borrow_reward_mut<X,Y,T>(self), reward_per_token_stored);
         reward::update_last_update_time(borrow_reward_mut<X,Y,T>(self), last_update_time);
 
         // Charge fees when
-        claim_fee(self, bribe, pool, vsdb, clock, ctx);
+        claim_fee(self, bribe, pool, clock, ctx);
 
         let reward = borrow_reward_mut<X,Y,T>(self);
         // initial bribe in each epoch
@@ -677,14 +672,11 @@ module suiDouBashiVest::gauge{
 
 
     // ===== Other =====
-    // For voter distribure fees, LP trenasfer Fees to Internal Bribe
-    /// Instead of receiving pairs of coins from each pool, LPs receive protocol emissions depending on votes each pool accumulate
+    /// Collect the fees from Pool, then deposit into internal bribe
     public (friend) fun claim_fee<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
-        vsdb: &VSDB,
-        // LP_TOKEN
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -706,10 +698,8 @@ module suiDouBashiVest::gauge{
         }else{
             0
         };
-
         option::destroy_none(coin_x);
         option::destroy_none(coin_y);
-
 
         if(value_x > 0 || value_y > 0){
             let bal_x = balance::value(&self.fees_x);
@@ -718,16 +708,15 @@ module suiDouBashiVest::gauge{
             // why checking left
             if(bal_x > internal_bribe::left(internal_bribe::borrow_reward<X,Y,X>(bribe),clock) && bal_x / DURATION > 0  ){
                 let withdraw = balance::withdraw_all(&mut self.fees_x);
-                internal_bribe::notify_reward_amount(bribe, vsdb, coin::from_balance(withdraw, ctx), clock, ctx);
+                internal_bribe::notify_reward_amount(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
             };
 
             if(bal_y > internal_bribe::left(internal_bribe::borrow_reward<X,Y,Y>(bribe),clock) && bal_y / DURATION > 0  ){
                 let withdraw = balance::withdraw_all(&mut self.fees_y);
-                internal_bribe::notify_reward_amount(bribe, vsdb, coin::from_balance(withdraw, ctx), clock, ctx);
+                internal_bribe::notify_reward_amount(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
             }
         };
 
         event::claim_fees(tx_context::sender(ctx), value_x, value_y);
     }
-
 }
