@@ -255,7 +255,6 @@ module suiDouBashiVest::vsdb{
         &self.url
     }
 
-
     // ===== Getter  =====
 
     // - Reg
@@ -310,27 +309,6 @@ module suiDouBashiVest::vsdb{
 
 
     // ===== Setter  =====
-    // - voting
-    // TODO: move to VSDB, leverage on dynamic fields
-    public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
-        table::add(&mut self.pool_votes, pool_id, value);
-    }
-    public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
-        *table::borrow_mut(&mut self.pool_votes, pool_id) = value;
-    }
-    public (friend) fun clear_pool_votes(self: &mut VSDB, pool_id: ID){
-        table::remove(&mut self.pool_votes, pool_id);
-    }
-    public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
-        self.used_weights = w;
-    }
-    public (friend) fun update_last_voted(self: &mut VSDB, v: u64){
-        self.last_voted = v;
-    }
-    /// 1. increase version
-    /// 2. update point
-    ///
-    /// have to called after modification of locked_balance
     fun update_user_point(self: &mut VSDB, clock: &Clock){
         let ts = clock::timestamp_ms(clock);
         let amount = balance::value(&self.locked_balance.balance);
@@ -344,8 +322,7 @@ module suiDouBashiVest::vsdb{
     }
 
     // ===== Utils =====
-    /// get the voting weight depends on
-    public fun voting_weight(self: &VSDB, ts: u64): u64{
+    public fun voting_weight(self: &VSDB, ts: u64): u64{ //u64 is insufficient
         if(self.user_epoch == 0){
             return 0
         }else{
@@ -359,14 +336,15 @@ module suiDouBashiVest::vsdb{
             return ((i128::as_u128(&last_point_bias))as u64)
         }
     }
+
     public fun latest_voting_weight(self: &VSDB, clock: &Clock):u64{
         voting_weight(self, clock::timestamp_ms(clock))
     }
 
-
     public fun latest_total_voting_weight(reg: &VSDBRegistry, clock: &Clock): u64{
         total_voting_weight(reg, clock::timestamp_ms(clock))
     }
+
     public fun total_voting_weight(self: &VSDBRegistry, ts: u64): u64{
         // calculate by latest epoch
         let point = table_vec::borrow(&self.point_history, self.epoch);
@@ -405,7 +383,7 @@ module suiDouBashiVest::vsdb{
         return ((i128::as_u128(&last_point_bias)) as u64)
     }
 
-    public fun calculate_slope(amount: u64, ): I128{
+    public fun calculate_slope( amount: u64 ): I128{
         i128::div( &i128::from((amount as u128)), &i128::from( (MAX_TIME as u128)))
     }
 
@@ -451,7 +429,6 @@ module suiDouBashiVest::vsdb{
 
         vsdb
     }
-
     /// TWO SCENARIO:
     /// 1. extend the amount
     /// 2. extend the locked_time
@@ -775,6 +752,24 @@ module suiDouBashiVest::vsdb{
     }
     public fun abstain(self: &mut VSDB){
         self.voted = false;
+    }
+
+    // ===== Voter =====
+    // TODO: move to VSDB, leverage on dynamic fields
+    public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
+        table::add(&mut self.pool_votes, pool_id, value);
+    }
+    public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
+        *table::borrow_mut(&mut self.pool_votes, pool_id) = value;
+    }
+    public (friend) fun clear_pool_votes(self: &mut VSDB, pool_id: ID){
+        table::remove(&mut self.pool_votes, pool_id);
+    }
+    public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
+        self.used_weights = w;
+    }
+    public (friend) fun update_last_voted(self: &mut VSDB, v: u64){
+        self.last_voted = v;
     }
     fun img_url_(id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): Url {
         let vesdb = SVG_PREFIX;

@@ -283,10 +283,7 @@ module suiDouBashiVest::voter{
         reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, clock, ctx);
         let pool_id = gauge::pool_id(gauge);
 
-
         let player_weight = vsdb::latest_voting_weight(vsdb, clock);
-
-        //let totalVoteWeight = 0;
 
         //pools
         let total_weight = 0;
@@ -294,7 +291,6 @@ module suiDouBashiVest::voter{
 
         // collect all voting weight
         let totalVoteWeight = weights;
-
 
         let pool_weight = weights * player_weight / totalVoteWeight; // get the pro rata voting weight
         assert!(vsdb::pool_votes(vsdb, pool_id) == 0, err::already_voted());

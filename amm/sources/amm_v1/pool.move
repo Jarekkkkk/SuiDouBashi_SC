@@ -102,7 +102,7 @@ module suiDouBashi::pool{
         claimable_x: u64,
         claimable_y: u64
     }
-    // not entry, each address cna only have one lp_position
+    // Refactor, player -> merge 2 lp_position
     public entry fun top_up_claim_lp_balance<X,Y>(self: &Pool<X,Y>, payee: &mut LP_Position<X,Y>, payer: &mut LP_Position<X,Y>, value: u64){
         update_lp_position(self, payee);
         update_lp_position(self, payer);
@@ -283,7 +283,6 @@ module suiDouBashi::pool{
         self.fee.index_y = self.fee.index_y + ratio_y;
         event::fee<Y>(fee_y);
     }
-
     // - add liquidity
     public entry fun add_liquidity<X, Y>(
         self: &mut Pool<X, Y>,
