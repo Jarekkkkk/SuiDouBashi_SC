@@ -1,5 +1,5 @@
 module suiDouBashi::pool{
-    use sui::object::{Self,UID};
+    use sui::object::{Self,UID, ID};
     use sui::balance::{Self,Supply, Balance};
     use sui::coin::{Self,Coin, CoinMetadata};
     use sui::tx_context::{Self, TxContext};
@@ -17,7 +17,6 @@ module suiDouBashi::pool{
     friend suiDouBashi::pool_reg;
 
     //friend suiDouBashiVest::gauge;
-
 
     const FEE_SCALING:u64 = 10000; //fee percentage: [0.01%, 100%]
 
@@ -192,14 +191,6 @@ module suiDouBashi::pool{
         assert!(input_x > 0, err::zero_amount());
 
         amm_math::mul_div(res_y, input_x, res_x)
-    }
-
-    public fun swap_input(output_y:u64, res_x:u64, res_y:u64, fee:u64, fee_scaling: u64): u64{
-        assert!(res_x > 0 && res_y > 0, err::empty_reserve());
-        assert!(output_y > 0, err::zero_amount());
-        let numerator = amm_math::mul_to_u128(res_x, output_y) * 1000;
-        let denominator =  (res_y - output_y) * (fee_scaling - fee) + 1;
-        ((numerator / (denominator as u128)) as u64)
     }
 
     // ===== Setter =====
@@ -408,7 +399,6 @@ module suiDouBashi::pool{
     public entry fun zap_x<X,Y>(
         pool: &mut Pool<X, Y>,
         coin_x: Coin<X>,
-        output_y_min:u64,
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
@@ -416,8 +406,11 @@ module suiDouBashi::pool{
     ){
         assert_pool_unlocked(pool);
         let x_value = coin::value<X>(&coin_x);
-        let coin_x_split = coin::split<X>(&mut coin_x, x_value/ 2, ctx);
-        let (coin_y, _, _) = swap_for_y_<X,Y>(pool, coin_x_split, output_y_min,  clock, ctx);
+        let (res_x, _, _) = get_reserves(pool);
+        let opt_x = (formula::zap_optimized_output((res_x as u256), (x_value as u256), pool.fee.fee_percentage) as u64);
+        let coin_x_split = coin::split<X>(&mut coin_x, opt_x, ctx);
+        let (coin_y, _, _) = swap_for_y_<X,Y>(pool, coin_x_split, 0,  clock, ctx);
+
         add_liquidity<X,Y>(pool, coin_x, coin_y, deposit_x_min, deposit_y_min, clock, ctx);
     }
 
@@ -432,8 +425,9 @@ module suiDouBashi::pool{
     ){
         assert_pool_unlocked(pool);
         let y_value = coin::value<Y>(&coin_y);
-        // simplest way to deposit single assets, to calculate exact output of another assets, use zap_optimized_output in formula module
-        let coin_y_split = coin::split<Y>(&mut coin_y, y_value/ 2, ctx);
+        let (_, res_y, _) = get_reserves(pool);
+        let opt_y = (formula::zap_optimized_output((res_y as u256), (y_value as u256), pool.fee.fee_percentage) as u64);
+        let coin_y_split = coin::split<Y>(&mut coin_y, opt_y, ctx);
         let (coin_x, _, _) = swap_for_x_<X,Y>(pool, coin_y_split,output_x_min,clock, ctx);
         add_liquidity<X,Y>(pool, coin_x, coin_y, deposit_x_min, deposit_y_min,clock, ctx);
     }
@@ -445,7 +439,7 @@ module suiDouBashi::pool{
         metadata_y: &CoinMetadata<Y>,
         fee_percentage: u64,
         ctx: &mut TxContext
-    ):(Pool<X, Y>){
+    ):ID{
         let lp_supply = balance::create_supply(LP_TOKEN<X, Y>{});
         let ts = tx_context::epoch_timestamp_ms(ctx);
         let fee = Fee{
@@ -478,7 +472,11 @@ module suiDouBashi::pool{
             observations: table_vec::singleton( observation, ctx),
             fee,
         };
-        pool
+        let pool_id = object::id(&pool);
+        transfer::share_object(
+            pool
+        );
+        pool_id
     }
     #[test_only]
     public fun add_liquidity_validate(
@@ -531,17 +529,26 @@ module suiDouBashi::pool{
             let opt_y  = quote(reserve_x, reserve_y, value_x);
             if (opt_y <= value_y){
                 assert!(opt_y >= deposit_y_min, err::insufficient_input());
-
-                let take = coin::take<Y>(coin::balance_mut<Y>(&mut coin_y), opt_y, ctx);
-                transfer::public_transfer(coin_y, tx_context::sender(ctx));
+                let take = if(coin::value(&coin_y) == opt_y){ // Optimized input
+                    coin_y
+                }else{
+                    let take = coin::take<Y>(coin::balance_mut<Y>(&mut coin_y), opt_y, ctx);
+                    transfer::public_transfer(coin_y, tx_context::sender(ctx));
+                    take
+                };
                 (coin_x, take)
             }else{
                 let opt_x = quote(reserve_y, reserve_x, value_y);
                 assert!(opt_x <= value_x, err::insufficient_input());
                 assert!(opt_x >= deposit_x_min, err::below_minimum());
+                let take = if(coin::value(&coin_x) == opt_y){ // Optimized input
+                    coin_x
+                }else{
+                    let take = coin::take<X>(coin::balance_mut<X>(&mut coin_x), opt_x, ctx);
+                    transfer::public_transfer(coin_x, tx_context::sender(ctx));
+                    take
+                };
 
-                let take = coin::take<X>(coin::balance_mut<X>(&mut coin_x), opt_x, ctx);
-                transfer::public_transfer(coin_x, tx_context::sender(ctx));
 
                 (take, coin_y)
             }
@@ -552,7 +559,6 @@ module suiDouBashi::pool{
         let lp_output = if( balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply) == 0){
             let amount = (amm_math::mul_sqrt(deposit_x, deposit_y) - MINIMUM_LIQUIDITY);
             let min = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
-            //freeze the minimum liquidity, quesion: does this affect k value calculation
             transfer::public_transfer(coin::from_balance(min,ctx), @0x00);
             amount
         }else{

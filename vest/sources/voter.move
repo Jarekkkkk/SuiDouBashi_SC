@@ -168,12 +168,18 @@ module suiDouBashiVest::voter{
     // - Rewards
     /// weekly minted SDB to incentivize pools --> LP_Staker
     entry fun claim_rewards<X,Y,T>(
+        self: &mut Voter,
+        minter: &mut Minter,
+        distributor: &mut Distributor,
         gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        pool: &mut Pool<X,Y>,
+        vsdb_reg: &mut VSDBRegistry,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        distribute()
+        distribute(self, minter, distributor, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
         gauge::get_reward<X,Y,T>(gauge, vsdb, clock, ctx);
     }
 

@@ -69,15 +69,10 @@ module suiDouBashi::pool_reg{
         assert_sorted<X, Y>();
         assert_guardian(self, tx_context::sender(ctx));
 
-        let pool = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
-        let pool_id = object::id(&pool);
+        let pool_id = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
 
-        let pool_name = get_pool_name<X,Y>(&pool);
-        table::add(&mut self.pools, pool_name, object::id(&pool));
-
-        transfer::share_object(
-            pool
-        );
+        let pool_name = get_pool_name<X,Y>();
+        table::add(&mut self.pools, pool_name, pool_id);
 
         event::pool_created<X,Y>(pool_id, tx_context::sender(ctx))
     }
@@ -100,7 +95,7 @@ module suiDouBashi::pool_reg{
     }
 
     // ===== Utils =====
-    public fun get_pool_name<X,Y>(_: &Pool<X, Y>):String{
+    public fun get_pool_name<X,Y>():String{
         let (_, _, symbol_x) = type::get_package_module_type<X>();
         let (_, _, symbol_y) = type::get_package_module_type<Y>();
 
@@ -109,23 +104,6 @@ module suiDouBashi::pool_reg{
         symbol_x
     }
 
-
-
-    // use sui::sui::SUI;
-    // use suiDouBashi::dai::DAI;
-    // use suiDouBashi::usdc::USDC;
-    // use suiDouBashi::usdt::USDT;
-    // entry fun create_pools(
-    //     gov: &mut PoolReg,
-    //     ctx: &mut TxContext
-    // ){
-    //     create_pool<DAI, SUI>(gov, false, 3, ctx);// dai-jrk
-    //     create_pool<SUI, USDC>(gov, false, 3, ctx);// jrk-usdc
-    //     create_pool<SUI, USDT>(gov, false, 3, ctx);// jrk-usdt
-    //     create_pool<DAI, USDC>(gov, true, 1, ctx);// dai-usdc
-    //     create_pool<DAI, USDT>(gov, true, 1, ctx);// dai-usdt
-    //     create_pool<USDC, USDT>(gov, true, 1, ctx);// usdc-usdt
-    // }
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
