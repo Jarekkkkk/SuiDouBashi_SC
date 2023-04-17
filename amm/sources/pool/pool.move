@@ -91,7 +91,7 @@ module suiDouBashi::pool{
     /// taking acount high-level transfer api calling, lp_balance will lose sync, therefore we have to managed in shared object
     /// TODO: transfer this wrapped with LP_TOKEN to record blance
 
-    /// LP's position
+    /// - LP's position
     struct LP_Position<phantom X, phantom Y> has key, store{
         id: UID,
         owner: address,
@@ -144,6 +144,12 @@ module suiDouBashi::pool{
     }
     fun update_claimable_y<X,Y>(claim: &mut LP_Position<X,Y>, value: u64){
         claim.claimable_y = value;
+    }
+
+    // Flash Loan
+    struct Receipt<phantom X, phantom Y, phantom T> {
+        amount: u64,
+        fee: u64,
     }
 
     // ===== Assertion =====
@@ -417,7 +423,6 @@ module suiDouBashi::pool{
     public entry fun zap_y<X,Y>(
         pool: &mut Pool<X, Y>,
         coin_y: Coin<Y>,
-        output_x_min:u64,
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
@@ -428,8 +433,59 @@ module suiDouBashi::pool{
         let (_, res_y, _) = get_reserves(pool);
         let opt_y = (formula::zap_optimized_output((res_y as u256), (y_value as u256), pool.fee.fee_percentage) as u64);
         let coin_y_split = coin::split<Y>(&mut coin_y, opt_y, ctx);
-        let (coin_x, _, _) = swap_for_x_<X,Y>(pool, coin_y_split,output_x_min,clock, ctx);
+        let (coin_x, _, _) = swap_for_x_<X,Y>(pool, coin_y_split, 0, clock, ctx);
         add_liquidity<X,Y>(pool, coin_x, coin_y, deposit_x_min, deposit_y_min,clock, ctx);
+    }
+    // - FlashLoan
+    public fun loan_x<X, Y>(
+        self: &mut Pool<X,Y>,
+        amount: u64,
+        ctx: &mut TxContext
+    ):(Coin<X>, Receipt<X,Y,X>){
+        let (res_x, _,  _) = get_reserves(self);
+
+        assert!( amount <= res_x, err::insufficient_borrow());
+        // charge
+        let fee = calculate_fee(amount, self.fee.fee_percentage);
+        let loan = coin::take(&mut self.reserve_x, amount, ctx);
+
+        (loan, Receipt{ amount, fee })
+    }
+    public fun loan_y<X, Y>(
+        self: &mut Pool<X,Y>,
+        amount: u64,
+        ctx: &mut TxContext
+    ):(Coin<Y>, Receipt<X,Y,Y>){
+        let (_, res_y,  _) = get_reserves(self);
+
+        assert!( amount <= res_y, err::insufficient_borrow());
+        let fee = calculate_fee(amount, self.fee.fee_percentage);
+        let loan = coin::take(&mut self.reserve_y, amount, ctx);
+
+        (loan, Receipt{ amount, fee })
+    }
+
+    public fun repay_loan_x<X,Y>(self: &mut Pool<X,Y>, payment: Coin<X>, receipt: Receipt<X,Y,X>, clock:&Clock, ctx: &mut TxContext) {
+        let Receipt { amount, fee } = receipt;
+        assert!(coin::value(&payment) == amount + fee, err::invalid_repay_amount());
+
+        let coin_fee = coin::split(&mut payment, fee, ctx);
+        coin::put(&mut self.fee.fee_x, coin_fee);
+        update_fee_index_x(self, fee);
+
+        coin::put(&mut self.reserve_x, payment);
+        update_timestamp_(self, clock);
+    }
+    public fun repay_loan_y<X,Y>(self: &mut Pool<X,Y>, payment: Coin<Y>, receipt: Receipt<X,Y,Y>, clock: &Clock, ctx: &mut TxContext) {
+        let Receipt { amount, fee } = receipt;
+        assert!(coin::value(&payment) == amount + fee, err::invalid_repay_amount());
+
+        let coin_fee = coin::split(&mut payment, fee, ctx);
+        coin::put(&mut self.fee.fee_y, coin_fee);
+        update_fee_index_x(self, fee);
+
+        coin::put(&mut self.reserve_y, payment);
+        update_timestamp_(self, clock);
     }
 
     // ====== MAIN_LOGIC ======

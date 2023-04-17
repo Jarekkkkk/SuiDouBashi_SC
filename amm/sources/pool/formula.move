@@ -4,7 +4,6 @@ module suiDouBashi::formula{
 
     use suiDouBashi::math;
 
-
     public fun k_(res_x: u256, res_y: u256, scale_x: u256, scale_y: u256): u256 {
         // x^3y + xy^3 = k
         let _x = res_x * SCALE_FACTOR / scale_x;
@@ -60,7 +59,6 @@ module suiDouBashi::formula{
 
         (math::sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4
     }
-
 
     fun get_y(x0: u256, xy: u256, y: u256): u256 {
         let i = 0;

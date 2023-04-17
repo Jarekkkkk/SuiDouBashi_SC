@@ -24,6 +24,10 @@ module suiDouBashi::pool_reg{
         assert!(self.guardian == guardian,err::invalid_guardian());
     }
 
+    fun assert_fee(fee: u64){
+        assert!(fee == 1 || fee == 2 || fee == 3 || fee == 4 || fee == 5, err::invalid_fee());
+    }
+
     fun assert_sorted<X, Y>() {
         let (_,_,coin_x_symbol) = type::get_package_module_type<X>();
         let (_,_,coin_y_symbol) = type::get_package_module_type<Y>();
@@ -39,12 +43,17 @@ module suiDouBashi::pool_reg{
             let length = vector::length<u8>(coin_x_bytes);
             let i = 0;
             while (i < length) {
-                assert!(*vector::borrow<u8>(coin_x_bytes, i) <= *vector::borrow<u8>(coin_y_bytes, i), err::wrong_pair_ordering());
+                let str_x = *vector::borrow<u8>(coin_x_bytes, i);
+                let str_y = *vector::borrow<u8>(coin_y_bytes, i);
+
+                assert!(str_x <= str_y, err::wrong_pair_ordering());
+                if(str_x < str_y){
+                    break
+                };
                 i = i + 1;
             }
         };
     }
-
 
     // ===== entry =====
     fun init(ctx:&mut TxContext){
@@ -68,6 +77,7 @@ module suiDouBashi::pool_reg{
     ){
         assert_sorted<X, Y>();
         assert_guardian(self, tx_context::sender(ctx));
+        assert_fee(fee_percentage);
 
         let pool_id = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
 
@@ -89,7 +99,7 @@ module suiDouBashi::pool_reg{
 
     entry fun update_fee_percentage<X,Y>(self: &PoolReg,pool: &mut Pool<X,Y>, fee: u64, ctx:&mut TxContext){
         assert_guardian(self, tx_context::sender(ctx));
-        assert!(fee == 1 || fee == 2 || fee == 3 || fee == 4 || fee == 5, err::invalid_fee());
+        assert_fee(fee);
 
         pool::update_fee(pool, fee);
     }

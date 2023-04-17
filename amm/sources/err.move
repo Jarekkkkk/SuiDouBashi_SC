@@ -56,4 +56,8 @@ module suiDouBashi::err{
     public fun invalid_owner(): u64 { Prefix + 214 }
 
     public fun empty_fee(): u64 { Prefix + 215 }
+
+    // - flashloan
+    public fun insufficient_borrow(): u64{ Prefix + 214 }
+    public fun invalid_repay_amount(): u64 { Prefix + 215 }
 }
