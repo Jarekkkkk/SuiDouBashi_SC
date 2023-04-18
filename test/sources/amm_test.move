@@ -7,9 +7,8 @@ module test::amm_test{
     use sui::math;
     use suiDouBashi::formula;
 
-    use suiDouBashi::pool::{Self, Pool, LP_Position};
+    use suiDouBashi::pool::{Self, Pool, LP};
     use suiDouBashi::pool_reg::{Self, PoolReg};
-    // coin pkg
     use suiDouBashi::dai::{Self, DAI};
     use suiDouBashi::usdc::{Self, USDC};
 
@@ -152,7 +151,7 @@ module test::amm_test{
         };
         next_tx(test, creator);{
             let pool = test::take_shared<Pool< X, Y>>(test);
-            let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
+            let lp_position = test::take_from_sender<LP<X,Y>>(test);
             let lp_value = pool::get_lp_balance(&lp_position);
 
             assert!(lp_value == minted_lp, 0);
@@ -177,9 +176,9 @@ module test::amm_test{
             let dx = input_x - pool::calculate_fee(input_x, 3);
 
             let desired_y = if(pool::get_stable<X,Y>(&pool)){
-             (formula::stable_swap_output((dx as u256),( res_x as u256), (res_y as u256), (scale_x as u256), (scale_y as u256)) as u64)
+             (formula::stable_swap_output(dx, res_x, res_y, scale_x, scale_y) as u64)
             }else{
-                (formula::variable_swap_output((dx as u256),( res_x as u256), (res_y as u256)) as u64)
+                (formula::variable_swap_output(dx, res_x, res_y) as u64)
             };
 
             pool::swap_for_y< X, Y>(&mut pool, coin_x, 0 , clock, ctx(test));
@@ -211,9 +210,9 @@ module test::amm_test{
             let dy = input_y - pool::calculate_fee(input_y, 3);
 
             let desired_x = if(pool::get_stable<X,Y>(&pool)){
-             (formula::stable_swap_output((dy as u256),( res_y as u256), (res_x as u256), (scale_y as u256), (scale_x as u256)) as u64)
+             (formula::stable_swap_output(dy, res_y, res_x, scale_y, scale_x) as u64)
             }else{
-                (formula::variable_swap_output((dy as u256),( res_y as u256), (res_x as u256)) as u64)
+                (formula::variable_swap_output(dy, res_y, res_x) as u64)
             };
 
             pool::swap_for_x< X, Y>(&mut pool, coin_y, 0 , clock, ctx(test));
@@ -242,7 +241,7 @@ module test::amm_test{
             let pool = test::take_shared<Pool< X, Y>>(test);
 
             let (res_x, res_y, lp_supply) = pool::get_reserves(&mut pool);
-            let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
+            let lp_position = test::take_from_sender<LP<X,Y>>(test);
             let lp_value = pool::get_lp_balance(&lp_position);
 
             let withdraw_x = pool::quote(lp_supply, res_x, lp_value);
@@ -301,7 +300,7 @@ module test::amm_test{
         };
         next_tx(test, creator);{
             let pool = test::take_shared<Pool< X, Y>>(test);
-            let lp_position = test::take_from_sender<LP_Position<X,Y>>(test);
+            let lp_position = test::take_from_sender<LP<X,Y>>(test);
             pool::claim_fees_player(&mut pool, &mut lp_position, ctx(test));
 
             test::return_shared(pool);
