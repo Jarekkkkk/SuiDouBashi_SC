@@ -3,6 +3,7 @@ module suiDouBashi::formula{
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     use suiDouBashi::math;
+    use sui::math as s_math;
 
     public fun k_(res_x: u256, res_y: u256, scale_x: u256, scale_y: u256): u256 {
         // x^3y + xy^3 = k
@@ -13,6 +14,27 @@ module suiDouBashi::formula{
         let _b =(( _x * _x) / SCALE_FACTOR) + (( _y * _y) / SCALE_FACTOR) ;
 
         (_a * _b / SCALE_FACTOR)
+    }
+
+    public fun get_output(
+        stable: bool,
+        dx: u64,
+        reserve_x: u64,
+        reserve_y: u64,
+        decimal_x: u8,
+        decimal_y: u8
+    ):u64{
+        if(stable){
+           (stable_swap_output(
+                (dx as u256),
+                (reserve_x as u256),
+                (reserve_y as u256),
+                (s_math::pow(10, decimal_x) as u256),
+                (s_math::pow(10, decimal_y) as u256)
+            ) as u64)
+        }else{
+            (variable_swap_output((dx as u256), (reserve_x as u256), (reserve_y as u256)) as u64)
+        }
     }
 
     //use suiDouBashi::amm_v1::swap_output as swap;

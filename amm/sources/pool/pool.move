@@ -308,7 +308,7 @@ module suiDouBashi::pool{
 
         event::liquidity_added<X,Y>(deposit_x, deposit_y, lP_value)
     }
-     public entry fun topup_liquidity<X, Y>(
+    public entry fun topup_liquidity<X, Y>(
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
         coin_y: Coin<Y>,
@@ -419,7 +419,6 @@ module suiDouBashi::pool{
 
         add_liquidity<X,Y>(pool, coin_x, coin_y, deposit_x_min, deposit_y_min, clock, ctx);
     }
-
     public entry fun zap_y<X,Y>(
         pool: &mut Pool<X, Y>,
         coin_y: Coin<Y>,
@@ -464,7 +463,6 @@ module suiDouBashi::pool{
 
         (loan, Receipt{ amount, fee })
     }
-
     public fun repay_loan_x<X,Y>(self: &mut Pool<X,Y>, payment: Coin<X>, receipt: Receipt<X,Y,X>, clock:&Clock, ctx: &mut TxContext) {
         let Receipt { amount, fee } = receipt;
         assert!(coin::value(&payment) == amount + fee, err::invalid_repay_amount());
@@ -570,8 +568,8 @@ module suiDouBashi::pool{
         ctx:&mut TxContext
     ):(
         Coin<LP_TOKEN<X,Y>>,
-       u64,
-       u64
+        u64,
+        u64
     ){
         let value_x = coin::value(&coin_x);
         let value_y = coin::value(&coin_y);
@@ -604,8 +602,6 @@ module suiDouBashi::pool{
                     transfer::public_transfer(coin_x, tx_context::sender(ctx));
                     take
                 };
-
-
                 (take, coin_y)
             }
         };
@@ -688,16 +684,6 @@ module suiDouBashi::pool{
             lp_value
         )
     }
-    #[test_only]
-    public fun charge_fee_validate(x_1: u64, y_1:u64, x_2: u64, y_2:u64, init_supply:u64):u64{
-        let prev_root_k = amm_math::mul_sqrt(x_1, y_1);
-        let root_k = amm_math::mul_sqrt(x_2, y_2);
-        let numerator = amm_math::mul_to_u128(init_supply, (root_k - prev_root_k));
-        let denominator = amm_math::mul_to_u128(5, root_k) + (prev_root_k as u128);
-        let minted_lp = numerator / denominator;
-
-        (minted_lp as u64)
-    }
     fun swap_for_y_<X, Y>(
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
@@ -717,17 +703,7 @@ module suiDouBashi::pool{
         let fee_x = calculate_fee(value_x, self.fee.fee_percentage);
         let dx = value_x - fee_x;
 
-        let output_y = if(self.stable){
-           (formula::stable_swap_output(
-                (dx as u256),
-                (reserve_x as u256),
-                (reserve_y as u256),
-                (math::pow(10, self.decimal_x) as u256),
-                (math::pow(10, self.decimal_y) as u256)
-            ) as u64)
-        }else{
-            (formula::variable_swap_output((dx as u256), (reserve_x as u256), (reserve_y as u256)) as u64)
-        };
+        let output_y = formula::get_output(self.stable, dx, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
 
         assert!(output_y > output_y_min, err::slippage());
         let _res_x = balance::value(&self.reserve_x);
@@ -769,17 +745,7 @@ module suiDouBashi::pool{
         let fee_y = calculate_fee(value_y, pool.fee.fee_percentage);
         let dy = value_y - fee_y;
 
-        let output_x = if(pool.stable){
-           ( formula::stable_swap_output(
-                (dy as u256),
-                (reserve_y as u256),
-                (reserve_x as u256),
-                (math::pow(10, pool.decimal_y) as u256),
-                (math::pow(10, pool.decimal_x) as u256)
-            ) as u64)
-        }else{
-             ( formula::variable_swap_output((dy as u256), (reserve_y as u256), (reserve_x as u256)) as u64)
-        };
+        let output_x = formula::get_output(pool.stable, dy, reserve_y, reserve_x, pool.decimal_y, pool.decimal_x);
 
         assert!(output_x > output_x_min, err::slippage());
         let _res_x = balance::value(&pool.reserve_x);
@@ -806,6 +772,73 @@ module suiDouBashi::pool{
         )
     }
 
+    // - Oracle
+    public fun current_cumulative_prices<X,Y>(
+        self: &Pool<X,Y>,
+        clock: &Clock
+    ):(u256, u256){
+        let ts = clock::timestamp_ms(clock);
+        let observation = get_latest_observation(self);
+        let reserve_x_cumulative = observation.reserve_x_cumulative;
+        let reserve_y_cumulative = observation.reserve_y_cumulative;
+        let (res_x, res_y, _) = get_reserves(self);
+
+        if(observation.timestamp != ts){
+            let time_elapsed = ts - observation.timestamp;
+            reserve_x_cumulative = reserve_x_cumulative + (res_x as u256) * (time_elapsed as u256);
+            reserve_y_cumulative = reserve_y_cumulative + (res_y as u256) * (time_elapsed as u256);
+        };
+
+        (reserve_x_cumulative, reserve_y_cumulative)
+    }
+
+    public fun current_y<X,Y>(
+        self: &Pool<X,Y>,
+        dx: u64,
+        clock: &Clock
+    ):u64{
+        let ts = clock::timestamp_ms(clock);
+        let observation = get_latest_observation(self);
+        let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
+        let len = table_vec::length(&self.observations);
+        if(len == 1){
+            // only gensis observation exist
+            return 0
+        }else if(ts == observation.timestamp){
+            observation = table_vec::borrow(&self.observations, len -2 );
+        };
+
+        let elapsed = ts - observation.timestamp;
+        let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
+        let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
+        formula::get_output(self.stable, dx, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
+    }
+    public fun current_x<X,Y>(
+        self: &Pool<X,Y>,
+        dy: u64,
+        clock: &Clock
+    ):u64{
+        let ts = clock::timestamp_ms(clock);
+        let observation = get_latest_observation(self);
+        let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
+        let len = table_vec::length(&self.observations);
+        if(len == 1){
+            // only gensis observation exist
+            return 0
+        }else if(ts == observation.timestamp){
+            observation = table_vec::borrow(&self.observations, len -2 );
+        };
+
+        let elapsed = ts - observation.timestamp;
+        let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
+        let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
+        formula::get_output(self.stable, dy, (res_y as u64), (res_x as u64), self.decimal_y, self.decimal_x)
+    }
+
+
+
+
+    // - Fee Distribution
     public entry fun claim_fees_player<X,Y>(
         self: &mut Pool<X,Y>,
         lp_position: &mut LP_Position<X,Y>,
@@ -826,7 +859,6 @@ module suiDouBashi::pool{
         option::destroy_none(coin_x);
         option::destroy_none(coin_y);
     }
-
     public fun claim_fees_gauge<X,Y>(
         self: &mut Pool<X,Y>,
         lp_position: &mut LP_Position<X,Y>,
@@ -834,7 +866,6 @@ module suiDouBashi::pool{
     ):(Option<Coin<X>>, Option<Coin<Y>>){
         claim_fees_(self, lp_position, ctx)
     }
-
     fun claim_fees_<X,Y>(
         self: &mut Pool<X,Y>,
         lp_position: &mut LP_Position<X,Y>,
