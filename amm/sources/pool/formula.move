@@ -5,10 +5,10 @@ module suiDouBashi::formula{
     use suiDouBashi::math;
     use sui::math as s_math;
 
-    public fun k_(res_x: u256, res_y: u256, scale_x: u256, scale_y: u256): u256 {
+    public fun k_(res_x: u64, res_y: u64, scale_x: u64, scale_y: u64): u256 {
         // x^3y + xy^3 = k
-        let _x = res_x * SCALE_FACTOR / scale_x;
-        let _y = res_y * SCALE_FACTOR / scale_y;
+        let _x = (res_x as u256) * SCALE_FACTOR / (scale_x as u256);
+        let _y = (res_y as u256) * SCALE_FACTOR / (scale_y as u256);
 
         let _a = (_x * _y ) / SCALE_FACTOR;
         let _b =(( _x * _x) / SCALE_FACTOR) + (( _y * _y) / SCALE_FACTOR) ;
@@ -26,28 +26,34 @@ module suiDouBashi::formula{
     ):u64{
         if(stable){
            (stable_swap_output(
-                (dx as u256),
-                (reserve_x as u256),
-                (reserve_y as u256),
-                (s_math::pow(10, decimal_x) as u256),
-                (s_math::pow(10, decimal_y) as u256)
+                dx,
+                reserve_x,
+                reserve_y,
+                s_math::pow(10, decimal_x),
+                s_math::pow(10, decimal_y)
             ) as u64)
         }else{
-            (variable_swap_output((dx as u256), (reserve_x as u256), (reserve_y as u256)) as u64)
+            (variable_swap_output( dx, reserve_x, reserve_y) as u64)
         }
     }
 
     //use suiDouBashi::amm_v1::swap_output as swap;
     /// Action: Swap: swap X for Y
     /// dy = (dx * y) / (dx + x), at dx' = dx(1 - fee)
-    public fun variable_swap_output(dx:u256, res_x:u256, res_y:u256): u256{
-        let n = dx * res_y ;
-        let d = dx + res_x;
+    public fun variable_swap_output( _dx:u64, _res_x: u64, _res_y: u64): u256{
+        let dx = ( _dx as u256 );
+        let n = dx * (_res_y as u256) ;
+        let d = dx + (_res_x as u256);
          n / d
     }
 
-    public fun stable_swap_output(input_x: u256, res_x: u256, res_y: u256, scale_x: u256, scale_y: u256 ): u256 {
-        let xy = k_(res_x, res_y, scale_x, scale_y);
+    public fun stable_swap_output(dx: u64, _res_x: u64, _res_y: u64, _scale_x: u64, _scale_y: u64 ): u256 {
+        let input_x = ( dx as u256);
+        let res_x = ( _res_x as u256);
+        let res_y = ( _res_y as u256);
+        let scale_x = ( _scale_x as u256);
+        let scale_y = ( _scale_y as u256);
+        let xy = k_(_res_x, _res_y, _scale_x, _scale_y);
 
         let res_x_ = (res_x  * SCALE_FACTOR) / scale_x ;
         let res_y_ = (res_y  * SCALE_FACTOR) / scale_y ;
@@ -127,11 +133,8 @@ module suiDouBashi::formula{
         let input_x = 1200000000;
         let res_x = 4196187624;
         let res_y = 841532386;
-        let dx = input_x - input_x * 3 / (10000 as u256);
+        let dx = input_x - input_x * 3 / (10000 as u64);
         let _out = variable_swap_output(dx, res_x, res_y);
-
-
-
         assert!(_out == 187095656, 1);
     }
     #[test]
