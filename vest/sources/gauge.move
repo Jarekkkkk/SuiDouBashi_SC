@@ -24,7 +24,7 @@ module suiDouBashiVest::gauge{
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
     use suiDouBashiVest::external_bribe::{Self};
 
-    use suiDouBashi::pool::{Self, Pool, LP_Position};
+    use suiDouBashi::pool::{Self, Pool, LP};
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u64 = 1_000_000_000_000_000_000;
@@ -42,7 +42,7 @@ module suiDouBashiVest::gauge{
 
         rewards: VecSet<String>,
 
-        total_supply: LP_Position<X,Y>,
+        total_supply: LP<X,Y>,
 
         balance_of: Table<ID, u64>,
 
@@ -121,7 +121,7 @@ module suiDouBashiVest::gauge{
 
             rewards: vec_set::empty<String>(),
 
-            total_supply: pool::create_lp_position(pool, id_ads, ctx), // no owner
+            total_supply: pool::create_lp(pool, id_ads, ctx), // no owner
             balance_of: table::new<ID, u64>(ctx),
 
             token_ids: table::new<address, ID>(ctx),
@@ -535,7 +535,7 @@ module suiDouBashiVest::gauge{
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         vsdb: &mut VSDB,
-        lp_position: &mut LP_Position<X,Y>, // borrow_mut or take ?
+        lp_position: &mut LP<X,Y>, // borrow_mut or take ?
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
@@ -549,7 +549,7 @@ module suiDouBashiVest::gauge{
         reward::update_reward_per_token_stored(reward, reward_per_token_stored);
         reward::update_last_update_time(reward, last_update_time);
 
-        pool::top_up_claim_lp_balance(pool, &mut self.total_supply, lp_position, value );
+        pool::join_lp(pool, &mut self.total_supply, lp_position, value );
 
         let lp_value = pool::get_lp_balance(lp_position);
 
@@ -581,7 +581,7 @@ module suiDouBashiVest::gauge{
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
-    ):LP_Position<X,Y>{
+    ):LP<X,Y>{
         assert_generic_type<X,Y,T>();
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token<X,Y,T>(self, MAX_U64, true, clock);
@@ -592,9 +592,9 @@ module suiDouBashiVest::gauge{
         reward::update_last_update_time(reward, last_update_time);
 
         // unstake the LP from pool
-        let lp_position = pool::create_lp_position(pool, tx_context::sender(ctx), ctx);
+        let lp_position = pool::create_lp(pool, tx_context::sender(ctx), ctx);
 
-        pool::top_up_claim_lp_balance(pool, &mut lp_position, &mut self.total_supply, value);
+        pool::join_lp(pool, &mut lp_position, &mut self.total_supply, value);
         let lp_value = pool::get_lp_balance(&lp_position);
 
         // record check

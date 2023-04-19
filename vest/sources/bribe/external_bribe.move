@@ -22,7 +22,7 @@ module suiDouBashiVest::external_bribe{
     friend suiDouBashiVest::voter;
 
     const DURATION: u64 = { 7 * 86400 };
-    const PRECISION: u64 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_REWARD_TOKENS: u64 = 16;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
@@ -30,8 +30,7 @@ module suiDouBashiVest::external_bribe{
         id: UID,
         pool:ID,
         governor: address,
-
-        /// Voting weight
+        /// Total Voting weight this bribe accumulate and record of user's
         total_supply: u64,
         balace_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
@@ -74,7 +73,8 @@ module suiDouBashiVest::external_bribe{
     public fun assert_reward_created<X,Y,T>(self: &ExternalBribe<X,Y>, type_name: TypeName){
         assert!(ob::contains(&self.rewards, type_name), err::reward_not_exist());
     }
-    // being calling by voter, when creating guage
+
+    /// constructor when creating gauge
     public (friend )fun create_bribe<X,Y>(
         pool: & Pool<X,Y>,
         ctx: &mut TxContext
@@ -106,14 +106,16 @@ module suiDouBashiVest::external_bribe{
         vsdb: &VSDB,
         ts:u64
     ):u64 {
-        let checkpoints = table::borrow(&self.checkpoints, object::id(vsdb));
-        let len = table_vec::length(checkpoints);
+        let id = object::id(vsdb);
 
-        if( len == 0){
+        if(!table::contains(&self.checkpoints, id)){
             return 0
         };
 
-        if(!table::contains(&self.checkpoints, object::id(vsdb))){
+        let checkpoints = table::borrow(&self.checkpoints, id);
+        let len = table_vec::length(checkpoints);
+
+        if( len == 0){
             return 0
         };
 
@@ -175,7 +177,6 @@ module suiDouBashiVest::external_bribe{
         return lower
     }
 
-    // move to REWARD
     public fun get_prior_reward_per_token<X, Y, T>(
         reward: &Reward<X, Y, T>,
         ts:u64

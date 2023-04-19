@@ -8,6 +8,8 @@ module suiDouBashiVest::reward{
 
     use suiDouBashiVest::checkpoints::RewardPerTokenCheckpoint;
 
+
+    // TODO: seperate same reward btw internal bribe & external bribe
     struct Reward<phantom X, phantom Y, phantom T> has key, store{
         id: UID,
 

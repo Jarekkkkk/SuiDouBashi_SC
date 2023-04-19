@@ -27,6 +27,7 @@ module suiDouBashiVest::vsdb{
     const SVG_PREFIX: vector<u8> = b"data:image/svg+xml;base64,";
 
     friend suiDouBashiVest::voter;
+    friend suiDouBashiVest::gauge;
     friend suiDouBashiVest::reward_distributor;
 
     // TODO: display pkg format rule
@@ -657,6 +658,7 @@ module suiDouBashiVest::vsdb{
         };
     }
 
+    // DOS attack
     public (friend) fun global_checkpoint_(
         self: &mut VSDBRegistry,
         clock: &Clock
@@ -737,20 +739,20 @@ module suiDouBashiVest::vsdb{
     }
 
     // ===== Gauge Voting =====
-    public fun attach<X,Y>(self: &mut VSDB, ctx: &TxContext){
+    public (friend) fun attach<X,Y>(self: &mut VSDB, ctx: &TxContext){
         self.attachments = self.attachments + 1;
         event::attach<X,Y>(object::id(self), tx_context::sender(ctx))
     }
 
-    public fun detach<X,Y>(self: &mut VSDB, ctx: &TxContext){
+    public (friend) fun detach<X,Y>(self: &mut VSDB, ctx: &TxContext){
         self.attachments = self.attachments - 1;
         event::detach<X,Y>(object::id(self), tx_context::sender(ctx))
     }
 
-    public fun voting(self: &mut VSDB){
+    public (friend) fun voting(self: &mut VSDB){
         self.voted = true;
     }
-    public fun abstain(self: &mut VSDB){
+    public (friend) fun abstain(self: &mut VSDB){
         self.voted = false;
     }
 

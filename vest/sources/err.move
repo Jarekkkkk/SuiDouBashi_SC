@@ -24,13 +24,13 @@ module suiDouBashiVest::err{
 
     // - Reward
     public fun max_reward(): u64 { Prefix + 209 }
-
     public fun invalid_reward_rate(): u64 { Prefix + 210 }
+
+    // -Bribe
 
     // - Gauge
     public fun already_stake(): u64 { Prefix + 211 }
     public fun dead_gauge(): u64 { Prefix + 211 }
-
 
     // - Vote
     public fun already_voted(): u64 { Prefix + 212 }

@@ -22,7 +22,7 @@ module suiDouBashiVest::internal_bribe{
     friend suiDouBashiVest::voter;
 
     const DURATION: u64 = { 7 * 86400 };
-    const PRECISION: u64 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_REWARD_TOKENS: u64 = 16;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
@@ -251,7 +251,7 @@ module suiDouBashiVest::internal_bribe{
     ///  returns the last time the reward was modified or periodFinish if the reward has ended
     public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         // Two scenarios
-        // 1. return current time if we are still in latest epoch
+        // 1. return current time if latest bribe is deposited in 7 days
         // 2  return period_finish if new bribes hasn't deposited in new epoch yet
         math::min(clock::timestamp_ms(clock), reward::period_finish(reward))
     }
@@ -341,7 +341,7 @@ module suiDouBashiVest::internal_bribe{
         ctx: &mut TxContext
     ){
         let vsdb = object::id(vsdb);
-        let timestamp = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock);
 
         if( !table::contains(&self.checkpoints, vsdb)){
             let checkpoints = table_vec::empty(ctx);
@@ -351,11 +351,11 @@ module suiDouBashiVest::internal_bribe{
         let player_checkpoint = table::borrow_mut(&mut self.checkpoints, vsdb);
         let len = table_vec::length(player_checkpoint);
 
-        if( len > 0 && checkpoints::balance_ts(table_vec::borrow(player_checkpoint, len - 1)) == timestamp){
+        if( len > 0 && checkpoints::balance_ts(table_vec::borrow(player_checkpoint, len - 1)) == ts){
             let cp_mut = table_vec::borrow_mut(player_checkpoint, len - 1 );
             checkpoints::update_balance(cp_mut, balance);
         }else{
-            let checkpoint = checkpoints::new_cp(timestamp, balance);
+            let checkpoint = checkpoints::new_cp(ts, balance);
             table_vec::push_back(player_checkpoint, checkpoint);
         };
     }
