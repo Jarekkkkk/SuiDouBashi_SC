@@ -8,7 +8,6 @@ module suiDouBashiVest::reward{
 
     use suiDouBashiVest::checkpoints::RewardPerTokenCheckpoint;
 
-
     // TODO: seperate same reward btw internal bribe & external bribe
     struct Reward<phantom X, phantom Y, phantom T> has key, store{
         id: UID,
@@ -16,7 +15,7 @@ module suiDouBashiVest::reward{
         balance: Balance<T>,
 
         //update when bribe is deposited
-        reward_rate: u64,
+        reward_rate: u64, // bribe_amount/ 7 days
         period_finish: u64, // update when bribe is deposited, (internal_bribe -> fee ), (external_bribe -> doverse coins)
 
         last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
@@ -24,7 +23,6 @@ module suiDouBashiVest::reward{
 
         user_reward_per_token_stored: Table<ID, u64>, // udpate when user deposit
 
-        /// TODO: move to VSDB
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
         last_earn: Table<ID, u64>, // last time player deposit the reward
     }
