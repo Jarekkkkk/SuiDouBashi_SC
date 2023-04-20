@@ -200,7 +200,7 @@ module suiDouBashiVest::external_bribe{
 
     public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock));
-        if (table::is_empty(&reward.token_rewards_per_epoch)){
+        if (table::is_empty(&reward.token_rewards_per_epoch) || !table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){
             0
         }else{
             *table::borrow(&reward.token_rewards_per_epoch, adjusted_ts)
@@ -268,7 +268,12 @@ module suiDouBashiVest::external_bribe{
                 pre_reward_ts = _next_epoch_start;
                 _pre_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, _next_epoch_start + DURATION)));
 
-                pre_reward_bal = checkpoints::balance(cp_0) * *table::borrow(&reward.token_rewards_per_epoch, _next_epoch_start) / _pre_supply;
+                let rewards =  if(table::contains(&reward.token_rewards_per_epoch, _next_epoch_start)){
+                    *table::borrow(&reward.token_rewards_per_epoch, _next_epoch_start)
+                }else{
+                    0
+                };
+                pre_reward_bal = checkpoints::balance(cp_0) * rewards / _pre_supply;
             }
         };
 
@@ -277,9 +282,14 @@ module suiDouBashiVest::external_bribe{
         let last_epoch_end = last_epoch_start + DURATION;
 
         if(clock::timestamp_ms(clock) > last_epoch_end){
-             let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
+            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
 
-            earned_reward = earned_reward + checkpoints::balance(cp) * *table::borrow(&reward.token_rewards_per_epoch, last_epoch_start) / supply;
+            let rewards =  if(table::contains(&reward.token_rewards_per_epoch, last_epoch_start)){
+                *table::borrow(&reward.token_rewards_per_epoch, last_epoch_start)
+            }else{
+                0
+            };
+            earned_reward = earned_reward + checkpoints::balance(cp) * rewards / supply;
         };
 
         return earned_reward
@@ -390,6 +400,7 @@ module suiDouBashiVest::external_bribe{
         write_supply_checkpoint_(self, clock);
     }
 
+    // protocol deposit external bribe
     public entry fun notify_reward_amount<X,Y,T>(
         self: &mut ExternalBribe<X,Y>,
         coin: Coin<T>,
