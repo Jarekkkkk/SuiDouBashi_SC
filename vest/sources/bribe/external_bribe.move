@@ -12,6 +12,7 @@ module suiDouBashiVest::external_bribe{
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use sui::object_bag::{Self as ob, ObjectBag};
+    use std::vector as vec;
 
     use suiDouBashi::pool::Pool;
     use suiDouBashiVest::vsdb::VSDB;
@@ -38,7 +39,7 @@ module suiDouBashiVest::external_bribe{
         balace_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
-        checkpoints: Table<ID, TableVec<Checkpoint>>, // VSDB -> balance checkpoint
+        checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> balance checkpoint
 
         rewards: ObjectBag //TypeName<T> -> Reward<T>,
     }
@@ -99,7 +100,7 @@ module suiDouBashiVest::external_bribe{
             balace_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
-            checkpoints: table::new<ID, TableVec<Checkpoint>>(ctx), // voting weights for each voter,
+            checkpoints: table::new<ID, vector<Checkpoint>>(ctx), // voting weights for each voter,
             rewards: ob::new(ctx)
         };
         let id = object::id(&bribe);
@@ -124,27 +125,44 @@ module suiDouBashiVest::external_bribe{
     }
 
     // ===== Getter =====
+    public fun bribe_start(ts: u64):u64{
+        ts - (ts % DURATION)
+    }
+
+    public fun get_epoch_start( ts: u64):u64{
+        let bribe_start = bribe_start(ts);
+        let bribe_end = bribe_start + DURATION;
+        if( ts < bribe_end){
+            return bribe_start
+        }else{
+            return bribe_end
+        }
+    }
+
     public fun get_prior_balance_index<X,Y>(
         self: & ExternalBribe<X,Y>,
         vsdb: &VSDB,
         ts:u64
     ):u64 {
-        let checkpoints = table::borrow(&self.checkpoints, object::id(vsdb));
-        let len = table_vec::length(checkpoints);
+        let id = object::id(vsdb);
+        if( !table::contains(&self.checkpoints, id)) return 0;
+
+        let checkpoints = table::borrow(&self.checkpoints, id);
+        let len = vec::length(checkpoints);
 
         if( len == 0){
             return 0
         };
 
-        if(!table::contains(&self.checkpoints, object::id(vsdb))){
+        if(!table::contains(&self.checkpoints, id)){
             return 0
         };
 
-        if( checkpoints::balance_ts(table_vec::borrow(checkpoints, len - 1)) <= ts ){
+        if( checkpoints::balance_ts(vec::borrow(checkpoints, len - 1)) <= ts ){
             return len - 1
         };
 
-        if( checkpoints::balance_ts(table_vec::borrow(checkpoints, 0)) > ts){
+        if( checkpoints::balance_ts(vec::borrow(checkpoints, 0)) > ts){
             return 0
         };
 
@@ -152,7 +170,7 @@ module suiDouBashiVest::external_bribe{
         let upper = len - 1;
         while ( lower < upper){
             let center = upper - (upper - lower) / 2;
-            let cp_ts = checkpoints::balance_ts(table_vec::borrow(checkpoints, center));
+            let cp_ts = checkpoints::balance_ts(vec::borrow(checkpoints, center));
             if(cp_ts == ts ){
                 return center
             }else if (cp_ts < ts){
@@ -198,105 +216,6 @@ module suiDouBashiVest::external_bribe{
         return lower
     }
 
-    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock));
-        if (table::is_empty(&reward.token_rewards_per_epoch) || !table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){
-            0
-        }else{
-            *table::borrow(&reward.token_rewards_per_epoch, adjusted_ts)
-        }
-    }
-
-    public fun bribe_start(ts: u64):u64{
-        ts - (ts % DURATION)
-    }
-
-    public fun get_epoch_start( ts: u64):u64{
-        let bribe_start = bribe_start(ts);
-        let bribe_end = bribe_start + DURATION;
-        if( ts < bribe_end){
-            return bribe_start
-        }else{
-            return bribe_end
-        }
-    }
-
-    ///  returns the last time the reward was modified or periodFinish if the reward has ended
-    public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        // Two scenarios
-        // 1. return current time if latest bribe is deposited in 7 days
-        // 2  return period_finish bribe has been abandoned over 7 days
-        math::min(clock::timestamp_ms(clock), reward.period_finish)
-    }
-
-    // get accumulated coins for individual players
-    fun earned<X,Y,T>(
-        self: &ExternalBribe<X,Y>,
-        vsdb: &VSDB,
-        clock: &Clock
-    ):u64{
-        assert_generic_type<X,Y,T>();
-        let id = object::id(vsdb);
-        let reward = borrow_reward<X,Y,T>(self);
-        if(!table::contains(&reward.last_earn, id) || !table::contains(&self.checkpoints, id) || table::length(&reward.token_rewards_per_epoch) == 0 ){
-            return 0
-        };
-
-        let start_timestamp = *table::borrow(&reward.last_earn, id);
-
-        let bps_borrow = table::borrow(&self.checkpoints, id);
-        if(table_vec::length(bps_borrow) == 0) return 0;
-
-        let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
-        let end_idx = table_vec::length(bps_borrow) - 1;
-        let earned_reward = 0;
-
-        let pre_reward_bal = 0;
-        let pre_reward_ts = bribe_start(start_timestamp);
-        let _pre_supply = 1;
-        if(end_idx > 0){
-            let i = start_idx;
-            while( i <= end_idx - 1){ // leave last one
-                let cp_0 = table_vec::borrow(bps_borrow, i);
-                let _next_epoch_start = bribe_start(checkpoints::balance_ts(cp_0));
-                 // check that you've earned it
-                // this won't happen until a week has passed
-                if(_next_epoch_start > pre_reward_ts){
-                    earned_reward = earned_reward + pre_reward_bal;
-                };
-
-                pre_reward_ts = _next_epoch_start;
-                _pre_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, _next_epoch_start + DURATION)));
-
-                let rewards =  if(table::contains(&reward.token_rewards_per_epoch, _next_epoch_start)){
-                    *table::borrow(&reward.token_rewards_per_epoch, _next_epoch_start)
-                }else{
-                    0
-                };
-                pre_reward_bal = checkpoints::balance(cp_0) * rewards / _pre_supply;
-            }
-        };
-
-        let cp = table_vec::borrow(bps_borrow, end_idx);
-        let last_epoch_start = bribe_start(checkpoints::balance_ts(cp));
-        let last_epoch_end = last_epoch_start + DURATION;
-
-        if(clock::timestamp_ms(clock) > last_epoch_end){
-            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
-
-            let rewards =  if(table::contains(&reward.token_rewards_per_epoch, last_epoch_start)){
-                *table::borrow(&reward.token_rewards_per_epoch, last_epoch_start)
-            }else{
-                0
-            };
-            earned_reward = earned_reward + checkpoints::balance(cp) * rewards / supply;
-        };
-
-        return earned_reward
-    }
-
-
-    // ===== Setter =====
     fun write_checkpoint_<X,Y>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
@@ -308,19 +227,19 @@ module suiDouBashiVest::external_bribe{
         let ts = clock::timestamp_ms(clock);
 
         if( !table::contains(&self.checkpoints, vsdb)){
-            let checkpoints = table_vec::empty(ctx);
+            let checkpoints = vec::empty();
             table::add(&mut self.checkpoints, vsdb, checkpoints);
         };
 
         let player_checkpoint = table::borrow_mut(&mut self.checkpoints, vsdb);
-        let len = table_vec::length(player_checkpoint);
+        let len = vec::length(player_checkpoint);
 
-        if( len > 0 && checkpoints::balance_ts(table_vec::borrow(player_checkpoint, len - 1)) == ts){
-            let cp_mut = table_vec::borrow_mut(player_checkpoint, len - 1 );
+        if( len > 0 && checkpoints::balance_ts(vec::borrow(player_checkpoint, len - 1)) == ts){
+            let cp_mut = vec::borrow_mut(player_checkpoint, len - 1 );
             checkpoints::update_balance(cp_mut, balance);
         }else{
             let checkpoint = checkpoints::new_cp(ts, balance);
-            table_vec::push_back(player_checkpoint, checkpoint);
+            vec::push_back(player_checkpoint, checkpoint);
         };
     }
 
@@ -329,22 +248,48 @@ module suiDouBashiVest::external_bribe{
         self: &mut ExternalBribe<X,Y>,
         clock: &Clock,
     ){
-        let timestamp = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock);
         let supply = self.total_supply;
 
         let len = table_vec::length(&self.supply_checkpoints);
 
-        if( len > 0 && checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, len - 1)) == timestamp){
+        if( len > 0 && checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, len - 1)) == ts){
             let cp_mut = table_vec::borrow_mut(&mut self.supply_checkpoints, len - 1 );
             checkpoints::update_supply(cp_mut, supply)
         }else{
-            let checkpoint = checkpoints::new_sp(timestamp, supply);
+            let checkpoint = checkpoints::new_sp(ts, supply);
             table_vec::push_back(&mut self.supply_checkpoints, checkpoint);
         };
     }
 
-    /// allows a voter to claim reward for external bribe
-    public (friend) fun get_reward<X, Y, T>(
+
+
+    public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+        math::min(clock::timestamp_ms(clock), reward.period_finish)
+    }
+
+    public entry fun get_all_rewards<X,Y>(
+        self: &mut ExternalBribe<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let type_x = type_name::get<X>();
+        let type_y = type_name::get<Y>();
+        let type_sdb = type_name::get<SDB>();
+        let type_sui = type_name::get<SUI>();
+
+        get_reward<X,Y,X>(self, vsdb, clock, ctx);
+        get_reward<X,Y,Y>(self, vsdb, clock, ctx);
+        if(type_sui != type_x && type_sui != type_y){
+            get_reward<X,Y,SUI>(self, vsdb, clock, ctx);
+        };
+        if(type_sdb != type_x && type_sdb != type_y){
+            get_reward<X,Y,SDB>(self, vsdb, clock, ctx);
+        };
+    }
+    /// allows a voter to claim reward for external bribea
+    public entry fun get_reward<X, Y, T>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
@@ -370,6 +315,74 @@ module suiDouBashiVest::external_bribe{
         }
     }
 
+    // get accumulated coins for individual players
+    fun earned<X,Y,T>(
+        self: &ExternalBribe<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock
+    ):u64{
+        assert_generic_type<X,Y,T>();
+        let id = object::id(vsdb);
+        let reward = borrow_reward<X,Y,T>(self);
+        if(!table::contains(&reward.last_earn, id) || !table::contains(&self.checkpoints, id) || table::length(&reward.token_rewards_per_epoch) == 0 ){
+            return 0
+        };
+
+        let start_timestamp = *table::borrow(&reward.last_earn, id);
+        let bps_borrow = table::borrow(&self.checkpoints, id);
+        if(vec::length(bps_borrow) == 0) return 0;
+
+        let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
+        let end_idx = vec::length(bps_borrow) - 1;
+        let earned_reward = 0;
+
+        let pre_reward_bal = 0;
+        let pre_reward_ts = bribe_start(start_timestamp);
+        let _pre_supply = 1;
+        if(end_idx > 0){
+            let i = start_idx;
+            while( i <= end_idx - 1){ // leave last one
+                let cp_0 = vec::borrow(bps_borrow, i);
+                let _next_epoch_start = bribe_start(checkpoints::balance_ts(cp_0));
+                 // check that you've earned it
+                // this won't happen until a week has passed
+                if(_next_epoch_start > pre_reward_ts){
+                    earned_reward = earned_reward + pre_reward_bal;
+                };
+
+                pre_reward_ts = _next_epoch_start;
+                _pre_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, _next_epoch_start + DURATION)));
+
+                let rewards =  if(table::contains(&reward.token_rewards_per_epoch, _next_epoch_start)){
+                    *table::borrow(&reward.token_rewards_per_epoch, _next_epoch_start)
+                }else{
+                    0
+                };
+                pre_reward_bal = checkpoints::balance(cp_0) * rewards / _pre_supply;
+            }
+        };
+
+        let cp = vec::borrow(bps_borrow, end_idx);
+        let last_epoch_start = bribe_start(checkpoints::balance_ts(cp));
+        let last_epoch_end = last_epoch_start + DURATION;
+
+        if(clock::timestamp_ms(clock) > last_epoch_end){
+            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
+
+            let rewards =  if(table::contains(&reward.token_rewards_per_epoch, last_epoch_start)){
+                *table::borrow(&reward.token_rewards_per_epoch, last_epoch_start)
+            }else{
+                0
+            };
+            earned_reward = earned_reward + checkpoints::balance(cp) * rewards / supply;
+        };
+
+        return earned_reward
+    }
+
+
+    // ===== Setter =====
+
     //// [voter]: receive votintg
     public (friend) fun deposit<X,Y>(
         self: &mut ExternalBribe<X,Y>,
@@ -378,8 +391,14 @@ module suiDouBashiVest::external_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        let id = object::id(vsdb);
         self.total_supply = self.total_supply + amount;
-        *table::borrow_mut(&mut self.balace_of, object::id(vsdb)) = *table::borrow(& self.balace_of, object::id(vsdb)) + amount;
+
+        if(table::contains(&self.balace_of, id)){
+            *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) + amount;
+        }else{
+            table::add(&mut self.balace_of, id, amount);
+        };
 
         write_checkpoint_(self, vsdb, amount, clock, ctx);
         write_supply_checkpoint_(self, clock);
@@ -393,11 +412,23 @@ module suiDouBashiVest::external_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        let id = object::id(vsdb);
+        assert!(table::contains(&self.balace_of, id), err::invalid_voter());
+        assert!(self.total_supply >= amount, err::insufficient_voting());
         self.total_supply = self.total_supply - amount;
-        *table::borrow_mut(&mut self.balace_of, object::id(vsdb)) = *table::borrow(& self.balace_of, object::id(vsdb)) - amount;
+        *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) - amount;
 
         write_checkpoint_(self, vsdb, amount, clock, ctx);
         write_supply_checkpoint_(self, clock);
+    }
+
+    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+        let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock));
+        if (!table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){
+            0
+        }else{
+            *table::borrow(&reward.token_rewards_per_epoch, adjusted_ts)
+        }
     }
 
     // protocol deposit external bribe
