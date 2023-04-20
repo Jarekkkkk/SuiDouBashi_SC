@@ -31,8 +31,10 @@ module suiDouBashiVest::err{
     public fun insufficient_voting(): u64 { Prefix + 212 }
     // - Gauge
     public fun already_stake(): u64 { Prefix + 211 }
+    public fun empty_lp(): u64 { Prefix + 212 }
     public fun dead_gauge(): u64 { Prefix + 211 }
     public fun zero_fees(): u64 { Prefix + 212 }
+    public fun insufficient_lp_balance(): u64 { Prefix + 212 }
 
     // - Vote
     public fun already_voted(): u64 { Prefix + 212 }

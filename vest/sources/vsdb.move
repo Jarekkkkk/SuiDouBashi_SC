@@ -43,6 +43,8 @@ module suiDouBashiVest::vsdb{
 
         locked_balance: LockedSDB,
 
+
+        /// TODO: add bag
         // Gauge Voting
         attachments: u64,
         voted: bool,

@@ -44,7 +44,7 @@ module suiDouBashiVest::external_bribe{
         rewards: ObjectBag //TypeName<T> -> Reward<T>,
     }
 
-    // only 4 coins is allowed to bribe, [coin pair of pool, SDB, SUI]
+    // 4 coins at most are allowed to bribe, [coin pair of pool, SDB, SUI]
     struct Reward<phantom X, phantom Y, phantom T> has key, store{
         id: UID,
         balance: Balance<T>,
@@ -221,7 +221,6 @@ module suiDouBashiVest::external_bribe{
         vsdb: &VSDB,
         balance: u64, // record down balance
         clock: &Clock,
-        ctx: &mut TxContext
     ){
         let vsdb = object::id(vsdb);
         let ts = clock::timestamp_ms(clock);
@@ -389,7 +388,7 @@ module suiDouBashiVest::external_bribe{
         vsdb: &VSDB,
         amount: u64,
         clock: &Clock,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ){
         let id = object::id(vsdb);
         self.total_supply = self.total_supply + amount;
@@ -400,7 +399,7 @@ module suiDouBashiVest::external_bribe{
             table::add(&mut self.balace_of, id, amount);
         };
 
-        write_checkpoint_(self, vsdb, amount, clock, ctx);
+        write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
 
@@ -410,7 +409,7 @@ module suiDouBashiVest::external_bribe{
         vsdb: &VSDB,
         amount: u64, // should be u256
         clock: &Clock,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ){
         let id = object::id(vsdb);
         assert!(table::contains(&self.balace_of, id), err::invalid_voter());
@@ -418,7 +417,7 @@ module suiDouBashiVest::external_bribe{
         self.total_supply = self.total_supply - amount;
         *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) - amount;
 
-        write_checkpoint_(self, vsdb, amount, clock, ctx);
+        write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
 
@@ -443,6 +442,7 @@ module suiDouBashiVest::external_bribe{
         let value = coin::value(&coin);
         let reward = borrow_reward_mut<X,Y,T>(self);
         assert!(value > 0, err::empty_coin());
+
         // bribes kick in at the start of next bribe period
         let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock));
         let epoch_rewards = if(table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){

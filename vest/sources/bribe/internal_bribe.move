@@ -179,6 +179,7 @@ module suiDouBashiVest::internal_bribe{
         ts:u64
     ):(u64, u64) // ( ts, reward_per_token )
     {
+        assert_generic_type<X,Y,T>();
         let checkpoints = reward::reward_per_token_checkpoints_borrow(reward);
         let len = table_vec::length(checkpoints);
 
@@ -219,7 +220,6 @@ module suiDouBashiVest::internal_bribe{
         vsdb: &VSDB,
         balance: u64, // record down balance
         clock: &Clock,
-        ctx: &mut TxContext
     ){
         let vsdb = object::id(vsdb);
         let ts = clock::timestamp_ms(clock);
@@ -302,7 +302,10 @@ module suiDouBashiVest::internal_bribe{
         assert_generic_type<X,Y,T>();
 
         let id = object::id(vsdb);
+
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
+
+        let _reward = earned<X,Y,T>(self, vsdb, clock);
         let reward = borrow_reward_mut<X,Y,T>(self);
         // global state
         reward::update_reward_per_token_stored(reward, reward_per_token_stored);
@@ -312,7 +315,7 @@ module suiDouBashiVest::internal_bribe{
         reward::update_user_reward_per_token_stored(reward, id, reward_per_token_stored);
         reward::update_last_earn(reward, id, clock::timestamp_ms(clock));
 
-        let _reward = earned<X,Y,T>(self, vsdb, clock);
+
         if(_reward > 0){
             let coin_x = coin::take(reward::balance_mut(reward), _reward, ctx);
             let value_x = coin::value(&coin_x);
@@ -532,14 +535,13 @@ module suiDouBashiVest::internal_bribe{
         return earned_reward
     }
 
-
     //// [voter]: receive votintg
     public (friend) fun deposit<X,Y>(
         self: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
         amount: u64,
         clock: &Clock,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ){
         let id = object::id(vsdb);
         update_reward_for_all_tokens_(self, clock);
@@ -552,7 +554,7 @@ module suiDouBashiVest::internal_bribe{
             table::add(&mut self.balace_of, id, amount);
         };
 
-        write_checkpoint_(self, vsdb, amount, clock, ctx);
+        write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
 
@@ -562,7 +564,7 @@ module suiDouBashiVest::internal_bribe{
         vsdb: &VSDB,
         amount: u64, // should be u256
         clock: &Clock,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ){
         update_reward_for_all_tokens_(self, clock);
 
@@ -572,7 +574,7 @@ module suiDouBashiVest::internal_bribe{
         self.total_supply = self.total_supply - amount;
         *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) - amount;
 
-        write_checkpoint_(self, vsdb, amount, clock, ctx);
+        write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
 

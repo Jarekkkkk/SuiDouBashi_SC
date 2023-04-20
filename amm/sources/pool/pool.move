@@ -824,6 +824,7 @@ module suiDouBashi::pool{
         formula::get_output(self.stable, dy, (res_y as u64), (res_x as u64), self.decimal_y, self.decimal_x)
     }
 
+    // TODO: merge 2 position as we are going to remove owner fields
     // - Fee Distribution
     public entry fun claim_fees_player<X,Y>(
         self: &mut Pool<X,Y>,
