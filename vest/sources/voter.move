@@ -309,8 +309,8 @@ module suiDouBashiVest::voter{
         *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) + pool_weight;
 
         // vote for voting power
-        internal_bribe::deposit<X,Y,T>(internal_bribe, vsdb, pool_weight, clock, ctx);
-        external_bribe::deposit<X,Y,T>(external_bribe, vsdb, pool_weight, clock, ctx);
+        internal_bribe::deposit<X,Y>(internal_bribe, vsdb, pool_weight, clock, ctx);
+        external_bribe::deposit<X,Y>(external_bribe, vsdb, pool_weight, clock, ctx);
 
         used_weight = used_weight + pool_weight;
         total_weight = total_weight + pool_weight;
@@ -347,8 +347,8 @@ module suiDouBashiVest::voter{
 
             // WHY ?
             if(votes > 0){
-                internal_bribe::withdraw<X,Y,T>(internal_bribe, vsdb, votes, clock, ctx);
-                external_bribe::withdraw<X,Y,T>(external_bribe, vsdb, votes, clock, ctx);
+                internal_bribe::withdraw<X,Y>(internal_bribe, vsdb, votes, clock, ctx);
+                external_bribe::withdraw<X,Y>(external_bribe, vsdb, votes, clock, ctx);
                 total_weight = total_weight + votes;
             }else{
                 total_weight = total_weight - votes;

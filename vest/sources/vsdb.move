@@ -165,7 +165,7 @@ module suiDouBashiVest::vsdb{
 
         assert!(locked_end > clock::timestamp_ms(clock), err::locked());
         assert!(locked_bal > 0, err::empty_locked_balance());
-        assert!(coin::value(&coin) > 0 , err::emptry_coin());
+        assert!(coin::value(&coin) > 0 , err::empty_coin());
 
         extend(self, option::some(coin), 0, clock);
 
@@ -659,6 +659,7 @@ module suiDouBashiVest::vsdb{
     }
 
     // DOS attack
+    // TODO: refactor, merge with checkpoint
     public (friend) fun global_checkpoint_(
         self: &mut VSDBRegistry,
         clock: &Clock

@@ -12,7 +12,7 @@ module suiDouBashiVest::err{
 
     public fun empty_locked_balance(): u64{ Prefix + 204 }
 
-    public fun emptry_coin(): u64{ Prefix + 205 }
+    public fun empty_coin(): u64{ Prefix + 205 }
 
     public fun invalid_owner(): u64{ Prefix + 206 }
 
@@ -27,10 +27,11 @@ module suiDouBashiVest::err{
     public fun invalid_reward_rate(): u64 { Prefix + 210 }
 
     // -Bribe
-
+    public fun insufficient_bribes(): u64 { Prefix + 211 }
     // - Gauge
     public fun already_stake(): u64 { Prefix + 211 }
     public fun dead_gauge(): u64 { Prefix + 211 }
+    public fun zero_fees(): u64 { Prefix + 212 }
 
     // - Vote
     public fun already_voted(): u64 { Prefix + 212 }

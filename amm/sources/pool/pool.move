@@ -87,7 +87,7 @@ module suiDouBashi::pool{
     /// - LP's position
     struct LP<phantom X, phantom Y> has key, store{
         id: UID,
-        owner: address,
+        owner: address, // delete
         lp_balance: Balance<LP_TOKEN<X,Y>>,
         position_x: u256, //
         position_y: u256,
