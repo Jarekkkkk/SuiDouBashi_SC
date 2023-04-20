@@ -28,6 +28,7 @@ module suiDouBashiVest::err{
 
     // -Bribe
     public fun insufficient_bribes(): u64 { Prefix + 211 }
+    public fun insufficient_voting(): u64 { Prefix + 212 }
     // - Gauge
     public fun already_stake(): u64 { Prefix + 211 }
     public fun dead_gauge(): u64 { Prefix + 211 }
@@ -35,6 +36,7 @@ module suiDouBashiVest::err{
 
     // - Vote
     public fun already_voted(): u64 { Prefix + 212 }
+    public fun invalid_voter(): u64 { Prefix + 213 }
     public fun invalid_governor(): u64 { Prefix + 213 }
     public fun invalid_emergency(): u64 { Prefix + 214 }
     public fun invalid_team(): u64 { Prefix + 215 }

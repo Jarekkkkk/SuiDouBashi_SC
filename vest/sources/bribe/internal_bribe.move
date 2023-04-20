@@ -277,14 +277,23 @@ module suiDouBashiVest::internal_bribe{
     ///  returns the last time the reward was modified or periodFinish if the reward has ended
     public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         // Two scenarios
-        // 1. return current time if latest bribe is deposited in 7 days
+        // 1. return current time if latest fun  is deposited in 7 days
         // 2  return period_finish bribe has been abandoned over 7 days
         math::min(clock::timestamp_ms(clock), reward::period_finish(reward))
     }
 
     /// allows a voter to claim reward for a given bribe
     /// T as argument ( must be pair of coin types )
-    public (friend) fun get_reward<X, Y, T>(
+    public entry fun get_all_rewards<X,Y>(
+        self: &mut InternalBribe<X,Y>,
+        vsdb: &VSDB,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        get_reward<X,Y,X>(self, vsdb, clock, ctx);
+        get_reward<X,Y,Y>(self, vsdb, clock, ctx);
+    }
+    public entry fun get_reward<X, Y, T>(
         self: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
@@ -538,7 +547,7 @@ module suiDouBashiVest::internal_bribe{
         self.total_supply = self.total_supply + amount;
 
         if(table::contains(&self.balace_of, id)){
-            *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) - amount;
+            *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) + amount;
         }else{
             table::add(&mut self.balace_of, id, amount);
         };
@@ -555,10 +564,12 @@ module suiDouBashiVest::internal_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let id = object::id(vsdb);
-        assert!(table::contains(&self.balace_of, id), err::invalid_voter());
         update_reward_for_all_tokens_(self, clock);
 
+        let id = object::id(vsdb);
+        assert!(table::contains(&self.balace_of, id), err::invalid_voter());
+        assert!(self.total_supply >= amount, err::insufficient_voting());
+        self.total_supply = self.total_supply - amount;
         *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) - amount;
 
         write_checkpoint_(self, vsdb, amount, clock, ctx);

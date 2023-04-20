@@ -19,7 +19,6 @@ module suiDouBashiVest::gauge{
     use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
-    use suiDouBashiVest::reward::{Self, Reward};
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
     use suiDouBashiVest::external_bribe::{Self};
