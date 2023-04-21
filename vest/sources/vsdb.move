@@ -1,8 +1,10 @@
 module suiDouBashiVest::vsdb{
     use sui::url::{Self, Url};
+    use std::type_name::{Self, TypeName};
     use std::string::{Self};
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
+    use sui::types::is_one_time_witness as is_otw;
     use sui::transfer;
     use std::vector as vec;
     use sui::balance::{Self, Balance};
@@ -11,6 +13,9 @@ module suiDouBashiVest::vsdb{
     use sui::coin::{Self, Coin};
     use std::option::{Self, Option};
     use sui::clock::{Self, Clock};
+    use sui::dynamic_field as df;
+    use sui::dynamic_object_field as dof;
+
 
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::point::{Self, Point};
@@ -27,7 +32,6 @@ module suiDouBashiVest::vsdb{
     const SVG_PREFIX: vector<u8> = b"data:image/svg+xml;base64,";
 
     friend suiDouBashiVest::voter;
-    friend suiDouBashiVest::gauge;
     friend suiDouBashiVest::reward_distributor;
 
     // TODO: display pkg format rule
@@ -43,8 +47,6 @@ module suiDouBashiVest::vsdb{
 
         locked_balance: LockedSDB,
 
-
-        /// TODO: add bag
         // Gauge Voting
         attachments: u64,
         voted: bool,
@@ -62,11 +64,91 @@ module suiDouBashiVest::vsdb{
         end: u64 // week-based
     }
 
+    // - Whitelist module to add df/ dof
     struct VSDBCap has key, store { id: UID } // governor who else can add fieldds to this NFT
+
+    entry fun register_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
+        let type = type_name::get<T>();
+        assert!(!table::contains(&reg.whitelist_modules, type), err::already_reigster());
+        table::add(&mut reg.whitelist_modules, type, true);
+    }
+
+    entry fun remove_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
+        let type = type_name::get<T>();
+        table::remove(&mut reg.whitelist_modules, type);
+    }
+
+    // TODO: add back df
+    public fun df_add<T: drop, N: copy + drop + store,V: store>(
+        otw:&T,
+        //reg: & VSDBRegistry,
+        vsdb: &mut VSDB,
+        name: N,
+        value: V
+    ){
+        // assert!(is_otw(otw), err::OTW());
+        // let type = type_name::get<T>();
+        // assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
+        df::add(&mut vsdb.id, name, value);
+    }
+    public fun dof_add<T: drop, N: copy + drop + store, V: key + store>(
+        otw:&T,
+        reg: & VSDBRegistry,
+        vsdb: &mut VSDB,
+        name: N,
+        value: V
+    ){
+        assert!(is_otw(otw), err::OTW());
+        let type = type_name::get<T>();
+        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
+        dof::add(&mut vsdb.id, name, value);
+    }
+
+    // - df
+    public fun df_exists<N: copy + drop + store>(
+        vsdb: &VSDB,
+        name: N,
+    ): bool{
+        df::exists_(&vsdb.id, name)
+    }
+    public fun df_borrow<N: copy + drop + store, V: store>(
+        vsdb: &VSDB,
+        name: N,
+    ): &V{
+        df::borrow(&vsdb.id, name)
+    }
+    public fun df_borrow_mut<N: copy + drop + store, V: store>(
+        vsdb: &mut VSDB,
+        name: N,
+    ): &mut V{
+        df::borrow_mut(&mut vsdb.id, name)
+    }
+    // - dof
+    public fun dof_exists<N: copy + drop + store>(
+        vsdb: &VSDB,
+        name: N,
+    ): bool{
+        dof::exists_(&vsdb.id, name)
+    }
+     public fun dof_borrow<N: copy + drop + store, V: key + store>(
+        vsdb: &VSDB,
+        name: N,
+    ): &V{
+        dof::borrow(&vsdb.id, name)
+    }
+    public fun dof_borrow_mut<N: copy + drop + store, V: key + store>(
+        vsdb: &mut VSDB,
+        name: N,
+    ): &mut V{
+        dof::borrow_mut(&mut vsdb.id, name)
+    }
+
+
 
     struct VSDBRegistry has key {
         id: UID,
         gov: address,
+        whitelist_modules: Table<TypeName, bool>,
 
         minted_vsdb: u64,
         locked_total: u64,
@@ -95,6 +177,7 @@ module suiDouBashiVest::vsdb{
             VSDBRegistry {
                 id: object::new(ctx),
                 gov: tx_context::sender(ctx),
+                whitelist_modules: table::new<TypeName, bool>(ctx),
                 minted_vsdb: 0,
                 locked_total: 0,
                 epoch:0,
