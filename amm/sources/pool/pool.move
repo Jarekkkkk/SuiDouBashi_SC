@@ -87,7 +87,6 @@ module suiDouBashi::pool{
     /// - LP's position
     struct LP<phantom X, phantom Y> has key, store{
         id: UID,
-        owner: address, // delete
         lp_balance: Balance<LP_TOKEN<X,Y>>,
         position_x: u256, //
         position_y: u256,
@@ -95,10 +94,9 @@ module suiDouBashi::pool{
         claimable_y: u64
     }
     /// It's safe we make it public, as we do will update index before any balance changing
-    public fun create_lp<X,Y>(self: &Pool<X,Y>, from: address, ctx: &mut TxContext):LP<X,Y>{
+    public fun create_lp<X,Y>(self: &Pool<X,Y>, ctx: &mut TxContext):LP<X,Y>{
         LP<X,Y>{
             id: object::new(ctx),
-            owner: from,
             lp_balance: balance::zero<LP_TOKEN<X,Y>>(),
             position_x: self.fee.index_x,
             position_y: self.fee.index_y,
@@ -106,22 +104,17 @@ module suiDouBashi::pool{
             claimable_y: 0,
         }
     }
-    /// Useful for acquiring multiple same type of position
+
+    /// IMPORTANT: all the claimable fees have to be settled before balance changes
     public entry fun join_lp<X,Y>(self: &Pool<X,Y>, payee: &mut LP<X,Y>, payer: &mut LP<X,Y>, value: u64){
         update_lp(self, payee);
         update_lp(self, payer);
         let balance = balance::split(&mut payer.lp_balance, value);
         balance::join(&mut payee.lp_balance, balance);
     }
-    entry fun transfer_lp<X, Y>(lp_position: LP<X,Y>, to: address, ctx: &mut TxContext){
-        assert_lp_owner(&lp_position, ctx);
-        lp_position.owner = to;
-        transfer::transfer(lp_position, to);
-    }
     public entry fun delete_lp<X,Y>(lp: LP<X,Y>){
         let LP {
             id,
-            owner: _,
             lp_balance,
             position_x: _,
             position_y: _,
@@ -146,9 +139,6 @@ module suiDouBashi::pool{
     // ===== Assertion =====
     fun assert_pool_unlocked<X, Y>(pool: &Pool<X, Y>){
         assert!(pool.locked == false, err::pool_unlocked());
-    }
-    fun assert_lp_owner<X,Y>(lp_position: &LP<X,Y>, ctx: &mut TxContext){
-        assert!(lp_position.owner == tx_context::sender(ctx), err::invalid_owner());
     }
 
     // ===== getter =====
@@ -264,39 +254,13 @@ module suiDouBashi::pool{
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
         coin_y: Coin<Y>,
-        deposit_x_min:u64,
-        deposit_y_min:u64,
-        clock: &Clock,
-        ctx:&mut TxContext
-    ){
-        assert_pool_unlocked(self);
-        // main execution
-        let (lp_token, deposit_x, deposit_y) = add_liquidity_(self, coin_x, coin_y, deposit_x_min, deposit_y_min
-        , clock, ctx);
-        let lP_value = coin::value(&lp_token);
-
-        // lp_position update
-        let lp_position = create_lp(self, tx_context::sender(ctx),ctx);
-        coin::put(&mut lp_position.lp_balance, lp_token);
-
-        transfer::public_transfer(
-            lp_position,
-            tx_context::sender(ctx)
-        );
-
-        event::liquidity_added<X,Y>(deposit_x, deposit_y, lP_value)
-    }
-    public entry fun topup_liquidity<X, Y>(
-        self: &mut Pool<X, Y>,
-        coin_x: Coin<X>,
-        coin_y: Coin<Y>,
+        // required when deposit, this is easily achieved by leveraging on programmable tx
         lp_position: &mut LP<X,Y>,
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
         ctx:&mut TxContext
     ){
-        assert_lp_owner(lp_position, ctx);
         assert_pool_unlocked(self);
         // main execution
         let (lp_token, deposit_x, deposit_y) = add_liquidity_(self, coin_x, coin_y, deposit_x_min, deposit_y_min
@@ -319,7 +283,6 @@ module suiDouBashi::pool{
         clock: &Clock,
         ctx:&mut TxContext
     ){
-        assert_lp_owner(lp_position, ctx);
         assert_pool_unlocked(self);
 
         // lp position update
@@ -383,6 +346,7 @@ module suiDouBashi::pool{
     public entry fun zap_x<X,Y>(
         pool: &mut Pool<X, Y>,
         coin_x: Coin<X>,
+        lp: &mut LP<X,Y>,
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
@@ -394,12 +358,12 @@ module suiDouBashi::pool{
         let opt_x = (formula::zap_optimized_output((res_x as u256), (x_value as u256), pool.fee.fee_percentage) as u64);
         let coin_x_split = coin::split<X>(&mut coin_x, opt_x, ctx);
         let (coin_y, _, _) = swap_for_y_<X,Y>(pool, coin_x_split, 0,  clock, ctx);
-
-        add_liquidity<X,Y>(pool, coin_x, coin_y, deposit_x_min, deposit_y_min, clock, ctx);
+        add_liquidity<X,Y>(pool, coin_x, coin_y, lp, deposit_x_min, deposit_y_min, clock, ctx);
     }
     public entry fun zap_y<X,Y>(
         pool: &mut Pool<X, Y>,
         coin_y: Coin<Y>,
+        lp: &mut LP<X,Y>,
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
@@ -411,7 +375,7 @@ module suiDouBashi::pool{
         let opt_y = (formula::zap_optimized_output((res_y as u256), (y_value as u256), pool.fee.fee_percentage) as u64);
         let coin_y_split = coin::split<Y>(&mut coin_y, opt_y, ctx);
         let (coin_x, _, _) = swap_for_x_<X,Y>(pool, coin_y_split, 0, clock, ctx);
-        add_liquidity<X,Y>(pool, coin_x, coin_y, deposit_x_min, deposit_y_min,clock, ctx);
+        add_liquidity<X,Y>(pool, coin_x, coin_y, lp, deposit_x_min, deposit_y_min,clock, ctx);
     }
     // - FlashLoan
     public fun loan_x<X, Y>(
@@ -831,7 +795,6 @@ module suiDouBashi::pool{
         lp_position: &mut LP<X,Y>,
         ctx: &mut TxContext
     ){
-        assert_lp_owner(lp_position, ctx);
         let (coin_x, coin_y ) = claim_fees_(self, lp_position, ctx);
 
         if(option::is_some(&coin_x)){
