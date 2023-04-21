@@ -16,7 +16,6 @@ module suiDouBashiVest::gauge{
     use std::ascii::String;
     use sui::table::{Self, Table};
 
-    use suiDouBashiVest::vsdb::{Self, VSDB};
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
@@ -36,16 +35,16 @@ module suiDouBashiVest::gauge{
         id: UID,
         is_alive:bool,
 
-        bribes: vector<ID>,//[ Internal, External ]
+        bribes: vector<ID>,// [ Internal, External ]
         pool: ID,
 
         rewards: VecSet<String>,
 
+        // LP
         total_supply: LP<X,Y>,
-
         balance_of: Table<address, u64>,
 
-        token_ids: Table<address, ID>, // each player cna only stake once for each pool
+        // Derived shared
 
         is_for_pair: bool,
 
@@ -138,7 +137,6 @@ module suiDouBashiVest::gauge{
         vec::push_back(&mut bribes, external_id);
 
         let id = object::new(ctx);
-        let id_ads = object::uid_to_address(&id);
         let gauge = Gauge<X,Y>{
             id,
 
@@ -149,10 +147,8 @@ module suiDouBashiVest::gauge{
 
             rewards: vec_set::empty<String>(),
 
-            total_supply: pool::create_lp(pool, id_ads, ctx), // no owner
+            total_supply: pool::create_lp(pool, ctx), // no owner
             balance_of: table::new<address, u64>(ctx),
-
-            token_ids: table::new<address, ID>(ctx),
 
             is_for_pair: false,
 
@@ -161,7 +157,7 @@ module suiDouBashiVest::gauge{
 
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
-            checkpoints: table::new<address, TableVec<Checkpoint>>(ctx), // voting weights for each voter
+            checkpoints: table::new<address, TableVec<Checkpoint>>(ctx), //voting weights for each voter
 
             supply_index: 0,
             claimable: 0
@@ -173,7 +169,7 @@ module suiDouBashiVest::gauge{
         (gauge, internal_id, external_id)
     }
 
-    // Claim the fee that this Gauge accumulate
+    // Claim the fees from pool
     public (friend) fun claim_fee<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
@@ -651,8 +647,7 @@ module suiDouBashiVest::gauge{
     fun deposit<X,Y,T>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
-        vsdb: &mut VSDB,
-        lp_position: &mut LP<X,Y>, // borrow_mut or take ?
+        lp_position: &mut LP<X,Y>, // not taking the ownership, otherwise owner lose all of its previous shares
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
@@ -663,75 +658,46 @@ module suiDouBashiVest::gauge{
         let staker = tx_context::sender(ctx);
         let lp_value = pool::get_lp_balance(lp_position);
         assert!(lp_value > 0, err::empty_lp());
-        let id = object::id(vsdb);
 
-        pool::join_lp(pool, &mut self.total_supply, lp_position, value );
+        pool::join_lp(pool, &mut self.total_supply, lp_position, value);
 
-        *table::borrow_mut(&mut self.balance_of, staker) = *table::borrow(& self.balance_of, staker) + lp_value;
-
-        //TODO: attach token to gauge, and move assertion in the front of respective functions
-        // each address can only register once for each pool
-        let sender = tx_context::sender(ctx);
-        assert!(vsdb::owner(vsdb) == sender, err::invalid_owner());
-        if(!table::contains(&self.token_ids, sender)){
-            table::add(&mut self.token_ids, sender, id);
-            // attahc
-            vsdb::attach<X,Y>(vsdb, ctx);
+        if(!table::contains(&self.balance_of, staker)){
+            table::add(&mut self.balance_of, staker, lp_value);
+        }else{
+            *table::borrow_mut(&mut self.balance_of, staker) = *table::borrow(& self.balance_of, staker) + lp_value;
         };
-        //voter::attachTokenToGauge() // move to voter
 
         write_checkpoint_(self, staker, lp_value, clock, ctx);
         write_supply_checkpoint_(self, clock);
 
-        event::deposit_lp<X,Y>(tx_context::sender(ctx), id, lp_value);
+        event::deposit_lp<X,Y>(tx_context::sender(ctx), lp_value);
     }
 
     // unstake
     fun withdraw_<X,Y,T>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
-        vsdb: &mut VSDB,
+        lp_position: &mut LP<X,Y>,
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
-    ):LP<X,Y>{
+    ){
         assert_generic_type<X,Y,T>();
         update_reward_for_all_tokens_(self, clock);
-
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
-        let id = object::id(vsdb);
         let staker = tx_context::sender(ctx);
-
-
-        // unstake the LP from pool
-        let lp_position = pool::create_lp(pool, tx_context::sender(ctx), ctx);
-
-        pool::join_lp(pool, &mut lp_position, &mut self.total_supply, value);
-        let lp_value = pool::get_lp_balance(&lp_position);
-
-        // record check
+        assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
         let bal = *table::borrow(& self.balance_of, staker);
-        assert!(bal > lp_value, err::insufficient_lp_balance());
-        *table::borrow_mut(&mut self.balance_of, staker) =  bal - lp_value;
+        assert!(value <= bal, err::insufficient_lp());
+        // unstake the LP from pool
+        pool::join_lp(pool, lp_position, &mut self.total_supply, value);
 
-        // detach & validation
-        let sender = tx_context::sender(ctx);
-        assert!(vsdb::owner(vsdb) == sender, err::invalid_owner());
+        *table::borrow_mut(&mut self.balance_of, staker) =  bal - value;
 
-        let id = table::remove(&mut self.token_ids, sender);
-        // detach
-        vsdb::detach<X,Y>(vsdb, ctx);
-
-        assert!(table::borrow(&self.token_ids, sender) == &id, err::already_stake());
-
-        write_checkpoint_(self, staker, lp_value, clock, ctx);
+        write_checkpoint_(self, staker, value, clock, ctx);
         write_supply_checkpoint_(self, clock);
 
-        event::withdraw_lp<X,Y>(tx_context::sender(ctx), id, lp_value);
-
-        lp_position
+        event::withdraw_lp<X,Y>(tx_context::sender(ctx), value);
     }
-
 
     public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         let ts = clock::timestamp_ms(clock);
@@ -750,12 +716,11 @@ module suiDouBashiVest::gauge{
     public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
 
 
-
-
     /// distribute the weekly rebase amonut
+    /// Receive the SDB emissions from voter
     public fun notify_reward_amount<X,Y,T>(
         self: &mut Gauge<X,Y>,
-        bribe: &mut Gauge<X,Y>,
+        bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
         coin: Coin<T>,
         clock: &Clock,
@@ -765,40 +730,38 @@ module suiDouBashiVest::gauge{
 
         let value = coin::value(&coin);
         let reward = borrow_reward<X,Y,T>(self);
-        assert!(value > 0, 0);
+        assert!(value > 0, err::zero_input());
 
         let ts = clock::timestamp_ms(clock);
-        if(reward::reward_rate(reward) == 0){
+        if(reward.reward_rate == 0){
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), 0, ts);
         };
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
+        borrow_reward_mut<X,Y,T>(self).reward_per_token_stored = reward_per_token_stored;
+        borrow_reward_mut<X,Y,T>(self).last_update_time = last_update_time;
 
-        reward::update_reward_per_token_stored(borrow_reward_mut<X,Y,T>(self), reward_per_token_stored);
-        reward::update_last_update_time(borrow_reward_mut<X,Y,T>(self), last_update_time);
-
-        // Charge fees when
+        // Charge fees
         claim_fee(self, bribe, pool, clock, ctx);
 
         let reward = borrow_reward_mut<X,Y,T>(self);
         // initial bribe in each epoch
-        if(ts >= reward::period_finish(reward)){
-            coin::put(reward::balance_mut(reward), coin);
-            reward::update_reward_rate(reward, value / DURATION);
+        if(ts >= reward.period_finish){
+            coin::put(&mut reward.balance, coin);
+            reward.reward_rate = value / DURATION;
         }else{
-        // accumulate bribes in each eopch
-            let _remaining = reward::period_finish(reward) - ts;
-            let _left = _remaining * reward::reward_rate(reward);
-            assert!(value > _left, 1);
-            coin::put(reward::balance_mut(reward), coin);
-            reward::update_reward_rate(reward, ( value + _left ) / DURATION);
+            // accumulate bribes in each eopch
+            let _remaining = reward.period_finish - ts;
+            let _left = _remaining * reward.reward_rate;
+            assert!(value > _left, err::insufficient_bribes());
+            coin::put(&mut reward.balance, coin);
+            reward.reward_rate = ( value + _left ) / DURATION;
         };
 
-        assert!(reward::reward_rate(reward) > 0, err::invalid_reward_rate());
-        let bal_total = reward::balance(reward);
-        assert!( reward::reward_rate(reward) <= bal_total / DURATION, err::max_reward());
+        assert!(reward.reward_rate > 0, err::invalid_reward_rate());
+        assert!( reward.reward_rate <= balance::value(&reward.balance) / DURATION, err::max_reward());
 
-        reward::update_period_finish(reward, ts + DURATION);
+        reward.period_finish = ts + DURATION;
 
         event::notify_reward<X>(tx_context::sender(ctx), value);
     }

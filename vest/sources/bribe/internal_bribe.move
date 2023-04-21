@@ -187,7 +187,6 @@ module suiDouBashiVest::internal_bribe{
             return ( 0, 0 )
         };
 
-        // return the latest reward as of specific time
         if( checkpoints::reward_ts(table_vec::borrow(checkpoints, len - 1)) <= ts ){
             let last_checkpoint = table_vec::borrow(checkpoints, len - 1);
             return ( checkpoints::reward_ts(last_checkpoint), checkpoints::reward(last_checkpoint))
@@ -407,7 +406,7 @@ module suiDouBashiVest::internal_bribe{
         ((reward as u64), end_time)
     }
 
-    public entry fun batch_update_rewardPerToken<X,Y,T>(
+    public entry fun batch_update_reward_per_token<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         max_run:u64,
         clock: &Clock,

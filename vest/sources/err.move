@@ -1,6 +1,10 @@
 module suiDouBashiVest::err{
     const Prefix: u64 = 000000;
 
+    // - Reg
+    public fun already_reigster(): u64 { Prefix + 201 }
+    public fun OTW(): u64 { Prefix + 202 }
+    public fun invalid_module(): u64 { Prefix + 203 }
     // - VSDB
     public fun invalid_guardian(): u64 { Prefix + 200 }
 
@@ -31,10 +35,12 @@ module suiDouBashiVest::err{
     public fun insufficient_voting(): u64 { Prefix + 212 }
     // - Gauge
     public fun already_stake(): u64 { Prefix + 211 }
+    public fun invalid_staker(): u64 { Prefix + 212 }
+
     public fun empty_lp(): u64 { Prefix + 212 }
     public fun dead_gauge(): u64 { Prefix + 211 }
     public fun zero_fees(): u64 { Prefix + 212 }
-    public fun insufficient_lp_balance(): u64 { Prefix + 212 }
+    public fun insufficient_lp(): u64 { Prefix + 212 }
 
     // - Vote
     public fun already_voted(): u64 { Prefix + 212 }

@@ -105,14 +105,12 @@ module suiDouBashiVest::event{
 
     struct DepositLP<phantom X, phantom Y> has copy, drop{
         from: address,
-        token_id: ID,
         amount: u64
     }
-    public fun deposit_lp<X,Y>(from: address, token_id: ID, amount: u64){
+    public fun deposit_lp<X,Y>(from: address, amount: u64){
         emit(
             DepositLP<X,Y>{
                 from,
-                token_id,
                 amount
             }
         )
@@ -120,14 +118,12 @@ module suiDouBashiVest::event{
 
     struct WithdrawLP<phantom X, phantom Y> has copy, drop{
         from: address,
-        token_id: ID,
         amount: u64
     }
-    public fun withdraw_lp<X,Y>(from: address, token_id: ID, amount: u64){
+    public fun withdraw_lp<X,Y>(from: address, amount: u64){
         emit(
             WithdrawLP<X,Y>{
                 from,
-                token_id,
                 amount
             }
         )
