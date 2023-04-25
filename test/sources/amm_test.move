@@ -6,6 +6,7 @@ module test::amm_test{
     use suiDouBashi::amm_math;
     use sui::math;
     use suiDouBashi::formula;
+    use sui::transfer;
 
     use suiDouBashi::pool::{Self, Pool, LP};
     use suiDouBashi::pool_reg::{Self, PoolReg};
@@ -136,8 +137,11 @@ module test::amm_test{
         let minted_lp ={
             let pool = test::take_shared<Pool< X, Y>>(test);
             let (res_x, res_y, lp_supply) = pool::get_reserves< X, Y>(&mut pool);
+            let lp = pool::create_lp(&pool, ctx(test));
 
-            pool::add_liquidity(&mut pool, mint<X>(deposit_x, ctx(test)), mint<Y>(deposit_y, ctx(test)), 0, 0 , clock , ctx(test));
+            pool::add_liquidity(&mut pool, mint<X>(deposit_x, ctx(test)), mint<Y>(deposit_y, ctx(test)), &mut lp, 0, 0 , clock , ctx(test));
+
+            transfer::public_transfer(lp, creator);
             test::return_shared(pool);
 
             if(lp_supply == 0){
@@ -287,9 +291,10 @@ module test::amm_test{
             let pool = test::take_shared<Pool< X, Y>>(test);
             let coin_x = test::take_from_sender<Coin<X>>(test);
             let coin_y = test::take_from_sender<Coin<Y>>(test);
+            let lp = pool::create_lp(&pool, ctx(test));
+            pool::zap_x(&mut pool, mint<X>(deposit_x, ctx(test)), &mut lp, 0, 0, clock, ctx(test));
 
-            pool::zap_x(&mut pool, mint<X>(deposit_x, ctx(test)), 0, 0, clock, ctx(test));
-
+            transfer::public_transfer(lp, trader);
             test::return_shared(pool);
             test::return_to_sender(test, coin_x);
             burn(coin_y);
