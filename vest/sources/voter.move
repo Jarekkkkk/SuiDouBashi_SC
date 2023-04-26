@@ -8,7 +8,7 @@ module suiDouBashiVest::voter{
     use sui::transfer;
     use sui::clock::{Self, Clock};
     use sui::vec_set::{Self, VecSet};
-    use sui::vec_map::{Self, VecMap};
+    use sui::vec_map::VecMap;
     use sui::table::{Self, Table};
 
     use suiDouBashi::pool::Pool;
@@ -26,11 +26,11 @@ module suiDouBashiVest::voter{
     const DURATION: u64 = { 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
 
-    struct VOTER has store, drop {}
+    struct VOTER_SDB has store, drop {}
 
     struct Voter has key, store{
         id: UID,
-        otw: VOTER,
+        witness: VOTER_SDB, // referred as witness & capability
         balance: Balance<SDB>,
 
         governor: address,
@@ -65,11 +65,11 @@ module suiDouBashiVest::voter{
     }
 
     // ===== Entry =====
-    fun init(otw: VOTER, ctx: &mut TxContext){
+    fun init(ctx: &mut TxContext){
         let sender = tx_context::sender(ctx);
         let voter = Voter{
             id: object::new(ctx),
-            otw,
+            witness: VOTER_SDB{},
             balance: balance::zero<SDB>(),
             governor: sender,
             emergency: sender,
@@ -84,20 +84,6 @@ module suiDouBashiVest::voter{
         transfer::share_object(voter);
     }
 
-    // - player
-    public entry fun vote<X,Y,T>(
-        self: &mut Voter,
-        vsdb: &mut VSDB,
-        gauge: &mut Gauge<X,Y>,
-        internal_bribe: &mut InternalBribe<X,Y>,
-        external_bribe: &mut ExternalBribe<X,Y>,
-        weights: u64,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ){
-        vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
-    }
 
     public entry fun reset<X,Y,T>(
         self: &mut Voter,
@@ -214,6 +200,20 @@ module suiDouBashiVest::voter{
         self.total_weight = self.total_weight + total_weight;
         vsdb::update_used_weights(vsdb, used_weight);
     }
+    // - player
+    public entry fun vote<X,Y,T>(
+        self: &mut Voter,
+        vsdb: &mut VSDB,
+        gauge: &mut Gauge<X,Y>,
+        internal_bribe: &mut InternalBribe<X,Y>,
+        external_bribe: &mut ExternalBribe<X,Y>,
+        weights: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
+        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
+    }
 
     // - Gauge
     public entry fun create_gauge<X,Y>(self: &mut Voter, pool: &Pool<X,Y>, ctx: &mut TxContext){
@@ -230,18 +230,17 @@ module suiDouBashiVest::voter{
 
         update_for_(self, &mut gauge);
 
-        transfer::share_object(gauge);
+        transfer::public_share_object(gauge);
 
         event::gauge_created<X,Y>(object::id(pool), gauge_id, in_bribe, ex_bribe);
     }
     entry fun kill_gauge<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>, ctx: &mut TxContext){
         assert_emergency(self, ctx);
-        assert!(gauge::is_alive(gauge), 0);
+        assert!(gauge::is_alive(gauge), err::dead_gauge());
         gauge::kill_gauge_(gauge);
     }
     entry fun revive_gauge<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>, ctx: &mut TxContext){
         assert_emergency(self, ctx);
-        assert!(!gauge::is_alive(gauge), 0);
         gauge::revive_gauge_(gauge);
     }
 
@@ -305,7 +304,7 @@ module suiDouBashiVest::voter{
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
-    // rebase
+    // distribute weekly emission
     fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
@@ -317,14 +316,12 @@ module suiDouBashiVest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        // weekly reabse
         let coin_option = minter::update_period(minter, distributor, vsdb_reg, clock, ctx);
         if(option::is_some(&coin_option)){
             notify_reward_amount_(self , option::extract(&mut coin_option))
         };
         option::destroy_none(coin_option);
 
-        //update_period
         update_for_(self, gauge);
 
         let claimable = gauge::get_claimable(gauge);
@@ -339,16 +336,14 @@ module suiDouBashiVest::voter{
         }
     }
 
-
     // ===== Internal =====
     /// update each Gauge
     fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
         let supply = *table::borrow(&self.weights, gauge::pool_id(gauge));
-
         if(supply > 0){
             let s_idx = gauge::get_supply_index(gauge);
             let index_ = self.index;
-            gauge::update_supply_index(gauge, self.index);
+            gauge::update_supply_index(gauge, index_);
 
             let delta = index_ - s_idx;
             if(delta > 0){
@@ -363,10 +358,7 @@ module suiDouBashiVest::voter{
             gauge::update_supply_index(gauge, self.index);
         };
     }
-
-
-
-    // - Fee distribution
+    // - Rebase
     fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
         // update global index
         let value = coin::value(&sdb);

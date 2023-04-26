@@ -80,7 +80,6 @@ module suiDouBashi::pool_reg{
         assert_fee(fee_percentage);
 
         let pool_id = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
-
         let pool_name = get_pool_name<X,Y>();
         table::add(&mut self.pools, pool_name, pool_id);
 
@@ -113,6 +112,7 @@ module suiDouBashi::pool_reg{
         string::append(&mut symbol_x, symbol_y);
         symbol_x
     }
+    public fun pools_length(self: &PoolReg):u64{ table::length(&self.pools) }
 
 
     #[test_only]

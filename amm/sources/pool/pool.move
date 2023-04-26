@@ -93,7 +93,7 @@ module suiDouBashi::pool{
         claimable_x: u64,
         claimable_y: u64
     }
-    /// It's safe we make it public, as we do will update index before any balance changing
+    /// When adding liquidity, make sure create lp position first
     public fun create_lp<X,Y>(self: &Pool<X,Y>, ctx: &mut TxContext):LP<X,Y>{
         LP<X,Y>{
             id: object::new(ctx),
@@ -284,7 +284,6 @@ module suiDouBashi::pool{
         ctx:&mut TxContext
     ){
         assert_pool_unlocked(self);
-
         // lp position update
         update_lp(self, lp_position);
         let lp_token = coin::take(&mut lp_position.lp_balance, value, ctx);
@@ -841,6 +840,10 @@ module suiDouBashi::pool{
         lp_position.claimable_y = 0;
 
         (coin_x, coin_y)
+    }
+
+    #[test_only] public fun mint_lp<X,Y>(v: u64, ctx: &mut TxContext):Coin<LP_TOKEN<X,Y>>{
+        coin::mint_for_testing(v, ctx)
     }
 }
 

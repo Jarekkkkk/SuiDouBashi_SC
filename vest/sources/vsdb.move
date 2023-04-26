@@ -4,7 +4,6 @@ module suiDouBashiVest::vsdb{
     use std::string::{Self};
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
-    use sui::types::is_one_time_witness as is_otw;
     use sui::transfer;
     use std::vector as vec;
     use sui::balance::{Self, Balance};
@@ -30,6 +29,10 @@ module suiDouBashiVest::vsdb{
     const WEEK: u64 = { 7 * 86400 };
     const YEAR: u256 = { 365 * 86400 };
     const SVG_PREFIX: vector<u8> = b"data:image/svg+xml;base64,";
+
+    // Error
+    const E_INVALID_UNLOCK_TIME: u64 =  001 ;
+    const E_LOCK: u64 =  002 ;
 
     friend suiDouBashiVest::voter;
     friend suiDouBashiVest::reward_distributor;
@@ -80,25 +83,23 @@ module suiDouBashiVest::vsdb{
 
     // TODO: add back df
     public fun df_add<T: drop, N: copy + drop + store,V: store>(
-        otw:&T,
+        _otw:&T,
         //reg: & VSDBRegistry,
         vsdb: &mut VSDB,
         name: N,
         value: V
     ){
-        // assert!(is_otw(otw), err::OTW());
         // let type = type_name::get<T>();
         // assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
         df::add(&mut vsdb.id, name, value);
     }
     public fun dof_add<T: drop, N: copy + drop + store, V: key + store>(
-        otw:&T,
+        _otw:&T,
         reg: & VSDBRegistry,
         vsdb: &mut VSDB,
         name: N,
         value: V
     ){
-        assert!(is_otw(otw), err::OTW());
         let type = type_name::get<T>();
         assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
         dof::add(&mut vsdb.id, name, value);
@@ -143,8 +144,7 @@ module suiDouBashiVest::vsdb{
         dof::borrow_mut(&mut vsdb.id, name)
     }
 
-
-
+    // - Reg
     struct VSDBRegistry has key {
         id: UID,
         gov: address,
@@ -194,10 +194,10 @@ module suiDouBashiVest::vsdb{
         ctx: &mut TxContext
     ){
         let ts = clock::timestamp_ms(clock);
-        let unlock_time = (duration + ts) / WEEK * WEEK;
+        let unlock_time = round_down_week(duration + ts);
 
         assert!(coin::value(&coin) > 0 ,err::zero_input());
-        assert!(unlock_time > ts && unlock_time <= ts + MAX_TIME, err::invalid_lock_time());
+        assert!(unlock_time > ts && unlock_time <= ts + MAX_TIME, E_INVALID_UNLOCK_TIME);
 
         let amount = coin::value(&coin);
         let vsdb = new( coin, unlock_time, clock, ctx);
@@ -224,11 +224,12 @@ module suiDouBashiVest::vsdb{
         let ts = clock::timestamp_ms(clock);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
-        let unlock_time = ( (ts + extended_duration ) / WEEK) * WEEK;
+        let unlock_time = round_down_week(ts + extended_duration );
 
-        assert!(locked_end > ts, err::locked());
+        assert!(locked_end > ts, E_LOCK);
         assert!(locked_bal > 0, err::empty_locked_balance());
-        assert!(unlock_time > ts && unlock_time < ts + MAX_TIME, err::invalid_lock_time());
+        assert!(unlock_time > locked_end, E_INVALID_UNLOCK_TIME);
+        assert!(unlock_time > ts && unlock_time <= ts + MAX_TIME, E_INVALID_UNLOCK_TIME);
 
         extend(self, option::none<Coin<SDB>>(), unlock_time, clock);
 
@@ -247,13 +248,15 @@ module suiDouBashiVest::vsdb{
         assert_owner(self, ctx);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
+        let value = coin::value(&coin);
 
-        assert!(locked_end > clock::timestamp_ms(clock), err::locked());
+        assert!(locked_end > clock::timestamp_ms(clock), E_LOCK);
         assert!(locked_bal > 0, err::empty_locked_balance());
-        assert!(coin::value(&coin) > 0 , err::empty_coin());
+        assert!(value > 0 , err::empty_coin());
 
         extend(self, option::some(coin), 0, clock);
 
+        reg.locked_total = reg.locked_total + value;
         checkpoint_(true, reg, self, locked_bal, locked_end, clock);
 
         event::deposit(object::id(self), locked_balance(self), locked_end);
@@ -275,9 +278,9 @@ module suiDouBashiVest::vsdb{
         let locked_end_ = locked_end(&vsdb);
         let ts = clock::timestamp_ms(clock);
 
-        assert!(locked_end_ >= ts , err::locked());
+        assert!(locked_end_ >= ts , E_LOCK);
         assert!(locked_bal_ > 0, err::empty_locked_balance());
-        assert!(locked_end_ >= ts , err::locked());
+        assert!(locked_end_ >= ts , E_LOCK);
         assert!(locked_bal_ > 0, err::empty_locked_balance());
 
         // empty the old vsdb
@@ -292,7 +295,7 @@ module suiDouBashiVest::vsdb{
         }else{
             locked_end_
         };
-
+        reg.minted_vsdb = reg.minted_vsdb - 1 ;
         extend(self, option::some(coin), end_, clock);
         checkpoint_(true, reg, self, locked_bal, locked_end, clock);
 
@@ -300,22 +303,24 @@ module suiDouBashiVest::vsdb{
     }
 
     // /// Withdraw all the unlocked coin only when due date is expired
-    public entry fun unlock(self: &mut VSDBRegistry, vsdb: VSDB, clock: &Clock, ctx: &mut TxContext){
-        let locked_bal = locked_balance(&vsdb);
-        let locked_end = locked_end(&vsdb);
+    public entry fun unlock(reg: &mut VSDBRegistry, self: VSDB, clock: &Clock, ctx: &mut TxContext){
+        let locked_bal = locked_balance(&self);
+        let locked_end = locked_end(&self);
         let ts = clock::timestamp_ms(clock);
 
-        assert!(ts >= locked_end , err::locked());
+        assert!(ts >= locked_end , E_LOCK);
         assert!(locked_bal > 0, err::empty_locked_balance());
 
-        let coin = withdraw(&mut vsdb, ctx);
-        vsdb.locked_balance.end = 0;
+        let coin = withdraw(&mut self, ctx);
+        self.locked_balance.end = 0;
         let withdrawl = coin::value(&coin);
-        let id = object::id(&vsdb);
+        let id = object::id(&self);
 
-        checkpoint_(true, self, &vsdb, locked_bal, locked_end, clock);
+        checkpoint_(true, reg, &self, locked_bal, locked_end, clock);
 
-        destroy(vsdb);
+        reg.locked_total = reg.locked_total - withdrawl;
+
+        destroy(self);
         transfer::public_transfer(coin, tx_context::sender(ctx));
 
         event::withdraw(id, withdrawl, ts);
@@ -345,6 +350,7 @@ module suiDouBashiVest::vsdb{
 
     // - Reg
     public fun total_supply(reg: &VSDBRegistry ): u64 { reg.locked_total }
+    public fun total_minted(reg: &VSDBRegistry): u64 { reg.minted_vsdb }
 
     public fun epoch(reg: &VSDBRegistry ): u64 { reg.epoch }
 
@@ -360,7 +366,9 @@ module suiDouBashiVest::vsdb{
 
     // - Self
     public fun user_epoch(self: &VSDB): u64{ self.user_epoch }
-    public fun user_point_history(self: &VSDB, epoch: u64):&Point{table::borrow(&self.user_point_history, epoch) }
+    public fun user_point_history(self: &VSDB, epoch: u64):&Point{
+        table::borrow(&self.user_point_history, epoch)
+    }
 
     public fun locked_balance(self: &VSDB): u64{ balance::value(&self.locked_balance.balance) }
 
@@ -408,13 +416,15 @@ module suiDouBashiVest::vsdb{
     }
 
     // ===== Utils =====
-    public fun voting_weight(self: &VSDB, ts: u64): u64{ //u64 is insufficient
+    public fun voting_weight(self: &VSDB, ts: u64): u64{
         if(self.user_epoch == 0){
+            // useless
             return 0
         }else{
             let last_point = *table::borrow(&self.user_point_history, self.user_epoch);
             let last_point_bias = point::bias(&last_point);
-            last_point_bias = i128::sub(&last_point_bias, &i128::from(((ts - point::ts(&last_point)) as u128)));
+            let diff = i128::mul(&point::slope(&last_point), &i128::from(((ts - point::ts(&last_point)) as u128)));
+            last_point_bias = i128::sub(&last_point_bias, &diff);
 
             if(i128::compare(&last_point_bias, &i128::zero()) == 1){
                 last_point_bias = i128::zero();
@@ -859,12 +869,13 @@ module suiDouBashiVest::vsdb{
     public (friend) fun update_last_voted(self: &mut VSDB, v: u64){
         self.last_voted = v;
     }
-    fun img_url_(id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): Url {
+    fun img_url_(_id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): Url {
         let vesdb = SVG_PREFIX;
         let encoded_b = vec::empty<u8>();
 
-        vec::append(&mut encoded_b, b"<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='xMinYMin meet' viewBox='0 0 350 350'><style>.base { fill: white; font-family: serif; font-size: 14px; }</style><rect width='100%' height='100%' fill='#93c5fd' /><text x='10' y='20' class='base'>Token ");
-        vec::append(&mut encoded_b,id);
+        vec::append(&mut encoded_b, b"<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='xMinYMin meet' viewBox='0 0 350 350'><style>.base { fill: white; font-family: serif; font-size: 14px; }</style><rect width='100%' height='100%' fill='#93c5fd' /><text x='10' y='20' class='base'>SuiDouBashi VeSDB ");
+        // gas consuming if we loop 32 bytes ID to string
+        //vec::append(&mut encoded_b,*string::bytes(&string::utf8(_id)));
         vec::append(&mut encoded_b,b"</text><text x='10' y='40' class='base'>Voting Weight: ");
         vec::append(&mut encoded_b,*string::bytes(&to_string(voting_weight)));
         vec::append(&mut encoded_b,b"</text><text x='10' y='60' class='base'>Locked end: ");
@@ -872,7 +883,6 @@ module suiDouBashiVest::vsdb{
         vec::append(&mut encoded_b,b"</text><text x='10' y='80' class='base'>Locked_amount: ");
         vec::append(&mut encoded_b,*string::bytes(&to_string(locked_amount)));
         vec::append(&mut encoded_b,b"</text></svg>");
-
         vec::append(&mut vesdb,encode(encoded_b));
         url::new_unsafe_from_bytes(vesdb)
     }

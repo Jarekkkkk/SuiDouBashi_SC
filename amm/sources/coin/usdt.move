@@ -35,4 +35,8 @@ module suiDouBashi::usdt{
             tx_context::sender(ctx)
         )
     }
+
+    #[test_only] public fun deploy_coin(ctx: &mut TxContext){
+        init(USDT{}, ctx);
+    }
 }

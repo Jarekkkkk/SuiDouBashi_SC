@@ -5,7 +5,7 @@ module suiDouBashiVest::reward_distributor{
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::math;
-    use sui::object::{Self, ID};
+    use sui::object::{Self, ID, UID};
     use sui::table::{Self, Table};
 
     use sui::tx_context::{Self, TxContext};
@@ -18,35 +18,35 @@ module suiDouBashiVest::reward_distributor{
     use suiDouBashiVest::point;
     use suiDouBashi::i128;
 
-
     friend suiDouBashiVest::minter;
 
     const WEEK: u64 = {7 * 86400};
 
-
     struct Distributor has key{
+        id: UID,
         balance: Balance<SDB>,
         start_time: u64,
-        time_cursor: u64,
+        time_cursor: u64, // weekly countdown
 
         time_cursor_of: Table<ID, u64>,
         user_epoch_of: Table<ID, u64>,
 
         last_token_time: u64,
 
-        tokens_per_week: VecMap<u64, u64>, // ts -> distribute tokens
+        tokens_per_week: VecMap<u64, u64>, // week_epoch -> distribute tokens
 
         token_last_balance: u64,
 
-        ve_supply: VecMap<u64, u64>, // time-cursor ->
+        ve_supply: VecMap<u64, u64>, // time-cursor -> veSDB supply
 
         depositor: address
     }
 
-    public (friend) fun new(ctx: &mut TxContext){
+     fun init(ctx: &mut TxContext){
         let ts = tx_context::epoch_timestamp_ms(ctx) / WEEK * WEEK;
 
         let distributor = Distributor{
+            id: object::new(ctx),
             balance: balance::zero<SDB>(),
 
             start_time: ts,
@@ -90,6 +90,7 @@ module suiDouBashiVest::reward_distributor{
         checkpoint_total_supply_(self, vsdb_reg, clock);
     }
 
+    /// VSDB holder to rebase voting weight
     public entry fun claim(
         self: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry,
@@ -106,7 +107,7 @@ module suiDouBashiVest::reward_distributor{
 
         let amount = claim_(self, vsdb, last_token_time_);
         if(amount != 0){
-             // claim the rewards for VSDB holder
+             // extend the rebased amount for VeSDB holders
             let coin_sdb = coin::take(&mut self.balance, amount, ctx);
             vsdb::increase_unlock_amount(vsdb_reg, vsdb, coin_sdb, clock, ctx);
             self.token_last_balance = self.token_last_balance - amount;
@@ -124,7 +125,7 @@ module suiDouBashiVest::reward_distributor{
     public entry fun claim_many(
         self: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry,
-        vsdbs: &mut vector<VSDB>,
+        vsdbs: vector<VSDB>, // watch out any argument with vector wrapped with object, since it doesn't protect underlying objects by reference
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -137,20 +138,22 @@ module suiDouBashiVest::reward_distributor{
 
         let total = 0;
         let i = 0;
-        while( i < vec::length(vsdbs)){
-            let vsdb = vec::borrow_mut(vsdbs, i);
-            let amount = claim_(self, vsdb, last_token_time_);
+        while( i < vec::length(&vsdbs)){
+            let vsdb = vec::pop_back(&mut vsdbs);
+            let amount = claim_(self, &vsdb, last_token_time_);
             if(amount != 0){
                 let coin_sdb = coin::take(&mut self.balance, amount, ctx);
-                vsdb::increase_unlock_amount(vsdb_reg, vsdb, coin_sdb, clock, ctx);
+                vsdb::increase_unlock_amount(vsdb_reg, &mut vsdb, coin_sdb, clock, ctx);
                 self.token_last_balance = self.token_last_balance - amount;
                 total = total + amount;
             };
+            transfer::public_transfer(vsdb, tx_context::sender(ctx));
 
             i = i + 1;
         };
 
         if(total != 0) self.token_last_balance = self.token_last_balance - total;
+        vec::destroy_empty(vsdbs)
     }
 
 
@@ -199,11 +202,10 @@ module suiDouBashiVest::reward_distributor{
                     if(vec_map::contains(&self.tokens_per_week, &this_week)){
                         *vec_map::get_mut(&mut self.tokens_per_week, &this_week) = *vec_map::get(&self.tokens_per_week, &this_week) + to_distribute * ( next_week - t ) / since_last;
                     }else{
-                        vec_map::insert(&mut self.tokens_per_week, this_week,  to_distribute * ( ts - t ) / since_last);
+                        vec_map::insert(&mut self.tokens_per_week, this_week, to_distribute * ( next_week - t ) / since_last);
                     }
                 };
             };
-
             t = next_week;
             this_week = next_week;
 
@@ -279,7 +281,7 @@ module suiDouBashiVest::reward_distributor{
         return math::max((i128::as_u128(&ts) as u64), 0)
     }
 
-
+    /// Alert: globally checkpoint global histroy of vsdb registry
     fun checkpoint_total_supply_(
         self: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry,
@@ -330,9 +332,9 @@ module suiDouBashiVest::reward_distributor{
         let to_distribute = 0;
 
         let max_user_epoch = vsdb::user_epoch(vsdb);
-        let start_time_ = self.start_time;
-
         if (max_user_epoch == 0) return 0;
+
+        let start_time_ = self.start_time;
 
         let week_cursor = if(table::contains(&self.time_cursor_of, id)){
             *table::borrow(&self.time_cursor_of, id)
@@ -358,7 +360,7 @@ module suiDouBashiVest::reward_distributor{
             week_cursor = ( point::ts(&user_point) + WEEK - 1 ) / WEEK * WEEK;
         };
 
-        if(week_cursor > last_token_time) return 0;
+        if(week_cursor >= last_token_time) return 0;
 
         if(week_cursor < start_time_) week_cursor = start_time_;
 
@@ -381,7 +383,7 @@ module suiDouBashiVest::reward_distributor{
                 let dt = i128::sub(&i128::from(((week_cursor as u128))), &i128::from((point::ts(&old_user_point) as u128)));
                 let ts = i128::sub(&point::bias(&old_user_point), &i128::mul(&point::slope(&old_user_point), &dt));
                 let balance_of = math::max((i128::as_u128(&ts) as u64), 0);
-
+                if( balance_of == 0 && user_epoch > max_user_epoch) break;
                 if(balance_of != 0){
                     to_distribute = to_distribute + balance_of * *vec_map::get(&self.tokens_per_week, &week_cursor) / *vec_map::get(&self.ve_supply, &week_cursor);
                 };
@@ -448,7 +450,7 @@ module suiDouBashiVest::reward_distributor{
             week_cursor = ( point::ts(&user_point) + WEEK - 1 ) / WEEK * WEEK;
         };
 
-        if(week_cursor > last_token_time) return 0;
+        if(week_cursor >= last_token_time) return 0;
 
         if(week_cursor < start_time_) week_cursor = start_time_;
 
@@ -471,7 +473,7 @@ module suiDouBashiVest::reward_distributor{
                 let dt = i128::sub(&i128::from(((week_cursor as u128))), &i128::from((point::ts(&old_user_point) as u128)));
                 let ts = i128::sub(&point::bias(&old_user_point), &i128::mul(&point::slope(&old_user_point), &dt));
                 let balance_of = math::max((i128::as_u128(&ts) as u64), 0);
-
+                if( balance_of == 0 && user_epoch > max_user_epoch) break;
                 if(balance_of != 0){
                     to_distribute = to_distribute + balance_of * *vec_map::get(&self.tokens_per_week, &week_cursor) / *vec_map::get(&self.ve_supply, &week_cursor);
                 };
@@ -484,39 +486,4 @@ module suiDouBashiVest::reward_distributor{
 
         to_distribute
     }
-
 }
-
-
-
-
-
-
-//     function claim_many(uint[] memory _tokenIds) external returns (bool) {
-//         if (block.timestamp >= time_cursor) _checkpoint_total_supply();
-//         uint _last_token_time = last_token_time;
-//         _last_token_time = _last_token_time / WEEK * WEEK;
-//         address _voting_escrow = voting_escrow;
-//         uint total = 0;
-
-//         for (uint i = 0; i < _tokenIds.length; i++) {
-//             uint _tokenId = _tokenIds[i];
-//             if (_tokenId == 0) break;
-//             uint amount = _claim(_tokenId, _voting_escrow, _last_token_time);
-//             if (amount != 0) {
-//                 IVotingEscrow(_voting_escrow).deposit_for(_tokenId, amount);
-//                 total += amount;
-//             }
-//         }
-//         if (total != 0) {
-//             token_last_balance -= total;
-//         }
-
-//         return true;
-//     }
-
-//     // Once off event on contract initialize
-//     function setDepositor(address _depositor) external {
-//         require(msg.sender == depositor);
-//         depositor = _depositor;
-//     }

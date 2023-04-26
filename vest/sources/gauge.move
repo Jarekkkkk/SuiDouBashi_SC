@@ -409,6 +409,7 @@ module suiDouBashiVest::gauge{
         ctx: &mut TxContext
     ){
         assert_generic_type<X,Y,T>();
+        assert!(table::contains(&self.balance_of, tx_context::sender(ctx)), err::invalid_staker());
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
 
@@ -429,7 +430,10 @@ module suiDouBashiVest::gauge{
             );
 
             event::claim_reward(tx_context::sender(ctx), value_x);
-        }
+        };
+        let lp_value = *table::borrow(&self.balance_of, tx_context::sender(ctx));
+        write_checkpoint_(self, staker, lp_value, clock, ctx);
+        write_supply_checkpoint_(self, clock);
     }
 
     fun reward_per_token<X, Y, T>(
