@@ -169,6 +169,7 @@ module test::amm_test{
         let input_x = 500000;
 
         add_liquidity_< X, Y>(amt_x, amt_y, clock, test);
+
         next_tx(test, trader);
         let swap_y = {// swap X for Y
             let pool = test::take_shared<Pool< X, Y>>(test);
@@ -284,7 +285,6 @@ module test::amm_test{
         };
         next_tx(test, trader);{
             let coin_x = mint<X>(deposit_x, ctx(test));
-           std::debug::print(&coin_x);
             sui::transfer::public_transfer(coin_x, trader);
         };
         next_tx(test, trader);{// single zap
