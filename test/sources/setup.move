@@ -16,10 +16,10 @@ module test::setup{
     public fun usdc_1(): u64 { math::pow(10, 6) }
     public fun usdc_100K(): u64 { math::pow(10, 11) }
     public fun usdc_1M(): u64 { math::pow(10, 12) }
-    public fun usdc_100M(): u64 { math::pow(10, 14) }
+    public fun usdc_100M(): u64 { math::pow(10, 14)}
     public fun usdc_1B(): u64 { math::pow(10, 15) }
     public fun usdc_10B(): u64 { math::pow(10, 16) }
-    // 9 decimals, max value: 184B
+    // 9 decimals, max value: 18.44B
     public fun sui_1(): u64 { math::pow(10, 9) }
     public fun sui_100K(): u64 { math::pow(10, 14) }
     public fun sui_1M(): u64 { math::pow(10, 15) }
@@ -29,6 +29,7 @@ module test::setup{
     // common time
     public fun four_years(): u64 { 4 * 365 * 86400 }
     public fun week(): u64 { 7 * 86400 }
+    public fun day(): u64 { 86400 }
 
     #[test] fun test_setup(){
         let (a,_,_) = people();
@@ -58,8 +59,8 @@ module test::setup{
         let ctx = ctx(t);
         let (i, len) = (0, vec::length(&owners));
         while( i < len ){
-            // 1B for each owner
             let owner = vec::pop_back(&mut owners);
+            // 1B for each owner
             let v = math::pow(10, 9);
             let usdc = coin::mint_for_testing<USDC>( v * usdc_1(), ctx);
             let usdt = coin::mint_for_testing<USDT>( v * usdc_1(), ctx);

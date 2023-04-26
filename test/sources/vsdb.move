@@ -140,11 +140,11 @@ module test::vsdb{
         next_tx(s, a);{ // unlock
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            let point = vsdb::epoch(&reg);
-            std::debug::print(&point);
             vsdb::unlock(&mut reg, vsdb, clock, ctx(s));
             test::return_shared(reg);
         };
-
+        next_tx(s, a);{ // vsdb been burnt
+            assert!(!test::has_most_recent_for_sender<VSDB>(s), 0);
+        }
     }
 }
