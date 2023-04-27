@@ -8,7 +8,7 @@ module test::main{
 
 
     use test::setup;
-    use sui::coin::{ Self, mint_for_testing as mint, Coin};
+    use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
     use sui::object;
 
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
@@ -180,7 +180,6 @@ module test::main{
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
-            let _ctx = ctx(s);
             assert!(pool::get_lp_balance(&lp_a) == 1999000, 0);
             assert!(pool::get_lp_balance(&lp_b) == 63244552, 0);
             // pool_a
@@ -211,7 +210,7 @@ module test::main{
             transfer::public_transfer(lp_a, b);
             transfer::public_transfer(lp_b, b);
         };
-        next_tx(s,a);{ // Action: LP A Swap
+        next_tx(s,a);{ // Action: LP A Swap & Claim Fees
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
@@ -220,11 +219,117 @@ module test::main{
 
             let opt_output = pool::get_output<USDC,USDT,USDC>(&pool_a, setup::usdc_1());
             pool::swap_for_y(&mut pool_a, mint<USDC>(setup::usdc_1(), ctx), opt_output, clock, ctx);
+            let opt_output = pool::get_output<SDB, USDC, SDB>(&pool_b, setup::sui_1());
+            pool::swap_for_y(&mut pool_b, mint<SDB>(setup::sui_1(), ctx), opt_output, clock, ctx);
 
             test::return_shared(pool_a);
             test::return_shared(pool_b);
             test::return_to_sender(s, lp_a);
             test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,a);{ // Action: LP A Claim Fees & Assertion: Fee Deposit
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let ctx = ctx(s);
+
+            assert!(pool::get_fee_x(&pool_a) == 300, 1);
+            assert!(pool::get_fee_x(&pool_b) == 500_000, 1);
+
+            pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
+            pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,a);{ // Assertion: LP position = 0, fee withdrawl,
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            // pool's remaining fee
+            let pool_a_fee_x = pool::get_fee_x(&pool_a);
+            let pool_b_fee_x = pool::get_fee_x(&pool_b);
+            // user's fee
+            let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
+            let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
+
+            assert!(pool::get_claimable_x(&lp_a) == 0, 0);
+            assert!(pool::get_claimable_x(&lp_b) == 0, 0);
+            assert!( pool_a_fee_x == 101, 1);
+            assert!( pool_b_fee_x == 166_672, 1);
+            assert!(coin::value(&fee_usdc) == 199, 1);
+            assert!(coin::value(&fee_sdb) == 333_328, 1);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+            burn(fee_usdc);
+            burn(fee_sdb);
+        };
+        next_tx(s,b);{ // Action: LP B Swap & Claim Fees
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let ctx = ctx(s);
+
+            let opt_output = pool::get_output<USDC,USDT,USDC>(&pool_a, setup::usdc_1());
+            pool::swap_for_y(&mut pool_a, mint<USDC>(setup::usdc_1(), ctx), opt_output, clock, ctx);
+            let opt_output = pool::get_output<SDB, USDC, SDB>(&pool_b, setup::sui_1());
+            pool::swap_for_y(&mut pool_b, mint<SDB>(setup::sui_1(), ctx), opt_output, clock, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,b);{ // Action: LP B Claim Fees & Assertion: Fee Deposit
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let ctx = ctx(s);
+            assert!(pool::get_fee_x(&pool_a) == 401, 1);
+            assert!(pool::get_fee_x(&pool_b) == 666_672, 1);
+
+            pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
+            pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,b);{ // Assertion: LP position = 0, fee withdrawl,
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            // user's fee
+            let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
+            let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
+
+          std::debug::print(&coin::value(&fee_usdc));
+          std::debug::print(&coin::value(&fee_sdb));
+
+            assert!(pool::get_claimable_x(&lp_a) == 0, 0);
+            assert!(pool::get_claimable_x(&lp_b) == 0, 0);
+            assert!(pool::get_fee_x(&pool_a) == 201, 1);
+            assert!(pool::get_fee_x(&pool_b) == 333_339, 1);
+            assert!(coin::value(&fee_usdc) == 200, 1);
+            assert!(coin::value(&fee_sdb) == 333333, 1);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+            burn(fee_usdc);
+            burn(fee_sdb);
         };
     }
 }
