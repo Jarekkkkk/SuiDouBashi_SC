@@ -2,7 +2,7 @@
 module test::setup{
     use suiDouBashi::usdc::{Self, USDC};
     use suiDouBashi::usdt::{Self, USDT};
-    use suiDouBashi::pool::{Self, Pool};
+    use suiDouBashi::pool::{Self, Pool, LP};
     use suiDouBashiVest::sdb::{Self, SDB};
 
     use sui::math;
@@ -75,24 +75,24 @@ module test::setup{
     }
 
     use suiDouBashi::pool_reg::{Self, PoolReg};
-    public fun deploy_pools(t: &mut Scenario, clock: &mut Clock){
+    public fun deploy_pools(s: &mut Scenario, clock: &mut Clock){
         let (a,_,_) = people();
 
-        pool_reg::init_for_testing(ctx(t));
+        pool_reg::init_for_testing(ctx(s));
 
-        next_tx(t, a); {
-            let meta_usdc = test::take_immutable<CoinMetadata<USDC>>(t);
-            let meta_usdt = test::take_immutable<CoinMetadata<USDT>>(t);
-            let meta_sdb = test::take_immutable<CoinMetadata<SDB>>(t);
+        next_tx(s, a); { // Action: create pool
+            let meta_usdc = test::take_immutable<CoinMetadata<USDC>>(s);
+            let meta_usdt = test::take_immutable<CoinMetadata<USDT>>(s);
+            let meta_sdb = test::take_immutable<CoinMetadata<SDB>>(s);
 
-            let pool_gov = test::take_shared<PoolReg>(t);
+            let pool_gov = test::take_shared<PoolReg>(s);
             pool_reg::create_pool(
                 &mut pool_gov,
                 true,
                 &meta_usdc,
                 &meta_usdt,
                 3,
-                ctx(t)
+                ctx(s)
             );
             pool_reg::create_pool(
                 &mut pool_gov,
@@ -100,7 +100,7 @@ module test::setup{
                 &meta_sdb,
                 &meta_usdc,
                 5,
-                ctx(t)
+                ctx(s)
             );
 
             test::return_shared(pool_gov);
@@ -108,13 +108,13 @@ module test::setup{
             test::return_immutable(meta_sdb);
             test::return_immutable(meta_usdt);
         };
-        next_tx(t,a);{
-            let pool_gov = test::take_shared<PoolReg>(t);
+        next_tx(s,a);{ // Action: add liquidity
+            let pool_gov = test::take_shared<PoolReg>(s);
             assert!(pool_reg::pools_length(&pool_gov) == 2, 0);
 
-            let pool_a = test::take_shared<Pool<USDC, USDT>>(t);
-            let pool_b = test::take_shared<Pool<SDB, USDC>>(t);
-            let ctx = ctx(t);
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let ctx = ctx(s);
             let lp_a = pool::create_lp(&pool_a, ctx);
             let lp_b = pool::create_lp(&pool_b, ctx);
 
@@ -127,6 +127,41 @@ module test::setup{
             test::return_shared(pool_gov);
             test::return_shared(pool_a);
             test::return_shared(pool_b);
+        };
+        next_tx(s,a);{ // Assertion: swap amount, lp_balance
+            let pool_gov = test::take_shared<PoolReg>(s);
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let _ctx = ctx(s);
+
+            assert!(pool_reg::pools_length(&pool_gov) == 2, 0);
+            let (_, _, res_lp_a) = pool::get_reserves(&pool_a);
+            let (_, _, res_lp_b) = pool::get_reserves(&pool_b);
+
+            // pool_a
+            assert!(pool::get_stable(&pool_a) == true, 0);
+            assert! (res_lp_a == 1000000, 0);
+            assert!(pool::get_lp_balance(&lp_a) == res_lp_a - 1000, 0);
+            assert!(pool::get_output<USDC, USDT, USDC>(&pool_a, usdc_1()) == 753_627, 0);
+            assert!(pool::get_output<USDC, USDT, USDT>(&pool_a, usdc_1()) == 753_627, 0);
+
+            // pool_b
+            assert!(pool::get_stable(&pool_b) == false, 0);
+            assert!(res_lp_b == 31622776, 0);
+            assert!(pool::get_lp_balance(&lp_b) == res_lp_b - 1000, 0);
+            assert!(pool::get_output<SDB, USDC, SDB>(&pool_b, sui_1()) == 499_874, 0);
+            assert!(pool::get_output<SDB, USDC, USDC>(&pool_b, usdc_1()) == 499_874_968, 0);
+            //std::debug::print(&pool::get_output<USDC, USDT, USDC>(&pool_a, usdc_1()));
+            //std::debug::print(&pool::get_output<USDC, USDT, USDT>(&pool_a, usdc_1()));
+            //std::debug::print(&pool::get_output<SDB, USDC, SDB>(&pool_b, sui_1()));
+            //std::debug::print(&pool::get_output<SDB, USDC, USDC>(&pool_b, usdc_1()));
+            test::return_shared(pool_gov);
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
         };
     }
 

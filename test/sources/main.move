@@ -1,7 +1,11 @@
 #[test_only]
-module test::pool{
-    use suiDouBashiVest::sdb::{SDB};
+module test::main{
+    use suiDouBashi::pool::{Self, Pool, LP};
+    use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi::usdc::USDC;
+    use suiDouBashi::usdt::USDT;
+
 
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin};
@@ -9,6 +13,7 @@ module test::pool{
 
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::transfer;
+    use std::debug::print;
 
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
 
@@ -18,7 +23,8 @@ module test::pool{
         let clock = clock::create_for_testing(ctx(&mut scenario));
 
         setup_(&mut clock, &mut scenario);
-        create_lock_(&mut clock, &mut scenario);
+        vest_(&mut clock, &mut scenario);
+        pool_(&mut clock, &mut scenario);
 
         clock::destroy_for_testing(clock);
         test::end(scenario);
@@ -27,6 +33,7 @@ module test::pool{
     fun setup_(clock: &mut Clock, test: &mut Scenario){
         let (a,_,_) = setup::people();
         add_time(clock, 1672531200);
+        print(&get_time(clock));
 
         setup::deploy_coins(test);
         setup::mint_stable(test);
@@ -35,7 +42,7 @@ module test::pool{
         transfer::public_transfer(mint<SDB>(18 * setup::sui_1B(), ctx(test)), a);
     }
 
-    fun create_lock_(clock: &mut Clock, s: &mut Scenario){
+    fun vest_(clock: &mut Clock, s: &mut Scenario){
         let (a,_,_) = setup::people();
 
         next_tx(s, a);{ // create lock
@@ -50,12 +57,11 @@ module test::pool{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-
-           assert!(voting > vsdb::voting_weight(&vsdb, get_time(clock) + setup::day()), 1);
-           assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
-           assert!(vsdb::total_supply(&reg) == 5 * setup::sui_1B(), 1);
-           assert!(vsdb::total_minted(&reg) == 1, 1);
-           assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
+            assert!(voting >=  4999999999910976000, 1);
+            assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
+            assert!(vsdb::total_supply(&reg) == 5 * setup::sui_1B(), 1);
+            assert!(vsdb::total_minted(&reg) == 1, 1);
+            assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
@@ -79,8 +85,7 @@ module test::pool{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-
-            assert!(voting > vsdb::voting_weight(&vsdb, get_time(clock) + setup::day()), 1);
+            assert!(voting >= 9999999999948096000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
             assert!(vsdb::total_supply(&reg) == 10 * setup::sui_1B(), 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
@@ -90,7 +95,7 @@ module test::pool{
             test::return_shared(reg);
         };
 
-        next_tx(s,a);{ // create new VeSDB
+        next_tx(s,a);{ // create 2 additional new VeSDB
             let reg = test::take_shared<VSDBRegistry>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
             vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_100M(), ctx(s)), setup::four_years(), clock, ctx(s));
@@ -104,7 +109,7 @@ module test::pool{
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting > vsdb::voting_weight(&vsdb, get_time(clock) + setup::day()), 1);
+            assert!(voting >= 499999999877568000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(),1);
             assert!(vsdb::total_supply(&reg) == 110 * setup::sui_100M(), 1);
             assert!(vsdb::total_minted(&reg) == 3, 1);
@@ -134,16 +139,92 @@ module test::pool{
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting > vsdb::voting_weight(&vsdb, get_time(clock) + setup::day()), 1);
+            assert!(voting >= 10999999999955520000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 110 * setup::sui_100M(),1);
             assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
+            // check NFTs are removed from global storage
             assert!(!test::was_taken_from_address(a, id),1); // not exist
             assert!(!test::was_taken_from_address(a, id_1),1); // not exist
             assert!(vsdb::total_supply(&reg) == 110 * setup::sui_100M(), 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
 
+
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
         }
+    }
+
+    fun pool_(clock: &mut Clock, s: &mut Scenario){
+        let (a, b, _c ) = setup::people();
+
+        // create USDC-USDT/ SDB-USDC
+        setup::deploy_pools(s, clock);
+
+        next_tx(s,a);{ // Action: topup liquidity
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+
+            let ctx = ctx(s);
+            pool::add_liquidity(&mut pool_a, mint<USDC>(setup::usdc_1(), ctx), mint<USDT>(setup::usdc_1(), ctx), &mut lp_a, 0, 0, clock, ctx);
+            pool::add_liquidity(&mut pool_b, mint<SDB>(setup::sui_1(), ctx), mint<USDC>(setup::usdc_1(), ctx), &mut lp_b, 0, 0, clock, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,a);{ // Assertion: updated swap amount & lp_balance
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let _ctx = ctx(s);
+            assert!(pool::get_lp_balance(&lp_a) == 1999000, 0);
+            assert!(pool::get_lp_balance(&lp_b) == 63244552, 0);
+            // pool_a
+            assert!(pool::get_output<USDC, USDT, USDC>(&pool_a, setup::usdc_1()) == 944968, 0);
+            assert!(pool::get_output<USDC, USDT, USDT>(&pool_a, setup::usdc_1()) == 944968, 0);
+            // pool_b
+            assert!(pool::get_output<SDB, USDC, SDB>(&pool_b, setup::sui_1()) == 666444, 0);
+            assert!(pool::get_output<SDB, USDC, USDC>(&pool_b,setup::usdc_1()) == 666444407, 0);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,b);{ // Action: LP B open LP position
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let ctx = ctx(s);
+            // additionally create LP position
+            let lp_a = pool::create_lp(&pool_a, ctx);
+            let lp_b = pool::create_lp(&pool_b, ctx);
+
+            pool::add_liquidity(&mut pool_a, mint<USDC>(setup::usdc_1(), ctx), mint<USDT>(setup::usdc_1(), ctx), &mut lp_a, 0, 0, clock, ctx);
+            pool::add_liquidity(&mut pool_b, mint<SDB>(setup::sui_1(), ctx), mint<USDC>(setup::usdc_1(), ctx), &mut lp_b, 0, 0, clock, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            transfer::public_transfer(lp_a, b);
+            transfer::public_transfer(lp_b, b);
+        };
+        next_tx(s,a);{ // Action: LP A Swap
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let ctx = ctx(s);
+
+            let opt_output = pool::get_output<USDC,USDT,USDC>(&pool_a, setup::usdc_1());
+            pool::swap_for_y(&mut pool_a, mint<USDC>(setup::usdc_1(), ctx), opt_output, clock, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
     }
 }
