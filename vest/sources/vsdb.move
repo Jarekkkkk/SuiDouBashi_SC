@@ -45,9 +45,7 @@ module suiDouBashiVest::vsdb{
         logical_owner: address,
 
         user_epoch: u64,
-
-        user_point_history: Table<u64, Point>, // epoch -> point_history //
-
+        user_point_history: Table<u64, Point>, // epoch -> point_history
         locked_balance: LockedSDB,
 
         // Gauge Voting

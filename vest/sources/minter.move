@@ -39,7 +39,7 @@ module suiDouBashiVest::minter{
     }
 
     // one time trigger
-    fun new(treasury: TreasuryCap<SDB>, ctx: &mut TxContext){
+    public fun new(treasury: TreasuryCap<SDB>, ctx: &mut TxContext){
         let minter = Minter{
             id: object::new(ctx),
             supply: coin::treasury_into_supply(treasury),
@@ -124,7 +124,7 @@ module suiDouBashiVest::minter{
             reward_distributor::deposit_reward(distributor, rebase_coin);
 
             // checkpoint balance that was just distributed
-            reward_distributor::checkpoint_token(distributor, clock, ctx);
+            reward_distributor::checkpoint_token(distributor, clock);
             reward_distributor::checkpoint_total_supply(distributor, vsdb_reg, clock);
 
             event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg), circulating_emission(self, vsdb_reg));
@@ -133,4 +133,5 @@ module suiDouBashiVest::minter{
         };
         option::none()
      }
+
 }

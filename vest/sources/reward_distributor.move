@@ -12,7 +12,6 @@ module suiDouBashiVest::reward_distributor{
     use sui::transfer;
 
     use suiDouBashiVest::event;
-    use suiDouBashiVest::err;
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::vsdb::{Self, VSDB,VSDBRegistry};
     use suiDouBashiVest::point;
@@ -38,8 +37,6 @@ module suiDouBashiVest::reward_distributor{
         token_last_balance: u64,
 
         ve_supply: VecMap<u64, u64>, // time-cursor -> veSDB supply
-
-        depositor: address
     }
 
      fun init(ctx: &mut TxContext){
@@ -62,8 +59,6 @@ module suiDouBashiVest::reward_distributor{
             token_last_balance: 0,
 
             ve_supply: vec_map::empty<u64, u64>(),
-
-            depositor: tx_context::sender(ctx)
         };
 
         transfer::share_object(distributor);
@@ -77,8 +72,7 @@ module suiDouBashiVest::reward_distributor{
     public (friend) fun deposit_reward(self: &mut Distributor, coin: Coin<SDB>){
         coin::put(&mut self.balance, coin);
     }
-    public entry fun checkpoint_token(self: &mut Distributor, clock: &Clock, ctx: &mut TxContext){
-        assert!(tx_context::sender(ctx) == self.depositor, err::invalid_depositor());
+    public(friend) fun checkpoint_token(self: &mut Distributor, clock: &Clock){
         checkpoint_token_(self, clock);
     }
 
@@ -125,7 +119,7 @@ module suiDouBashiVest::reward_distributor{
     public entry fun claim_many(
         self: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry,
-        vsdbs: vector<VSDB>, // watch out any argument with vector wrapped with object, since it doesn't protect underlying objects by reference
+        vsdbs: vector<VSDB>, // watch out any argument with vector wrapping object, since it doesn't protect underlying objects by reference
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -486,4 +480,8 @@ module suiDouBashiVest::reward_distributor{
 
         to_distribute
     }
+     #[test_only]
+     public fun init_for_testing(ctx: &mut TxContext){
+        init(ctx);
+     }
 }

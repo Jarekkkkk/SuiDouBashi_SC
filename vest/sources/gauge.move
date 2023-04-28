@@ -10,10 +10,7 @@ module suiDouBashiVest::gauge{
     use sui::transfer;
     use sui::clock::{Self, Clock};
     use sui::math;
-    use std::vector as vec;
-    use sui::vec_set::{Self, VecSet};
     use sui::table_vec::{Self, TableVec};
-    use std::ascii::String;
     use sui::table::{Self, Table};
 
     use suiDouBashiVest::event;
@@ -35,25 +32,18 @@ module suiDouBashiVest::gauge{
         id: UID,
         is_alive:bool,
 
-        bribes: vector<ID>,// [ Internal, External ]
         pool: ID,
-
-        rewards: VecSet<String>,
 
         // LP
         total_supply: LP<X,Y>,
         balance_of: Table<address, u64>,
-
-        // Derived shared
-
-        is_for_pair: bool,
 
         fees_x: Balance<X>,
         fees_y: Balance<Y>,
 
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
-        checkpoints: Table<address, TableVec<Checkpoint>>, // each address can stake only one LP
+        checkpoints: Table<address, TableVec<Checkpoint>>, // each address can stake once for each pool
 
         // voting, distributing, fee
         supply_index: u64,
@@ -130,11 +120,8 @@ module suiDouBashiVest::gauge{
         pool: &Pool<X,Y>,
         ctx: &mut TxContext
     ):(Gauge<X,Y>, ID, ID){
-        let internal_id = internal_bribe::create_bribe(pool, ctx);
-        let external_id = external_bribe::create_bribe(pool, ctx);
-
-        let bribes = vec::singleton(internal_id);
-        vec::push_back(&mut bribes, external_id);
+        let internal_id = internal_bribe::create_bribe<X,Y>(ctx);
+        let external_id = external_bribe::create_bribe<X,Y>(ctx);
 
         let id = object::new(ctx);
         let gauge = Gauge<X,Y>{
@@ -142,15 +129,10 @@ module suiDouBashiVest::gauge{
 
             is_alive: true,
 
-            bribes,
             pool: object::id(pool),
-
-            rewards: vec_set::empty<String>(),
 
             total_supply: pool::create_lp(pool, ctx), // no owner
             balance_of: table::new<address, u64>(ctx),
-
-            is_for_pair: false,
 
             fees_x: balance::zero<X>(),
             fees_y: balance::zero<Y>(),

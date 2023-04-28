@@ -1,4 +1,4 @@
-// Internal Bribes represent pool fee distributed to LP holders
+// Internal Bribes represent pool fee distributed to LP stakers
 module suiDouBashiVest::internal_bribe{
     use std::type_name;
     use sui::object::{Self, UID, ID};
@@ -12,7 +12,6 @@ module suiDouBashiVest::internal_bribe{
     use sui::object_bag::{Self as ob, ObjectBag};
     use std::vector as vec;
 
-    use suiDouBashi::pool::Pool;
     use suiDouBashiVest::vsdb::VSDB;
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
@@ -29,11 +28,9 @@ module suiDouBashiVest::internal_bribe{
 
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
-        pool:ID,
-        governor: address,
 
         /// Voting weight
-        total_supply: u64, // is u64 enough ?
+        total_supply: u64,
         balace_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
@@ -41,6 +38,9 @@ module suiDouBashiVest::internal_bribe{
 
         rewards: ObjectBag //TypeName<T> -> Reward<T>,
     }
+
+    // - Self
+    public fun total_voting_weight<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_supply }
 
     // - Reward
     fun create_reward<X,Y,T>(self: &mut InternalBribe<X,Y>, ctx: &mut TxContext){
@@ -52,11 +52,13 @@ module suiDouBashiVest::internal_bribe{
         assert!(ob::contains(&self.rewards, type_name), err::reward_not_exist());
         ob::borrow(&self.rewards, type_name)
     }
+    /// mutable reference can't be exported
     fun borrow_reward_mut<X,Y,T>(self: &mut InternalBribe<X,Y>):&mut Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert!(ob::contains(&self.rewards, type_name), err::reward_not_exist());
         ob::borrow_mut(&mut self.rewards, type_name)
     }
+    public fun total_rewwards_length<X,Y>(self: &InternalBribe<X,Y>): u64 { ob::length(&self.rewards) }
 
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
@@ -65,18 +67,12 @@ module suiDouBashiVest::internal_bribe{
         let type_y = type_name::get<Y>();
         assert!( type_t == type_x || type_t == type_y, err::invalid_type_argument());
     }
-    public fun assert_governor<X,Y>(self: &InternalBribe<X,Y>, ctx: &mut TxContext){
-        assert!(self.governor == tx_context::sender(ctx), err::invalid_governor());
-    }
     // being calling by voter, when creating guage
     public (friend )fun create_bribe<X,Y>(
-        pool: & Pool<X,Y>,
         ctx: &mut TxContext
     ):ID {
         let bribe = InternalBribe<X,Y>{
             id: object::new(ctx),
-            governor: tx_context::sender(ctx),
-            pool: object::id(pool),
             total_supply:0,
             balace_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),

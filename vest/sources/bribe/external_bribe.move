@@ -14,7 +14,6 @@ module suiDouBashiVest::external_bribe{
     use sui::object_bag::{Self as ob, ObjectBag};
     use std::vector as vec;
 
-    use suiDouBashi::pool::Pool;
     use suiDouBashiVest::vsdb::VSDB;
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::event;
@@ -31,11 +30,8 @@ module suiDouBashiVest::external_bribe{
 
     struct ExternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
-        pool:ID,
-        governor: address,
-
         /// Voting weight
-        total_supply: u64, // is u64 enough ?
+        total_supply: u64,
         balace_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
@@ -44,15 +40,17 @@ module suiDouBashiVest::external_bribe{
         rewards: ObjectBag //TypeName<T> -> Reward<T>,
     }
 
+    public fun total_voting_weight<X,Y>(self: &ExternalBribe<X,Y>):u64{ self.total_supply }
+
     // 4 coins at most are allowed to bribe, [coin pair of pool, SDB, SUI]
     struct Reward<phantom X, phantom Y, phantom T> has key, store{
         id: UID,
         balance: Balance<T>,
-
         token_rewards_per_epoch: Table<u64, u64>,
         period_finish: u64,
         last_earn: Table<ID, u64>,
     }
+
 
     // - Reward
     fun create_reward<X,Y,T>(self: &mut ExternalBribe<X,Y>, ctx: &mut TxContext){
@@ -75,27 +73,22 @@ module suiDouBashiVest::external_bribe{
         assert_reward_created<X,Y,T>(self, type_name);
         ob::borrow_mut(&mut self.rewards, type_name)
     }
+    public fun total_rewwards_length<X,Y>(self: &ExternalBribe<X,Y>): u64 { ob::length(&self.rewards) }
 
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
         let type_t = type_name::get<T>();
         assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>() || type_t == type_name::get<SUI>() || type_t == type_name::get<SDB>(), err::invalid_type_argument());
     }
-    public fun assert_governor<X,Y>(self: &ExternalBribe<X,Y>, ctx: &mut TxContext){
-        assert!(self.governor == tx_context::sender(ctx), err::invalid_governor());
-    }
     public fun assert_reward_created<X,Y,T>(self: &ExternalBribe<X,Y>, type_name: TypeName){
         assert!(ob::contains(&self.rewards, type_name), err::reward_not_exist());
     }
     // called in gauge constructor
     public (friend )fun create_bribe<X,Y>(
-        pool: & Pool<X,Y>,
         ctx: &mut TxContext
     ):ID {
         let bribe = ExternalBribe<X,Y>{
             id: object::new(ctx),
-            governor: tx_context::sender(ctx),
-            pool: object::id(pool),
             total_supply:0,
             balace_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),

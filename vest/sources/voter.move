@@ -30,16 +30,16 @@ module suiDouBashiVest::voter{
 
     struct Voter has key, store{
         id: UID,
-        witness: VOTER_SDB, // referred as witness & capability
+        witness: VOTER_SDB, // stand for witness & capability
         balance: Balance<SDB>,
 
         governor: address,
         emergency: address,
 
-        total_weight: u64, // enought
+        total_weight: u64, // always <= total_minted
         weights: Table<ID, u64>, // gauge -> distributed weights
 
-        registry: Table<ID, VecSet<ID>>, // registered_pool -> <gauges, Internal_bribe, external_bribe>
+        registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]: for front_end fetching
 
         index: u64 // weekly sdb rebase * 10e18 / total_weight
     }
@@ -54,14 +54,29 @@ module suiDouBashiVest::voter{
     }
 
     // assertion
-    public fun assert_new_epoch(vsdb: &VSDB, clock: &Clock){
+    fun assert_new_epoch(vsdb: &VSDB, clock: &Clock){
         assert!((clock::timestamp_ms(clock) / DURATION) * DURATION > vsdb::last_voted(vsdb), err::already_voted());
     }
-    public fun assert_governor(self: &Voter, ctx: &mut TxContext){
+    fun assert_governor(self: &Voter, ctx: &mut TxContext){
         assert!(self.governor == tx_context::sender(ctx), err::invalid_governor());
     }
-    public fun assert_emergency(self: &Voter, ctx: &mut TxContext){
+    fun assert_emergency(self: &Voter, ctx: &mut TxContext){
         assert!(self.emergency == tx_context::sender(ctx), err::invalid_emergency());
+    }
+
+    // - Getter
+    public fun get_governor(self: &Voter): address { self.governor }
+    public fun get_emergency(self: &Voter): address { self.emergency}
+    public fun get_total_weight(self: &Voter): u64 { self.total_weight}
+    public fun get_weights_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>):u64{
+        *table::borrow(&self.weights, object::id(pool))
+    }
+    public fun get_gauge_and_bribes_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>):VecSet<ID>{
+        *table::borrow(&self.registry, object::id(pool))
+    }
+    public fun get_registry_length(self:&Voter): u64 { table::length(&self.registry) }
+    public fun get_pool_exists<X,Y>(self: &Voter, pool: &Pool<X,Y>):bool {
+        table::contains(&self.registry, object::id(pool))
     }
 
     // ===== Entry =====
@@ -83,7 +98,6 @@ module suiDouBashiVest::voter{
         };
         transfer::share_object(voter);
     }
-
 
     public entry fun reset<X,Y,T>(
         self: &mut Voter,
@@ -370,4 +384,8 @@ module suiDouBashiVest::voter{
 
         event::voter_notify_reward(value);
     }
+     #[test_only]
+     public fun init_for_testing(ctx: &mut TxContext){
+        init(ctx);
+     }
 }
