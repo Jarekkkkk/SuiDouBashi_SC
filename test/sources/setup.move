@@ -26,6 +26,8 @@ module test::setup{
     public fun sui_100M(): u64 { math::pow(10, 17) }
     public fun sui_1B(): u64 { math::pow(10, 18) }
     public fun sui_10B(): u64 { math::pow(10, 19) }
+    // stake
+    public fun stake_1(): u64 { math::pow(10, 6)}
     // common time
     public fun four_years(): u64 { 4 * 365 * 86400 }
     public fun week(): u64 { 7 * 86400 }
@@ -247,7 +249,7 @@ module test::setup{
                 assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
                 assert!(i_bribe::total_rewwards_length(&i_bribe) == 2, 0);
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
-                // external bribe at most 4, including pair of coins + SDB + SUI
+                // amount of external bribe is at most 4, including pair of coins + SDB + SUI
                 assert!(e_bribe::total_rewwards_length(&e_bribe) == 3, 0);
                 assert!(voter::get_weights_by_pool(&voter, &pool_b) == 0, 0);
                 assert!(voter::get_pool_exists(&voter, &pool_b), 0);
@@ -256,9 +258,7 @@ module test::setup{
                 test::return_shared(e_bribe);
                 test::return_shared(pool_b);
             };
-
             test::return_shared(voter);
-
         }
     }
 
