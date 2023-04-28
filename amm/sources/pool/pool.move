@@ -856,6 +856,7 @@ module suiDouBashi::pool{
         option::destroy_none(coin_x);
         option::destroy_none(coin_y);
     }
+
     public fun claim_fees_gauge<X,Y>(
         self: &mut Pool<X,Y>,
         lp_position: &mut LP<X,Y>,
@@ -863,13 +864,13 @@ module suiDouBashi::pool{
     ):(Option<Coin<X>>, Option<Coin<Y>>){
         claim_fees_(self, lp_position, ctx)
     }
+
     fun claim_fees_<X,Y>(
         self: &mut Pool<X,Y>,
         lp_position: &mut LP<X,Y>,
         ctx: &mut TxContext
     ):(Option<Coin<X>>, Option<Coin<Y>>){
         update_lp_(self, lp_position);
-        assert!(lp_position.claimable_x > 0 || lp_position.claimable_y > 0, err::empty_fee());
 
         let coin_x = if(lp_position.claimable_x > 0){
             let coin_x = coin::take(&mut self.fee.fee_x, lp_position.claimable_x, ctx);

@@ -1,6 +1,6 @@
 // Gauges are used to incentivize pools, they emit reward tokens over 7 days for staked LP tokens
 module suiDouBashiVest::gauge{
-    use std::type_name::{Self, TypeName};
+    use std::type_name;
     use std::option;
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
@@ -70,8 +70,8 @@ module suiDouBashiVest::gauge{
         balance: Balance<SDB>,
 
         //update when bribe is deposited
-        reward_rate: u64, // bribe_amount/ 7 days
-        period_finish: u64, // update when bribe is deposited, (internal_bribe -> fee ), (external_bribe -> doverse coins)
+        reward_rate: u64, // reward_amount/ 7 days
+        period_finish: u64,
 
         last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
         reward_per_token_stored: u64,
@@ -79,30 +79,27 @@ module suiDouBashiVest::gauge{
         user_reward_per_token_stored: Table<address, u64>, // udpate when user deposit
 
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
-        last_earn: Table<address, u64>, // last time player votes
+        last_earn: Table<address, u64>, // last time staker claim rewards
     }
-
 
     public fun borrow_reward<X,Y>(self: &Gauge<X,Y>):&Reward<X, Y>{
         dof::borrow(&self.id, type_name::get<SDB>())
     }
-
     fun borrow_reward_mut<X,Y>(self: &mut Gauge<X,Y>):&mut Reward<X, Y >{
         dof::borrow_mut(&mut self.id, type_name::get<SDB>())
     }
+    public fun get_reward_balance<X,Y>(reward: &Reward<X,Y>):u64 { balance::value(&reward.balance) }
+    public fun get_reward_rate<X,Y>(reward: &Reward<X,Y>):u64 { reward.reward_rate }
+    public fun get_reward_per_token_stored<X,Y>(reward: &Reward<X,Y>): u64{ reward.reward_per_token_stored }
+    public fun get_period_finish<X,Y>(reward: &Reward<X,Y>): u64{ reward.period_finish }
 
-    public fun assert_generic_type<X,Y,T>(){
-        let type_t = type_name::get<T>();
-        let type_x = type_name::get<X>();
-        let type_y = type_name::get<Y>();
 
-        assert!( type_t == type_x || type_t == type_y, err::invalid_type_argument());
+
+    #[test_only]
+    public fun reward_checkpoints_borrow<X,Y>(reward: &Reward<X,Y>):&TableVec<RewardPerTokenCheckpoint>{
+        &reward.reward_per_token_checkpoints
     }
-
-    public fun assert_reward_created<X,Y,T>(self: &Gauge<X,Y>, type_name: TypeName){
-        assert!(dof::exists_(&self.id, type_name), err::reward_not_exist());
-    }
-
+    // Assertion
     public fun assert_alive<X,Y>(self: &Gauge<X,Y>){
         assert!(self.is_alive, err::dead_gauge());
     }
@@ -385,7 +382,6 @@ module suiDouBashiVest::gauge{
     }
 
     /// allow staker to withdraw emission, should be called after voter distribute the emissions
-    /// T = SDB
     public (friend) fun get_reward<X, Y>(
         self: &mut Gauge<X,Y>,
         staker: address,
@@ -394,7 +390,7 @@ module suiDouBashiVest::gauge{
     ){
         assert!(table::contains(&self.balance_of, tx_context::sender(ctx)), err::invalid_staker());
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,SDB>(self, MAX_U64, true, clock);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
 
         let _reward = earned<X,Y>(self, staker, clock);
         let reward = borrow_reward_mut<X,Y>(self);
@@ -411,7 +407,6 @@ module suiDouBashiVest::gauge{
                 coin_x,
                 tx_context::sender(ctx)
             );
-
             event::claim_reward(tx_context::sender(ctx), value_x);
         };
         let lp_value = *table::borrow(&self.balance_of, tx_context::sender(ctx));
@@ -419,7 +414,7 @@ module suiDouBashiVest::gauge{
         write_supply_checkpoint_(self, clock);
     }
 
-    fun reward_per_token<X, Y, T>(
+    fun reward_per_token<X, Y>(
         self: &Gauge<X,Y>,
         clock: &Clock
     ): u64{
@@ -438,7 +433,7 @@ module suiDouBashiVest::gauge{
         return reward_stored + (elapsed * (reward_rate as u256) * PRECISION / (total_supply as u256) as u64)
     }
 
-    fun derived_balance<X, Y, T>(
+    fun derived_balance<X, Y>(
         self: &Gauge<X,Y>,
         staker: address
     ): u64{
@@ -464,14 +459,12 @@ module suiDouBashiVest::gauge{
         ((reward as u64), end_time)
     }
 
-    fun batch_reward_per_token<X,Y,T>(
+    fun batch_reward_per_token<X,Y>(
         self: &mut Gauge<X,Y>,
         max_run:u64, // useful when tx might be out of gas
         clock: &Clock,
     ):(u64, u64) // ( reward_per_token_stored, last_update_time)
     {
-        assert_generic_type<X,Y,T>();
-
         let ts = clock::timestamp_ms(clock);
         let reward = borrow_reward<X,Y>(self);
         let start_timestamp = reward.last_update_time;
@@ -508,24 +501,23 @@ module suiDouBashiVest::gauge{
         return ( reward_token_stored, start_timestamp )
     }
 
-    public entry fun batch_update_reward_per_token<X,Y,T>(
+    public entry fun batch_update_reward_per_token<X,Y>(
         self: &mut Gauge<X,Y>,
         max_run:u64,
         clock: &Clock,
     ){
-        update_reward_per_token_<X,Y,T>(self, max_run, false, clock);
+        update_reward_per_token_<X,Y>(self, max_run, false, clock);
     }
 
 
-    /// TODO: Remove this function , since we only has SDB reward
     fun update_reward_for_all_tokens_<X,Y>(
         self: &mut Gauge<X,Y>,
         clock: &Clock,
     ){
-        update_reward_per_token_<X,Y,SDB>(self, MAX_U64, true, clock);
+        update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
     }
 
-    fun update_reward_per_token_<X,Y,T>(
+    fun update_reward_per_token_<X,Y>(
         self: &mut Gauge<X,Y>,
         max_run:u64,
         actual_last: bool,
@@ -621,7 +613,7 @@ module suiDouBashiVest::gauge{
         let ( _, perior_reward ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
 
         // current slope
-        let acc = (checkpoints::balance(cp) as u256) * ((reward_per_token<X,Y,SDB>(self, clock) - math::max(perior_reward, *table::borrow(&reward.user_reward_per_token_stored, staker))) as u256) / PRECISION;
+        let acc = (checkpoints::balance(cp) as u256) * ((reward_per_token<X,Y>(self, clock) - math::max(perior_reward, *table::borrow(&reward.user_reward_per_token_stored, staker))) as u256) / PRECISION;
         earned_reward = earned_reward + (acc as u64);
 
         return earned_reward
@@ -699,8 +691,8 @@ module suiDouBashiVest::gauge{
     public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
 
 
+    // TODO: add friend module
     /// distribute the weekly rebase amonut
-    /// Receive the SDB emissions from voter
     public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
@@ -719,11 +711,10 @@ module suiDouBashiVest::gauge{
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), 0, ts);
         };
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,SDB>(self, MAX_U64, true, clock);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
         borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
         borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
 
-        // Charge fees
         claim_fee(self, bribe, pool, clock, ctx);
 
         let reward = borrow_reward_mut<X,Y>(self);
