@@ -270,7 +270,7 @@ module suiDouBashiVest::voter{
 
     // - Rewards
     /// weekly minted SDB to incentivize pools --> LP_Staker
-    entry fun claim_rewards<X,Y,T>(
+    entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
         distributor: &mut Distributor,
@@ -283,7 +283,9 @@ module suiDouBashiVest::voter{
     ){
         distribute(self, minter, distributor, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
         let staker = tx_context::sender(ctx);
-        gauge::get_reward<X,Y,T>(gauge, staker, clock, ctx);
+
+        // Guage collect SDB weekly emission
+        gauge::get_reward<X,Y>(gauge, staker, clock, ctx);
     }
 
     /// External Bribe --> voter
@@ -339,12 +341,12 @@ module suiDouBashiVest::voter{
         update_for_(self, gauge);
 
         let claimable = gauge::get_claimable(gauge);
-        if( claimable > gauge::left(gauge::borrow_reward<X,Y,SDB>(gauge), clock) && claimable / DURATION > 0 ){
+        if( claimable > gauge::left(gauge::borrow_reward<X,Y>(gauge), clock) && claimable / DURATION > 0 ){
             gauge::update_claimable(gauge, 0);
 
             // deposit the rebase to gauge
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
-            gauge::notify_reward_amount<X,Y,SDB>(gauge, internal_bribe, pool, coin_sdb, clock, ctx);
+            gauge::distribute_emissions<X,Y>(gauge, internal_bribe, pool, coin_sdb, clock, ctx);
 
             event::distribute_reward<X,Y>(tx_context::sender(ctx), claimable);
         }

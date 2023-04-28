@@ -424,7 +424,7 @@ module suiDouBashiVest::external_bribe{
     }
 
     // protocol deposit external bribe
-    public entry fun notify_reward_amount<X,Y,T>(
+    public entry fun bribe<X,Y,T>(
         self: &mut ExternalBribe<X,Y>,
         coin: Coin<T>,
         clock: &Clock,

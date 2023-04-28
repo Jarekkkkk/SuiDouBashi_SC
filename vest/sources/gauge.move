@@ -14,6 +14,7 @@ module suiDouBashiVest::gauge{
     use sui::table::{Self, Table};
 
     use suiDouBashiVest::event;
+    use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::err;
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
     use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
@@ -31,7 +32,6 @@ module suiDouBashiVest::gauge{
     struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,
         is_alive:bool,
-
         pool: ID,
 
         // LP
@@ -50,10 +50,24 @@ module suiDouBashiVest::gauge{
         claimable: u64
     }
 
-    struct Reward<phantom X, phantom Y, phantom T> has key, store{
+    public fun get_balance_of<X,Y>(self: &Gauge<X,Y>, staker: address):u64{
+        *table::borrow(&self.balance_of, staker)
+    }
+    #[test_only]
+    public fun checkpoints_borrow<X,Y>(self: &Gauge<X,Y>, staker: address): &TableVec<Checkpoint>{
+        table::borrow(&self.checkpoints, staker)
+    }
+    #[test_only]
+    public fun supply_checkpoints_borrow<X,Y>(self: &Gauge<X,Y>): &TableVec<SupplyCheckpoint>{
+        &self.supply_checkpoints
+    }
+    #[test_only]
+    public fun total_supply_borrow<X,Y>(self: &Gauge<X,Y>):&LP<X,Y>{ &self.total_supply }
+
+    struct Reward<phantom X, phantom Y > has key, store{
         id: UID,
 
-        balance: Balance<T>,
+        balance: Balance<SDB>,
 
         //update when bribe is deposited
         reward_rate: u64, // bribe_amount/ 7 days
@@ -68,36 +82,13 @@ module suiDouBashiVest::gauge{
         last_earn: Table<address, u64>, // last time player votes
     }
 
-    public (friend) fun create_reward<X,Y,T>(self: &mut Gauge<X,Y>, ctx: &mut TxContext){
-        assert_generic_type<X,Y,T>();
 
-        let type_name = type_name::get<T>();
-        let reward =  Reward<X,Y,T>{
-            id: object::new(ctx),
-            balance: balance::zero<T>(),
-            reward_rate: 0,
-            period_finish: 0,
-            last_update_time: 0,
-            reward_per_token_stored: 0,
-            reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
-
-            user_reward_per_token_stored: table::new<address, u64>(ctx),
-            last_earn: table::new<address, u64>(ctx),
-        };
-
-        dof::add(&mut self.id, type_name, reward);
+    public fun borrow_reward<X,Y>(self: &Gauge<X,Y>):&Reward<X, Y>{
+        dof::borrow(&self.id, type_name::get<SDB>())
     }
 
-    public fun borrow_reward<X,Y,T>(self: &Gauge<X,Y>):&Reward<X, Y, T>{
-        let type_name = type_name::get<T>();
-        assert_reward_created<X,Y,T>(self, type_name);
-        dof::borrow(&self.id, type_name)
-    }
-
-    fun borrow_reward_mut<X,Y,T>(self: &mut Gauge<X,Y>):&mut Reward<X, Y, T>{
-        let type_name = type_name::get<T>();
-        assert_reward_created<X,Y,T>(self, type_name);
-        dof::borrow_mut(&mut self.id, type_name)
+    fun borrow_reward_mut<X,Y>(self: &mut Gauge<X,Y>):&mut Reward<X, Y >{
+        dof::borrow_mut(&mut self.id, type_name::get<SDB>())
     }
 
     public fun assert_generic_type<X,Y,T>(){
@@ -145,8 +136,21 @@ module suiDouBashiVest::gauge{
             claimable: 0
         };
 
-        create_reward<X,Y,X>(&mut gauge, ctx);
-        create_reward<X,Y,Y>(&mut gauge, ctx);
+        // SDB emission
+        let reward =  Reward<X,Y>{
+            id: object::new(ctx),
+            balance: balance::zero<SDB>(),
+            reward_rate: 0,
+            period_finish: 0,
+            last_update_time: 0,
+            reward_per_token_stored: 0,
+            reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
+
+            user_reward_per_token_stored: table::new<address, u64>(ctx),
+            last_earn: table::new<address, u64>(ctx),
+        };
+
+        dof::add(&mut gauge.id, type_name::get<SDB>(), reward);
 
         (gauge, internal_id, external_id)
     }
@@ -186,12 +190,12 @@ module suiDouBashiVest::gauge{
             // only deposit when accumulated amount is over left
             if(bal_x > internal_bribe::left(internal_bribe::borrow_reward<X,Y,X>(bribe),clock) && bal_x / DURATION > 0  ){
                 let withdraw = balance::withdraw_all(&mut self.fees_x);
-                internal_bribe::notify_reward_amount(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
+                internal_bribe::deposit_pool_fees(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
             };
 
             if(bal_y > internal_bribe::left(internal_bribe::borrow_reward<X,Y,Y>(bribe),clock) && bal_y / DURATION > 0  ){
                 let withdraw = balance::withdraw_all(&mut self.fees_y);
-                internal_bribe::notify_reward_amount(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
+                internal_bribe::deposit_pool_fees(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
             }
         };
 
@@ -206,7 +210,6 @@ module suiDouBashiVest::gauge{
 
     public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.supply_index = v; }
     public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
-
 
     public fun get_prior_balance_index<X,Y>(
         self: & Gauge<X,Y>,
@@ -280,12 +283,11 @@ module suiDouBashiVest::gauge{
         return lower
     }
     // move to REWARD
-    public fun get_prior_reward_per_token<X, Y, T>(
-        reward: &Reward<X, Y, T>,
+    public fun get_prior_reward_per_token<X, Y>(
+        reward: &Reward<X, Y>,
         ts:u64
     ):(u64, u64) // ( ts, reward_per_token )
     {
-        assert_generic_type<X,Y,T>();
         let checkpoints = &reward.reward_per_token_checkpoints;
         let len = table_vec::length(checkpoints);
 
@@ -345,8 +347,8 @@ module suiDouBashiVest::gauge{
         };
     }
 
-    fun write_reward_per_token_checkpoint_<X, Y, T>(
-        reward: &mut Reward<X, Y, T>,
+    fun write_reward_per_token_checkpoint_<X, Y>(
+        reward: &mut Reward<X, Y>,
         reward_per_token: u64, // record down balance
         timestamp: u64,
     ){
@@ -378,25 +380,24 @@ module suiDouBashiVest::gauge{
         };
     }
 
-    public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+    public fun last_time_reward_applicable<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
         math::min(clock::timestamp_ms(clock), reward.period_finish)
     }
 
     /// allow staker to withdraw emission, should be called after voter distribute the emissions
     /// T = SDB
-    public (friend) fun get_reward<X, Y, T>(
+    public (friend) fun get_reward<X, Y>(
         self: &mut Gauge<X,Y>,
         staker: address,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert_generic_type<X,Y,T>();
         assert!(table::contains(&self.balance_of, tx_context::sender(ctx)), err::invalid_staker());
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,SDB>(self, MAX_U64, true, clock);
 
-        let _reward = earned<X,Y,T>(self, staker, clock);
-        let reward = borrow_reward_mut<X,Y,T>(self);
+        let _reward = earned<X,Y>(self, staker, clock);
+        let reward = borrow_reward_mut<X,Y>(self);
         reward.reward_per_token_stored = reward_per_token_stored;
         reward.last_update_time = last_update_time;
 
@@ -422,7 +423,7 @@ module suiDouBashiVest::gauge{
         self: &Gauge<X,Y>,
         clock: &Clock
     ): u64{
-        let reward = borrow_reward<X,Y,T>(self);
+        let reward = borrow_reward<X,Y>(self);
         let reward_stored = reward.reward_per_token_stored;
         let total_supply = pool::get_lp_balance(&self.total_supply);
         // no accumualated voting
@@ -449,8 +450,8 @@ module suiDouBashiVest::gauge{
     }
 
     // calculate reward between 2 supply checkpoints
-    fun calc_reward_per_token<X, Y, T>(
-        reward: &Reward<X, Y, T>,
+    fun calc_reward_per_token<X, Y>(
+        reward: &Reward<X, Y>,
         timestamp_1: u64,
         timestamp_0: u64,
         supply: u64,
@@ -472,7 +473,7 @@ module suiDouBashiVest::gauge{
         assert_generic_type<X,Y,T>();
 
         let ts = clock::timestamp_ms(clock);
-        let reward = borrow_reward<X,Y,T>(self);
+        let reward = borrow_reward<X,Y>(self);
         let start_timestamp = reward.last_update_time;
         let reward_token_stored = reward.reward_per_token_stored;
 
@@ -495,7 +496,7 @@ module suiDouBashiVest::gauge{
             let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
             if(sp_0_supply > 0){
                 let sp_1_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
-                let reward = borrow_reward_mut<X,Y,T>(self);
+                let reward = borrow_reward_mut<X,Y>(self);
                 let (reward_per_token ,end_time) = calc_reward_per_token(reward, sp_1_ts, sp_0_ts, sp_0_supply, start_timestamp);
                 reward_token_stored = reward_token_stored + reward_per_token;
                 write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
@@ -515,12 +516,13 @@ module suiDouBashiVest::gauge{
         update_reward_per_token_<X,Y,T>(self, max_run, false, clock);
     }
 
+
+    /// TODO: Remove this function , since we only has SDB reward
     fun update_reward_for_all_tokens_<X,Y>(
         self: &mut Gauge<X,Y>,
         clock: &Clock,
     ){
-        update_reward_per_token_<X,Y,X>(self, MAX_U64, true, clock);
-        update_reward_per_token_<X,Y,Y>(self, MAX_U64, true, clock);
+        update_reward_per_token_<X,Y,SDB>(self, MAX_U64, true, clock);
     }
 
     fun update_reward_per_token_<X,Y,T>(
@@ -530,10 +532,8 @@ module suiDouBashiVest::gauge{
         clock: &Clock
     ):(u64, u64) // ( reward_per_token_stored, last_update_time)
     {
-        assert_generic_type<X,Y,T>();
-
         let ts = clock::timestamp_ms(clock);
-        let reward = borrow_reward<X,Y,T>(self);
+        let reward = borrow_reward<X,Y>(self);
         let start_timestamp = reward.last_update_time;
         let reward_token_stored = reward.reward_per_token_stored;
 
@@ -556,7 +556,7 @@ module suiDouBashiVest::gauge{
                 let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
                 if(sp_0_supply > 0){
                     let ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
-                    let reward = borrow_reward_mut<X,Y,T>(self);
+                    let reward = borrow_reward_mut<X,Y>(self);
                     let ( reward_per_token , end_time) = calc_reward_per_token(reward, ts, sp_0_ts, sp_0_supply, start_timestamp);
                     reward_token_stored = reward_token_stored + reward_per_token;
                     write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
@@ -570,10 +570,10 @@ module suiDouBashiVest::gauge{
             let sp_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, end_idx));
             let sp_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, end_idx));
             if(sp_supply > 0){
-                let reward = borrow_reward<X,Y,T>(self);
+                let reward = borrow_reward<X,Y>(self);
                 let ( reward_per_token, _ ) = calc_reward_per_token(reward, last_time_reward_applicable(reward, clock), math::max(sp_ts, start_timestamp), sp_supply, start_timestamp);
                 reward_token_stored = reward_token_stored + reward_per_token;
-                write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), reward_token_stored, ts);
+                write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), reward_token_stored, ts);
                 start_timestamp = ts;
             };
         };
@@ -581,14 +581,13 @@ module suiDouBashiVest::gauge{
         return ( reward_token_stored, start_timestamp )
     }
 
-    fun earned<X,Y,T>(
+    /// Calculate staker's SDB reward by weekly
+    public fun earned<X,Y>(
         self: &Gauge<X,Y>,
         staker: address,
         clock: &Clock
     ):u64{
-        assert_generic_type<X,Y,T>();
-
-        let reward = borrow_reward<X,Y,T>(self);
+        let reward = borrow_reward<X,Y>(self);
         let rps_borrow = &reward.reward_per_token_checkpoints;
         // checking contains is sufficient, not allowing to exist any empty table
         if(!table::contains(&reward.last_earn, staker) || !table::contains(&self.checkpoints, staker) || table_vec::length(rps_borrow) == 0){
@@ -622,7 +621,7 @@ module suiDouBashiVest::gauge{
         let ( _, perior_reward ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
 
         // current slope
-        let acc = (checkpoints::balance(cp) as u256) * ((reward_per_token<X,Y,T>(self, clock) - math::max(perior_reward, *table::borrow(&reward.user_reward_per_token_stored, staker))) as u256) / PRECISION;
+        let acc = (checkpoints::balance(cp) as u256) * ((reward_per_token<X,Y,SDB>(self, clock) - math::max(perior_reward, *table::borrow(&reward.user_reward_per_token_stored, staker))) as u256) / PRECISION;
         earned_reward = earned_reward + (acc as u64);
 
         return earned_reward
@@ -630,7 +629,7 @@ module suiDouBashiVest::gauge{
 
      /// Stake LP_TOKEN
      /// Why do we need attach ?
-    fun deposit<X,Y,T>(
+    public entry fun stake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp_position: &mut LP<X,Y>, // not taking the ownership, otherwise owner lose all of its previous shares
@@ -638,7 +637,6 @@ module suiDouBashiVest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert_generic_type<X,Y,T>();
         update_reward_for_all_tokens_(self, clock);
 
         let staker = tx_context::sender(ctx);
@@ -648,19 +646,19 @@ module suiDouBashiVest::gauge{
         pool::join_lp(pool, &mut self.total_supply, lp_position, value);
 
         if(!table::contains(&self.balance_of, staker)){
-            table::add(&mut self.balance_of, staker, lp_value);
+            table::add(&mut self.balance_of, staker, value);
         }else{
-            *table::borrow_mut(&mut self.balance_of, staker) = *table::borrow(& self.balance_of, staker) + lp_value;
+            *table::borrow_mut(&mut self.balance_of, staker) = *table::borrow(& self.balance_of, staker) + value;
         };
 
-        write_checkpoint_(self, staker, lp_value, clock, ctx);
+        write_checkpoint_(self, staker, value, clock, ctx);
         write_supply_checkpoint_(self, clock);
 
         event::deposit_lp<X,Y>(tx_context::sender(ctx), lp_value);
     }
 
-    // unstake
-    fun withdraw_<X,Y,T>(
+    /// LP unstake lp
+    public entry fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp_position: &mut LP<X,Y>,
@@ -668,7 +666,6 @@ module suiDouBashiVest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert_generic_type<X,Y,T>();
         update_reward_for_all_tokens_(self, clock);
         let staker = tx_context::sender(ctx);
         assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
@@ -685,7 +682,7 @@ module suiDouBashiVest::gauge{
         event::withdraw_lp<X,Y>(tx_context::sender(ctx), value);
     }
 
-    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+    public fun left<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
         let ts = clock::timestamp_ms(clock);
         let period_finish = reward.period_finish;
         let reward_rate = reward.reward_rate;
@@ -704,33 +701,32 @@ module suiDouBashiVest::gauge{
 
     /// distribute the weekly rebase amonut
     /// Receive the SDB emissions from voter
-    public fun notify_reward_amount<X,Y,T>(
+    public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
-        coin: Coin<T>,
+        coin: Coin<SDB>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert_generic_type<X,Y,T>();
 
         let value = coin::value(&coin);
-        let reward = borrow_reward<X,Y,T>(self);
+        let reward = borrow_reward<X,Y>(self);
         assert!(value > 0, err::zero_input());
 
         let ts = clock::timestamp_ms(clock);
         if(reward.reward_rate == 0){
-            write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), 0, ts);
+            write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), 0, ts);
         };
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
-        borrow_reward_mut<X,Y,T>(self).reward_per_token_stored = reward_per_token_stored;
-        borrow_reward_mut<X,Y,T>(self).last_update_time = last_update_time;
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,SDB>(self, MAX_U64, true, clock);
+        borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
+        borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
 
         // Charge fees
         claim_fee(self, bribe, pool, clock, ctx);
 
-        let reward = borrow_reward_mut<X,Y,T>(self);
+        let reward = borrow_reward_mut<X,Y>(self);
         // initial bribe in each epoch
         if(ts >= reward.period_finish){
             coin::put(&mut reward.balance, coin);
@@ -751,9 +747,4 @@ module suiDouBashiVest::gauge{
 
         event::notify_reward<X>(tx_context::sender(ctx), value);
     }
-
-
-    // ===== Other =====
-    // Collect the fees from Pool, then deposit into internal bribe
-
 }

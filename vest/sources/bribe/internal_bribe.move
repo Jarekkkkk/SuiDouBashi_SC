@@ -15,6 +15,7 @@ module suiDouBashiVest::internal_bribe{
     use suiDouBashiVest::vsdb::VSDB;
     use suiDouBashiVest::event;
     use suiDouBashiVest::err;
+    // TODO: remove the external calling method
     use suiDouBashiVest::reward::{Self, Reward};
     use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
 
@@ -585,8 +586,9 @@ module suiDouBashiVest::internal_bribe{
         return _remaining * reward_rate
     }
 
+    // TODO: friend module signature
     /// collect fees from pool
-    public fun notify_reward_amount<X,Y,T>(
+    public fun deposit_pool_fees<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         coin: Coin<T>,
         clock: &Clock,
