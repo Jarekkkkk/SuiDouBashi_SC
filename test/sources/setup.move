@@ -8,7 +8,7 @@ module test::setup{
     use sui::math;
     use sui::clock::{Self, Clock};
     use sui::transfer;
-    use sui::coin::{Self, CoinMetadata, mint_for_testing as mint};
+    use sui::coin::{Self, CoinMetadata, mint_for_testing as mint, TreasuryCap};
     use std::vector as vec;
 
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
@@ -44,19 +44,19 @@ module test::setup{
         test::end(scenario);
     }
 
-    public fun deploy_coins(test: &mut Scenario){
-        usdc::deploy_coin(ctx(test));
-        usdt::deploy_coin(ctx(test));
-        sdb::deploy_coin(ctx(test));
+    public fun deploy_coins(s: &mut Scenario){
+        usdc::deploy_coin(ctx(s));
+        usdt::deploy_coin(ctx(s));
+        sdb::deploy_coin(ctx(s));
     }
 
-    public fun mint_stable(t: &mut Scenario){
+    public fun mint_stable(s: &mut Scenario){
         let (a, b, c) = people();
         let owners = vec::singleton(a);
         vec::push_back(&mut owners, b);
         vec::push_back(&mut owners, c);
 
-        let ctx = ctx(t);
+        let ctx = ctx(s);
         let (i, len) = (0, vec::length(&owners));
         while( i < len ){
             let owner = vec::pop_back(&mut owners);
@@ -165,6 +165,102 @@ module test::setup{
         };
     }
 
+    use suiDouBashiVest::minter;
+    use suiDouBashiVest::reward_distributor;
+    public fun deploy_minter(s: &mut Scenario){
+        let ( a, _, _ ) = people();
+        next_tx(s,a);{
+            let sdb_cap = test::take_from_sender<TreasuryCap<SDB>>(s);
+            minter::new(sdb_cap, ctx(s));
+            reward_distributor::init_for_testing(ctx(s));
+        };
+    }
+
+    use suiDouBashiVest::voter::{Self, Voter};
+    public fun deploy_voter(s: &mut Scenario){
+        let ( a, _, _ ) = people();
+
+        voter::init_for_testing(ctx(s));
+
+        next_tx(s,a);{
+            let voter = test::take_shared<Voter>(s);
+
+            assert!(voter::get_registry_length(&voter) == 0, 0);
+            assert!(voter::get_governor(&voter) == a, 0);
+            assert!(voter::get_emergency(&voter) == a, 0);
+            assert!(voter::get_total_weight(&voter) == 0, 0);
+
+            test::return_shared(voter);
+        }
+    }
+
+    use suiDouBashiVest::gauge::{Self, Gauge};
+    use suiDouBashiVest::internal_bribe::{Self as i_bribe, InternalBribe};
+    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
+    public fun deploy_gauge(s: &mut Scenario){
+        let ( a, _, _ ) = people();
+
+        next_tx(s,a);{ // Action: create gauges & I_brbie & E_bribe for given pool
+            let voter = test::take_shared<Voter>(s);
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+
+            voter::create_gauge(&mut voter, &pool_a, ctx(s));
+            voter::create_gauge(&mut voter, &pool_b, ctx(s));
+
+            test::return_shared(voter);
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+        };
+        next_tx(s,a);{ // Assertion: create gauge, I_birbe & E_bribe successfully
+            let voter = test::take_shared<Voter>(s);
+
+
+
+
+            assert!(voter::get_registry_length(&voter) == 2, 0);
+
+            {// pool_a
+                let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+                let gauge = test::take_shared<Gauge<USDC,USDT>>(s);
+                let i_bribe = test::take_shared<InternalBribe<USDC,USDT>>(s);
+                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                assert!(gauge::is_alive(&gauge), 0);
+                assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
+                assert!(i_bribe::total_rewwards_length(&i_bribe) == 2, 0);
+                assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
+                assert!(e_bribe::total_rewwards_length(&e_bribe) == 4, 0);
+                assert!(voter::get_weights_by_pool(&voter, &pool_a) == 0, 0);
+                assert!(voter::get_pool_exists(&voter, &pool_a), 0);
+                test::return_shared(gauge);
+                test::return_shared(i_bribe);
+                test::return_shared(e_bribe);
+                test::return_shared(pool_a);
+            };
+
+            {// pool_b
+                let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+                let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
+                let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                assert!(gauge::is_alive(&gauge), 0);
+                assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
+                assert!(i_bribe::total_rewwards_length(&i_bribe) == 2, 0);
+                assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
+                // external bribe at most 4, including pair of coins + SDB + SUI
+                assert!(e_bribe::total_rewwards_length(&e_bribe) == 3, 0);
+                assert!(voter::get_weights_by_pool(&voter, &pool_b) == 0, 0);
+                assert!(voter::get_pool_exists(&voter, &pool_b), 0);
+                test::return_shared(gauge);
+                test::return_shared(i_bribe);
+                test::return_shared(e_bribe);
+                test::return_shared(pool_b);
+            };
+
+            test::return_shared(voter);
+
+        }
+    }
 
     public fun people(): (address, address, address) { (@0x000A, @0x000B, @0x000C ) }
 }

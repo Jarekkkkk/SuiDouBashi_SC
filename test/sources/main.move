@@ -1,11 +1,16 @@
 #[test_only]
 module test::main{
     use suiDouBashi::pool::{Self, Pool, LP};
+
     use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
     use suiDouBashi::usdc::USDC;
     use suiDouBashi::usdt::USDT;
 
+    //use suiDouBashiVest::voter::{Self, Voter};
+    //use suiDouBashiVest::gauge::{Self, Gauge};
+    //use suiDouBashiVest::internal_bribe::{Self as i_bribe, InternalBribe};
+    //use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
+    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
 
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
@@ -19,15 +24,18 @@ module test::main{
 
     #[test] fun main(){
         let (a,_,_) = setup::people();
-        let scenario = test::begin(a);
-        let clock = clock::create_for_testing(ctx(&mut scenario));
+        let s = test::begin(a);
+        let clock = clock::create_for_testing(ctx(&mut s));
 
-        setup_(&mut clock, &mut scenario);
-        vest_(&mut clock, &mut scenario);
-        pool_(&mut clock, &mut scenario);
+        setup_(&mut clock, &mut s);
+        vest_(&mut clock, &mut s);
+        pool_(&mut clock, &mut s);
+        setup::deploy_minter(&mut s);
+        setup::deploy_voter(&mut s);
+        setup::deploy_gauge(&mut s);
 
         clock::destroy_for_testing(clock);
-        test::end(scenario);
+        test::end(s);
     }
 
     fun setup_(clock: &mut Clock, test: &mut Scenario){
@@ -94,7 +102,6 @@ module test::main{
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
         };
-
         next_tx(s,a);{ // create 2 additional new VeSDB
             let reg = test::take_shared<VSDBRegistry>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
@@ -271,7 +278,7 @@ module test::main{
             burn(fee_usdc);
             burn(fee_sdb);
         };
-        next_tx(s,b);{ // Action: LP B Swap & Claim Fees
+        next_tx(s,b);{ // Action: LP B Swap
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
@@ -305,7 +312,7 @@ module test::main{
             test::return_to_sender(s, lp_a);
             test::return_to_sender(s, lp_b);
         };
-        next_tx(s,b);{ // Assertion: LP position = 0, fee withdrawl,
+        next_tx(s,b);{ // Assertion: LP claimbale = 0, fee withdrawl,
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
@@ -313,9 +320,6 @@ module test::main{
             // user's fee
             let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
             let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
-
-          std::debug::print(&coin::value(&fee_usdc));
-          std::debug::print(&coin::value(&fee_sdb));
 
             assert!(pool::get_claimable_x(&lp_a) == 0, 0);
             assert!(pool::get_claimable_x(&lp_b) == 0, 0);
@@ -331,5 +335,53 @@ module test::main{
             burn(fee_usdc);
             burn(fee_sdb);
         };
+        next_tx(s,a);{ // Action: LP A Claim Fees & Assertion: Fee Deposit
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let ctx = ctx(s);
+
+            pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
+            pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+        };
+        next_tx(s,a);{ // Assertion: fee withdrawl, pool's remaingin fee = 0,
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            // user's fee
+            let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
+            let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
+
+            assert!(pool::get_claimable_x(&lp_a) == 0, 0);
+            assert!(pool::get_claimable_x(&lp_b) == 0, 0);
+            assert!(pool::get_fee_x(&pool_a) == 2, 1);
+            assert!(pool::get_fee_x(&pool_b) == 11, 1);
+            assert!(coin::value(&fee_usdc) == 199, 1);
+            assert!(coin::value(&fee_sdb) == 333_328, 1);
+
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+            burn(fee_usdc);
+            burn(fee_sdb);
+        };
     }
+
+    // fun gauge_(clock: &mut Clock, s: &mut Scenario){
+    //     let ( a, _, _ ) = setup::people();
+
+    //     next_tx(s,a);{ // create guages for pool
+    //         let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+    //         let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+    //         let voter = test::take_shared<Voter>(s);
+    //     }
+    // }
 }
