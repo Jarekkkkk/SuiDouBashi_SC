@@ -28,7 +28,8 @@ module test::setup{
     public fun sui_10B(): u64 { math::pow(10, 19) }
     // stake
     public fun stake_1(): u64 { math::pow(10, 6)}
-    // common time
+    // time utility
+    public fun start_time(): u64 { 1672531200 }
     public fun four_years(): u64 { 4 * 365 * 86400 }
     public fun week(): u64 { 7 * 86400 }
     public fun day(): u64 { 86400 }

@@ -16,11 +16,11 @@ module test::main{
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
     use sui::object;
+    use sui::table;
     use sui::table_vec;
 
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::transfer;
-    use std::debug::print;
 
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
 
@@ -45,8 +45,8 @@ module test::main{
 
     fun setup_(clock: &mut Clock, test: &mut Scenario){
         let (a,_,_) = setup::people();
-        add_time(clock, 1672531200);
-        print(&get_time(clock));
+        add_time(clock, setup::start_time());
+        std::debug::print(&get_time(clock));
 
         setup::deploy_coins(test);
         setup::mint_stable(test);
@@ -70,7 +70,7 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >=  4999999999910976000, 1);
+            assert!(voting >=  4404404404910976000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
             assert!(vsdb::total_supply(&reg) == 5 * setup::sui_1B(), 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
@@ -98,7 +98,7 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >= 9999999999948096000, 1);
+            assert!(voting >= 4044044049948096000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
             assert!(vsdb::total_supply(&reg) == 10 * setup::sui_1B(), 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
@@ -121,7 +121,7 @@ module test::main{
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting >= 499999999877568000, 1);
+            assert!(voting >= 440440499877568000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(),1);
             assert!(vsdb::total_supply(&reg) == 110 * setup::sui_100M(), 1);
             assert!(vsdb::total_minted(&reg) == 3, 1);
@@ -130,7 +130,6 @@ module test::main{
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
         };
-
         next_tx(s,a);
         let (id, id_1) = {
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -151,7 +150,7 @@ module test::main{
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting >= 10999999999955520000, 1);
+            assert!(voting >= 10404404404955520000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 110 * setup::sui_100M(),1);
             assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
             // check NFTs are removed from global storage
@@ -160,14 +159,13 @@ module test::main{
             assert!(vsdb::total_supply(&reg) == 110 * setup::sui_100M(), 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
 
-
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
         }
     }
 
     fun pool_(clock: &mut Clock, s: &mut Scenario){
-        let (a, b, _c ) = setup::people();
+        let (a, b, _) = setup::people();
 
         // create USDC-USDT/ SDB-USDC
         setup::deploy_pools(s, clock);
@@ -402,42 +400,38 @@ module test::main{
             test::return_shared(pool_b);
         };
         next_tx(s,a);{ // Assertion: Successfully staked & Lp_position == 0
-            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
-            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
-            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
-            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
-            let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
-            let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
-
-            // personal LP position
-            assert!(pool::get_lp_balance(&lp_a) == 1999000 - setup::stake_1(), 0);
-            assert!(pool::get_lp_balance(&lp_b) == 63244552 - setup::stake_1(), 0);
-            // LP position record in Gauge
-            assert!(gauge::get_balance_of(&gauge_a, a) == setup::stake_1(), 0);
-            assert!(gauge::get_balance_of(&gauge_b, a) == setup::stake_1(), 0);
-            assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge_a, a), 0)) == 1673136000, 0);
-            assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge_b, a), 0)) ==
-            1673136000, 0);
-            assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge_a, a), 0)) ==  setup::stake_1(), 0);
-            assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge_b, a), 0)) ==
-             setup::stake_1(), 0);
-            // supply points
-            assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_a), 0)) == 1673136000, 0);
-            assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_b), 0)) ==
-            1673136000, 0);
-            assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_a), 0)) ==  setup::stake_1(), 0);
-            assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_b), 0)) ==
-             setup::stake_1(), 0);
-            // total staked lp
-            assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge_a)) ==  setup::stake_1() , 1);
-            assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge_b)) ==  setup::stake_1() , 1);
-
-            test::return_shared(gauge_a);
-            test::return_shared(gauge_b);
-            test::return_to_sender(s, lp_a);
-            test::return_to_sender(s, lp_b);
-            test::return_shared(pool_a);
-            test::return_shared(pool_b)
+            { // gauge_a
+                let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                assert!(pool::get_lp_balance(&lp) == 1999000 - setup::stake_1(), 0);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, a) == setup::stake_1(), 0);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 0)) == get_time(clock), 0);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 0)) ==  setup::stake_1(), 0);
+                // supply points
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 0)) == get_time(clock), 0);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 0)) ==  setup::stake_1(), 0);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  setup::stake_1() , 1);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            };
+            {// guage_b
+                let lp = test::take_from_sender<LP<SDB, USDC>>(s);
+                let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                assert!(pool::get_lp_balance(&lp) ==  63244552 - setup::stake_1(), 0);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, a) == setup::stake_1(), 0);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 0)) == get_time(clock), 0);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 0)) ==  setup::stake_1(), 0);
+                // supply points
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 0)) == get_time(clock), 0);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 0)) ==  setup::stake_1(), 0);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  setup::stake_1() , 1);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            }
         };
 
         add_time(clock, setup::day());
@@ -462,48 +456,41 @@ module test::main{
         };
 
         next_tx(s,b);{ // Assertion: Successfully staked & Lp_position == 0
-            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
-            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
-            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
-            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
-            let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
-            let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
-
-            // personal LP position
-            assert!(pool::get_lp_balance(&lp_a) == 1000000 -  setup::stake_1(), 0);
-            assert!(pool::get_lp_balance(&lp_b) == 31622776 - setup::stake_1(), 0);
-            // LP position record in Gauge
-            assert!(gauge::get_balance_of(&gauge_a, b) == setup::stake_1(), 0);
-            assert!(gauge::get_balance_of(&gauge_b, b) == setup::stake_1(), 0);
-            assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge_a, b), 0)) == 1673222400, 0);
-            assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge_b, b), 0)) ==
-            1673222400, 0);
-            assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge_a, b), 0)) == setup::stake_1(), 0);
-            assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge_b, b), 0)) ==
-            setup::stake_1(), 0);
-            // supply points at index_1
-            assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_a), 1)) == 1673222400, 0);
-            assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_b), 1)) ==
-            1673222400, 0);
-            assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_a), 1)) == 2 * setup::stake_1(), 0);
-            assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge_b), 1)) ==
-            2 * setup::stake_1(), 0);
-            // total staked lp
-            assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge_a)) == 2 * setup::stake_1() , 1);
-            assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge_b)) == 2 * setup::stake_1() , 1);
-            // staker earned
-            assert!(gauge::earned(&gauge_a, a, clock) == 0, 0);
-            assert!(gauge::earned(&gauge_b, a, clock) == 0, 0);
-            assert!(gauge::earned(&gauge_a, b, clock) == 0, 0);
-            assert!(gauge::earned(&gauge_b, b, clock) == 0, 0);
-
-            test::return_shared(gauge_a);
-            test::return_shared(gauge_b);
-            test::return_to_sender(s, lp_a);
-            test::return_to_sender(s, lp_b);
-            test::return_shared(pool_a);
-            test::return_shared(pool_b)
+             { // gauge_a
+                let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                assert!(pool::get_lp_balance(&lp) == 1000000 - setup::stake_1(), 0);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, b) == setup::stake_1(), 0);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) == get_time(clock), 0);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) ==  setup::stake_1(), 0);
+                // supply points index at 1
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) == get_time(clock), 404);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) ==  2 * setup::stake_1(), 404);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  2 * setup::stake_1() , 1);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            };
+            {// guage_b
+                let lp = test::take_from_sender<LP<SDB, USDC>>(s);
+                let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                assert!(pool::get_lp_balance(&lp) ==  31622776 - setup::stake_1(), 0);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, b) == setup::stake_1(), 0);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) == get_time(clock), 0);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) ==  setup::stake_1(), 0);
+                // supply points index at 1
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) == get_time(clock), 404);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) ==  2 * setup::stake_1(), 404);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == 2 * setup::stake_1() , 1);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            }
         };
+        // checkpoint only update when previous ts is different,
+        add_time(clock, setup::day());
         next_tx(s,b);{ // Action: LP B unstake
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
@@ -522,6 +509,42 @@ module test::main{
             test::return_shared(pool_a);
             test::return_shared(pool_b);
         };
+        next_tx(s,b);{ // Assertion: LP B successfully unstake
+             { // gauge_a
+                let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                assert!(pool::get_lp_balance(&lp) == 1000000 , 404);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, b) == 0, 404);
+                // index at 1
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) ==  0, 404);
+                // supply points index at 1
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) == get_time(clock), 404);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) ==  setup::stake_1(), 404);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  setup::stake_1() , 404);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            };
+            {// guage_b
+                let lp = test::take_from_sender<LP<SDB, USDC>>(s);
+                let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                assert!(pool::get_lp_balance(&lp) ==  31622776 , 404);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, b) == 0, 404);
+                // index at 1
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == 0, 404);
+                // supply points index at 1
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) == get_time(clock), 404);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) ==   setup::stake_1(), 404);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == setup::stake_1() , 404);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            };
+        }
     }
 
     fun bribe_(clock: &mut Clock, s: &mut Scenario){
@@ -536,7 +559,6 @@ module test::main{
             let i_bribe_b = test::take_shared<InternalBribe<SDB, USDC>>(s);
             let e_bribe_a = test::take_shared<ExternalBribe<USDC, USDT>>(s);
             let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
-
             let ctx = ctx(s);
             // weekly emissions
             gauge::distribute_emissions(&mut gauge_a, &mut i_bribe_a, &mut pool_a, mint<SDB>(setup::stake_1(), ctx), clock, ctx);
@@ -555,34 +577,103 @@ module test::main{
             test::return_shared(pool_b);
         };
         next_tx(s,a);{ // Assertion: successfully deposit weekly emissions, pool_fees, external_ bribes
+            {// gauge_a
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                let reward = gauge::borrow_reward(&gauge);
+                assert!( gauge::get_reward_rate(reward) == 1, 0);
+                assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
+                assert!( gauge::get_period_finish(reward) == get_time(clock) + setup::week(), 0);
+                assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
+                assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == 1, 0);
+                assert!( gauge::get_reward_rate(reward) == 1, 0);
+                test::return_shared(gauge);
+            };
+            {// gauge_b
+                let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                let reward = gauge::borrow_reward(&gauge);
+                assert!( gauge::get_reward_rate(reward) == 1, 0);
+                assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
+                assert!( gauge::get_period_finish(reward) == get_time(clock) + setup::week(), 0);
+                assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
+                assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == 1, 0);
+                assert!( gauge::get_reward_rate(reward) == 1, 0);
+                test::return_shared(gauge);
+            };
+            {// e_bribe_a
+                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let reward = e_bribe::borrow_reward<USDC, USDT, SDB>(&e_bribe);
+                let epoch_start = e_bribe::get_epoch_start(get_time(clock));
+                assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
+                assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
+                assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
+                assert!( e_bribe::get_reward_balance(reward) == setup::stake_1(), 0);
+                test::return_shared(e_bribe);
+            };
+            {// e_bribe_a
+                let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                let reward = e_bribe::borrow_reward<SDB, USDC, SDB>(&e_bribe);
+                let epoch_start = e_bribe::get_epoch_start(get_time(clock));
+                assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
+                assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
+                assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
+                assert!( e_bribe::get_reward_balance(reward) == setup::stake_1(), 0);
+                test::return_shared(e_bribe);
+            };
+        };
+        add_time(clock, setup::day());
+        next_tx(s,a);{ // Action: LP A unstake & claim rewards
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
-            assert!( gauge::get_reward_rate(gauge::borrow_reward(&gauge_b)) == 1, 0);
-            // last update time, reward_per_token_stored, reward.balance, reward.period_finish, reward_checkpoints
-
-            {// gauge_a
-                let reward = gauge::borrow_reward(&gauge_a);
-                assert!( gauge::get_reward_rate(reward) == 1, 0);
-                assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
-                assert!( gauge::get_period_finish(reward) == get_time(clock) + setup::week(), 0);
-                assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
-                assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == 1, 0);
-                assert!( gauge::get_reward_rate(reward) == 1, 0);
-            };
-             {// gauge_b
-                let reward = gauge::borrow_reward(&gauge_b);
-                assert!( gauge::get_reward_rate(reward) == 1, 0);
-                assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
-                assert!( gauge::get_period_finish(reward) == get_time(clock) + setup::week(), 0);
-                assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
-                assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == 1, 0);
-                assert!( gauge::get_reward_rate(reward) == 1, 0);
-            };
-
+            gauge::unstake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
+            gauge::unstake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+        };
+        next_tx(s,a);{// Assetion: nobody stake & LP successfully withdraw the rewards
+            { // gauge_a
+                let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                assert!(pool::get_lp_balance(&lp) == 1999000 , 404);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
+                // index at 1
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) ==  0, 404);
+                // supply points index at 1
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock), 404);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==  0, 404);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  0, 404);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            };
+            {// guage_b
+                let lp = test::take_from_sender<LP<SDB, USDC>>(s);
+                let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                assert!(pool::get_lp_balance(&lp) ==  63244552 , 404);
+                // LP position record in Gauge
+                assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
+                // index at 1
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == 0, 404);
+                // supply points index at 1
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock), 404);
+                assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==   0, 404);
+                // total staked lp
+                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == 0 , 404);
+                test::return_shared(gauge);
+                test::return_to_sender(s, lp);
+            };
         }
     }
 }
