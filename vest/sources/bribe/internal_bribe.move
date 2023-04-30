@@ -314,7 +314,6 @@ module suiDouBashiVest::internal_bribe{
         reward::update_user_reward_per_token_stored(reward, id, reward_per_token_stored);
         reward::update_last_earn(reward, id, clock::timestamp_ms(clock));
 
-
         if(_reward > 0){
             let coin_x = coin::take(reward::balance_mut(reward), _reward, ctx);
             let value_x = coin::value(&coin_x);
@@ -338,7 +337,6 @@ module suiDouBashiVest::internal_bribe{
         if(self.total_supply == 0){
             return reward_stored
         };
-
         // TODO: merge all in function to save gas
         let last_update = reward::last_update_time(reward);
         let period_finish = reward::period_finish(reward);
@@ -347,7 +345,17 @@ module suiDouBashiVest::internal_bribe{
         return reward_stored + elapsed * (reward_rate as u128) * PRECISION / (self.total_supply as u128)
     }
 
-    fun batch_reward_per_token<X,Y,T>(
+    public entry fun batch_reward_per_token<X,Y,T>(
+        self: &mut InternalBribe<X,Y>,
+        max_run:u64,
+        clock: &Clock,
+    ){
+        let ( reward_per_token_stored, last_update_time ) = batch_reward_per_token_<X,Y,Y>(self, max_run, clock);
+        let reward = borrow_reward_mut<X,Y,Y>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
+    }
+    fun batch_reward_per_token_<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         max_run:u64, // useful when tx might be out of gas
         clock: &Clock,
@@ -411,15 +419,25 @@ module suiDouBashiVest::internal_bribe{
         max_run:u64,
         clock: &Clock,
     ){
-        update_reward_per_token_<X,Y,T>(self, max_run, false, clock);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, max_run, false, clock);
+        let reward = borrow_reward_mut<X,Y,X>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
     }
-
     fun update_reward_for_all_tokens_<X,Y>(
         self: &mut InternalBribe<X,Y>,
         clock: &Clock,
     ){
-        update_reward_per_token_<X,Y,X>(self, MAX_U64, true, clock);
-        update_reward_per_token_<X,Y,Y>(self, MAX_U64, true, clock);
+        // update_reward<X,Y,X>
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,X>(self, MAX_U64, true, clock);
+        let reward = borrow_reward_mut<X,Y,X>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
+        // update_reward<X,Y,Y>
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,Y>(self, MAX_U64, true, clock);
+        let reward = borrow_reward_mut<X,Y,Y>(self);
+        reward::update_reward_per_token_stored(reward, reward_per_token_stored);
+        reward::update_last_update_time(reward, last_update_time);
     }
     /// require when
     /// 1. reward claims,
