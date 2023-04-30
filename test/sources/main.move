@@ -586,6 +586,7 @@ module test::main{
                 assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
                 assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == 1, 0);
                 assert!( gauge::get_reward_rate(reward) == 1, 0);
+                assert!( gauge::reward_per_token(&gauge, clock) == 0, 404);
                 test::return_shared(gauge);
             };
             {// gauge_b
@@ -597,6 +598,7 @@ module test::main{
                 assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
                 assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == 1, 0);
                 assert!( gauge::get_reward_rate(reward) == 1, 0);
+                assert!( gauge::reward_per_token(&gauge, clock) == 0, 404);
                 test::return_shared(gauge);
             };
             {// e_bribe_a
@@ -629,8 +631,15 @@ module test::main{
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
+            // estimated rewards
+            assert!(gauge::earned(&gauge_a, a, clock) == 86400 , 404);
+            assert!(gauge::earned(&gauge_b, a, clock) == 86400 , 404);
+
             gauge::unstake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
             gauge::unstake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
+
+            gauge::get_reward(&mut gauge_a, clock, ctx(s));
+            gauge::get_reward(&mut gauge_b, clock, ctx(s));
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
@@ -643,6 +652,8 @@ module test::main{
             { // gauge_a
                 let lp = test::take_from_sender<LP<USDC, USDT>>(s);
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                let reward = gauge::borrow_reward(&gauge);
+                let sdb_reward = test::take_from_sender<Coin<SDB>>(s);
                 assert!(pool::get_lp_balance(&lp) == 1999000 , 404);
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
@@ -654,12 +665,20 @@ module test::main{
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==  0, 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  0, 404);
+                // receeive accumulated rewards
+                assert!(coin::value(&sdb_reward) == 86400, 404);
+                assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000, 404);
+                assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
+
                 test::return_shared(gauge);
+                test::return_to_sender(s, sdb_reward);
                 test::return_to_sender(s, lp);
             };
             {// guage_b
                 let lp = test::take_from_sender<LP<SDB, USDC>>(s);
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                let reward = gauge::borrow_reward(&gauge);
+                let sdb_reward = test::take_from_sender<Coin<SDB>>(s);
                 assert!(pool::get_lp_balance(&lp) ==  63244552 , 404);
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
@@ -671,7 +690,13 @@ module test::main{
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==   0, 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == 0 , 404);
+                // receeive accumulated rewards
+                assert!(coin::value(&sdb_reward) == 86400, 404);
+                assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000, 404);
+                assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
+
                 test::return_shared(gauge);
+                test::return_to_sender(s, sdb_reward);
                 test::return_to_sender(s, lp);
             };
         }
