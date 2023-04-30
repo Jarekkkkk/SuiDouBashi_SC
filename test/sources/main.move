@@ -7,12 +7,6 @@ module test::main{
     use suiDouBashi::usdc::USDC;
     use suiDouBashi::usdt::USDT;
 
-    //use suiDouBashiVest::voter::{Self, Voter};
-    use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::internal_bribe::{ InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
-
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
     use sui::object;
@@ -38,6 +32,7 @@ module test::main{
 
         gauge_(&mut clock, &mut s);
         bribe_(&mut clock, &mut s);
+        vote_(&mut clock, &mut s);
 
         clock::destroy_for_testing(clock);
         test::end(s);
@@ -55,6 +50,7 @@ module test::main{
         transfer::public_transfer(mint<SDB>(18 * setup::sui_1B(), ctx(test)), a);
     }
 
+    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
     fun vest_(clock: &mut Clock, s: &mut Scenario){
         let (a,_,_) = setup::people();
 
@@ -131,7 +127,7 @@ module test::main{
             test::return_shared(reg);
         };
         next_tx(s,a);
-        let (id, id_1) = {
+        let (id, id_1) = { // Action: Merge 3 vsdb into single
             let vsdb = test::take_from_sender<VSDB>(s);
             let vsdb_merged = test::take_from_sender<VSDB>(s);
             let vsdb_merged_1 = test::take_from_sender<VSDB>(s);
@@ -377,7 +373,9 @@ module test::main{
             burn(fee_sdb);
         };
     }
-
+    use suiDouBashiVest::gauge::{Self, Gauge};
+    use suiDouBashiVest::internal_bribe::{ InternalBribe};
+    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
     fun gauge_(clock: &mut Clock, s: &mut Scenario){
         let ( a, b, _ ) = setup::people();
 
@@ -671,7 +669,7 @@ module test::main{
                 assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
 
                 test::return_shared(gauge);
-                test::return_to_sender(s, sdb_reward);
+                burn(sdb_reward);
                 test::return_to_sender(s, lp);
             };
             {// guage_b
@@ -696,9 +694,146 @@ module test::main{
                 assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
 
                 test::return_shared(gauge);
-                test::return_to_sender(s, sdb_reward);
+                burn(sdb_reward);
                 test::return_to_sender(s, lp);
             };
+        };
+        next_tx(s,a);{// Action: LP A Stake back
+            let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
+            let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
+            let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
+            let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
+
+            gauge::stake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
+            gauge::stake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
+
+            test::return_shared(gauge_a);
+            test::return_shared(gauge_b);
+            test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, lp_b);
+            test::return_shared(pool_a);
+            test::return_shared(pool_b);
+        };
+
+        add_time(clock, setup::week());
+    }
+
+    use suiDouBashiVest::voter::{Self, Voter};
+    fun vote_(clock: &mut Clock, s: &mut Scenario){
+        let ( a, _, _ ) = setup::people();
+
+        next_tx(s,a);{ //Action: VeSDB holder reset the votes
+            let voter = test::take_shared<Voter>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+
+            { // pool_a
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+
+                voter::reset<USDC, USDT>(&mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+
+                test::return_shared(gauge);
+                test::return_shared(i_bribe);
+                test::return_shared(e_bribe);
+            };
+            { // pool_b //TODO: currently we could do single action for each pool
+                // let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                // let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
+                // let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+
+                // voter::reset<SDB, USDC>(&mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+
+                // test::return_shared(gauge);
+                // test::return_shared(i_bribe);
+                // test::return_shared(e_bribe);
+            };
+            test::return_shared(voter);
+            test::return_to_sender(s, vsdb);
+        };
+        next_tx(s,a);{ // Action: poke
+            let voter = test::take_shared<Voter>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+            { // pool_a
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+
+                voter::poke<USDC, USDT>(&mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+
+                test::return_shared(gauge);
+                test::return_shared(i_bribe);
+                test::return_shared(e_bribe);
+            };
+            { // pool_b //TODO: currently we could do single action for each pool
+                // let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
+                // let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
+                // let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+
+                // voter::reset<SDB, USDC>(&mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+
+                // test::return_shared(gauge);
+                // test::return_shared(i_bribe);
+                // test::return_shared(e_bribe);
+            };
+            test::return_shared(voter);
+            test::return_to_sender(s, vsdb);
+        };
+
+        next_tx(s,a);{ // Action: create new VSDB
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let sdb = test::take_from_sender<Coin<SDB>>(s);
+            vsdb::lock(&mut reg, coin::split(&mut sdb, setup::sui_1B(), ctx(s)), setup::four_years(), clock, ctx(s));
+
+            test::return_to_sender(s, sdb);
+            test::return_shared(reg);
+        };
+        add_time(clock, setup::week());
+        next_tx(s,a);{ // Assertion: new VSDB & total supply
+            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb_1 = test::take_from_sender<VSDB>(s);
+            let voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            assert!(voting >= 993150684813600000, 404);
+            assert!(vsdb::locked_balance(&vsdb) == setup::sui_1B(),404);
+            assert!(vsdb::total_supply(&reg) == 120 * setup::sui_100M(), 404);
+            assert!(vsdb::total_minted(&reg) == 2, 404);
+            assert!( vsdb::get_user_epoch(&vsdb) == 1, 404);
+            test::return_to_sender(s, vsdb);
+            test::return_to_sender(s, vsdb_1);
+            test::return_shared(reg);
+        };
+        next_tx(s,a);{ // Action: VSDB holder A voting
+            let voter = test::take_shared<Voter>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+            let weights = 5000;
+
+            {// pool_a
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+
+                voter::vote<USDC, USDT>(&mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, weights, clock, ctx(s));
+
+                test::return_shared(gauge);
+                test::return_shared(i_bribe);
+                test::return_shared(e_bribe);
+            };
+            test::return_shared(voter);
+            test::return_to_sender(s, vsdb);
+        };
+        next_tx(s,a);{ // Assertion: voting successfully
+            // check
+            // gauge: supply_index, claimable
+            // voter: weights, total_weights,
+            // vsdb: pool_votes, used_weights, voting_state
+            // i_brbie: total_supply(voting), balance_of,
+            // ex_brbie: total_supply(voting), balance_of,
         }
     }
 }
+
+// VSDB(sui::1B());@0x80c3903e5c4101a9a9a40a79a7f3345ded4dd973917eb06a9c706f2824f1b2b3
+// VSDB(110 * sui::100M()): @0x77c036971b0e3b7f9f801d16c99a2fba645aa4ef817e9b780f4fc7cec1bb032a
