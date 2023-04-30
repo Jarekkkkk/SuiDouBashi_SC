@@ -374,7 +374,7 @@ module test::main{
         };
     }
     use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::internal_bribe::{ InternalBribe};
+    use suiDouBashiVest::internal_bribe::{ Self as i_bribe, InternalBribe};
     use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
     fun gauge_(clock: &mut Clock, s: &mut Scenario){
         let ( a, b, _ ) = setup::people();
@@ -831,6 +831,40 @@ module test::main{
             // vsdb: pool_votes, used_weights, voting_state
             // i_brbie: total_supply(voting), balance_of,
             // ex_brbie: total_supply(voting), balance_of,
+            let voter = test::take_shared<Voter>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+
+            {// pool_a
+                let pool = test::take_shared<Pool<USDC, USDT>>(s);
+                let pool_id = object::id(&pool);
+                let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                //voter
+                assert!(voter::get_weights_by_pool(&voter, &pool) == 10871917808175216000, 404);
+                assert!(voter::get_total_weight(&voter) == 10871917808175216000, 404);
+                // gauge
+                assert!(gauge::get_supply_index(&gauge) == 0, 404);
+                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                // i_brbie
+                assert!(i_bribe::total_voting_weight(&i_bribe) == 10871917808175216000, 404);
+                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == 10871917808175216000, 404);
+                // e_bribe
+                assert!(e_bribe::total_voting_weight(&e_bribe) == 10871917808175216000, 404);
+                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 10871917808175216000, 404);
+                // vsdb
+                assert!(vsdb::pool_votes(&vsdb, pool_id) == 10871917808175216000, 404);
+                assert!(vsdb::get_used_weights(&vsdb) == 10871917808175216000, 404);
+                assert!(vsdb::get_voted(&vsdb), 404);
+
+                test::return_shared(gauge);
+                test::return_shared(i_bribe);
+                test::return_shared(e_bribe);
+                test::return_shared(pool);
+            };
+            test::return_shared(voter);
+            test::return_to_sender(s, vsdb);
+
         }
     }
 }
