@@ -147,26 +147,26 @@ module suiDouBashiVest::event{
        )
     }
 
-    struct Abstain<phantom X, phantom Y, phantom T> has copy, drop{
+    struct Abstain<phantom X, phantom Y> has copy, drop{
         vsdb: ID,
         amount: u64
     }
-    public fun abstain<X,Y,T>(vsdb: ID, amount:u64){
+    public fun abstain<X,Y>(vsdb: ID, amount:u64){
         emit(
-            Abstain<X,Y,T>{
+            Abstain<X,Y>{
                 vsdb,
                 amount
             }
         )
     }
 
-    struct Voted<phantom X, phantom Y, phantom T> has copy, drop{
+    struct Voted<phantom X, phantom Y> has copy, drop{
         vsdb: ID,
         amount: u64
     }
-    public fun voted<X,Y,T>(vsdb: ID, amount:u64){
+    public fun voted<X,Y>(vsdb: ID, amount:u64){
         emit(
-            Abstain<X,Y,T>{
+            Abstain<X,Y>{
                 vsdb,
                 amount
             }

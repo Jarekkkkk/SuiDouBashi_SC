@@ -852,8 +852,11 @@ module suiDouBashiVest::vsdb{
 
     // ===== Voter =====
     // TODO: move to VSDB, leverage on dynamic fields
-    public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
-        table::add(&mut self.pool_votes, pool_id, value);
+    public (friend) fun new_pool_votes(self: &mut VSDB, pool_id: ID){
+        table::add(&mut self.pool_votes, pool_id, 0);
+    }
+    public fun pool_votes_exist(self: &VSDB, pool_id: ID):bool{
+        table::contains(&self.pool_votes, pool_id)
     }
     public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
         *table::borrow_mut(&mut self.pool_votes, pool_id) = value;

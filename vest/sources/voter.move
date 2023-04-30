@@ -26,6 +26,8 @@ module suiDouBashiVest::voter{
     const DURATION: u64 = { 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
 
+    const E_EMPTY_VALUE: u64 = 0;
+
     struct VOTER_SDB has store, drop {}
 
     struct Voter has key, store{
@@ -99,7 +101,7 @@ module suiDouBashiVest::voter{
         transfer::share_object(voter);
     }
 
-    public entry fun reset<X,Y,T>(
+    public entry fun reset<X,Y>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
@@ -110,11 +112,14 @@ module suiDouBashiVest::voter{
     ){
         assert_new_epoch(vsdb, clock);
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, clock, ctx);
+        reset_<X,Y>(self, vsdb, gauge, internal_bribe, external_bribe, clock, ctx);
+
+        vsdb::abstain(vsdb);
     }
 
-    // currently we are unable to loop token ads to reset all of the votes in different pool,
-    fun reset_<X,Y,T>(
+    // TODO: disallowing voter to vote over once for each epoch,
+    // TODO: looping all voted pool, have to be done in front_end
+    fun reset_<X,Y>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
@@ -125,12 +130,16 @@ module suiDouBashiVest::voter{
     ){
         // record votes on veNFT
         let pool_id = gauge::pool_id(gauge);
+        if(!vsdb::pool_votes_exist(vsdb, pool_id)){
+            vsdb::new_pool_votes(vsdb, pool_id);
+        };
+
         let votes = vsdb::pool_votes(vsdb, pool_id);
         let total_weight = 0;
 
         if(votes != 0){
             update_for_(self, gauge);
-            let vote_ =  vsdb::pool_votes(vsdb, pool_id);
+            let vote_ = vsdb::pool_votes(vsdb, pool_id);
             vsdb::update_pool_votes(vsdb, pool_id, vote_ - votes);
             *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) - votes;
 
@@ -140,18 +149,18 @@ module suiDouBashiVest::voter{
                 total_weight = total_weight + votes;
             };
 
-            event::abstain<X,Y,T>(object::id(vsdb), votes);
+            event::abstain<X,Y>(object::id(vsdb), votes);
         };
 
         self.total_weight = self.total_weight - total_weight;
         vsdb::update_used_weights(vsdb, 0);
 
-        // clear all the pool votes
-        vsdb::clear_pool_votes(vsdb, pool_id);
+        // clear all the pool votes, remove the data from table
+        vsdb::update_pool_votes(vsdb, pool_id, 0);
     }
 
     /// re-vote last time voting
-    public entry fun poke<X,Y,T>(
+    public entry fun poke<X,Y>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
@@ -162,20 +171,20 @@ module suiDouBashiVest::voter{
     ){
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
         let weights = vsdb::pool_votes(vsdb, gauge::pool_id(gauge));
-        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
+        vote_<X,Y>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
     }
 
-    fun vote_<X,Y,T>(
+    fun vote_<X,Y>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         external_bribe: &mut ExternalBribe<X,Y>,
-        weights: u64,
+        weights: u64, // empty weights is available, to strictly prevent repeated voting in each epoch
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        reset_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, clock, ctx);
+        reset_<X,Y>(self, vsdb, gauge, internal_bribe, external_bribe, clock, ctx);
         let pool_id = gauge::pool_id(gauge);
 
         let player_weight = vsdb::latest_voting_weight(vsdb, clock);
@@ -187,25 +196,27 @@ module suiDouBashiVest::voter{
         // collect all voting weight
         let totalVoteWeight = weights;
 
-        let pool_weight = weights * player_weight / totalVoteWeight; // get the pro rata voting weight
-        assert!(vsdb::pool_votes(vsdb, pool_id) == 0, err::already_voted());
-        assert!(pool_weight > 0, err::invalid_weight());
+        if(weights > 0){
+            let pool_weight = ((weights as u128) * (player_weight as u128) / (totalVoteWeight as u128) as u64); // get the pro rata voting weight
+            assert!(vsdb::pool_votes(vsdb, pool_id) == 0, err::already_voted());
+            assert!(pool_weight > 0, err::invalid_weight());
 
-        update_for_(self, gauge);
+            update_for_(self, gauge);
 
-        // must be add, not aloowing exist empty pool
-        let votes = vsdb::pool_votes(vsdb, pool_id);
-        vsdb::add_pool_votes(vsdb, pool_id, votes + pool_weight);
-        *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) + pool_weight;
+            // must be add, not aloowing exist empty pool
+            let votes = vsdb::pool_votes(vsdb, pool_id);
+            vsdb::update_pool_votes(vsdb, pool_id, votes + pool_weight);
+            *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) + pool_weight;
 
-        // vote for voting power
-        internal_bribe::deposit<X,Y>(internal_bribe, vsdb, pool_weight, clock, ctx);
-        external_bribe::deposit<X,Y>(external_bribe, vsdb, pool_weight, clock, ctx);
+            // vote for voting power
+            internal_bribe::deposit<X,Y>(internal_bribe, vsdb, pool_weight, clock, ctx);
+            external_bribe::deposit<X,Y>(external_bribe, vsdb, pool_weight, clock, ctx);
 
-        used_weight = used_weight + pool_weight;
-        total_weight = total_weight + pool_weight;
+            used_weight = used_weight + pool_weight;
+            total_weight = total_weight + pool_weight;
 
-        event::voted<X,Y,T>(object::id(vsdb), pool_weight);
+            event::voted<X,Y>(object::id(vsdb), pool_weight);
+        };
 
         if(used_weight > 0){
             vsdb::voting(vsdb);
@@ -215,7 +226,7 @@ module suiDouBashiVest::voter{
         vsdb::update_used_weights(vsdb, used_weight);
     }
     // - player
-    public entry fun vote<X,Y,T>(
+    public entry fun vote<X,Y>(
         self: &mut Voter,
         vsdb: &mut VSDB,
         gauge: &mut Gauge<X,Y>,
@@ -225,8 +236,9 @@ module suiDouBashiVest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert_new_epoch(vsdb, clock);
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-        vote_<X,Y,T>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
+        vote_<X,Y>(self, vsdb, gauge, internal_bribe, external_bribe, weights, clock, ctx);
     }
 
     // - Gauge
