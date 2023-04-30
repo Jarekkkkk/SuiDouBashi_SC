@@ -19,9 +19,9 @@ module suiDouBashiVest::reward{
         period_finish: u64, // update when bribe is deposited, (internal_bribe -> fee ), (external_bribe -> doverse coins)
 
         last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
-        reward_per_token_stored: u64,
+        reward_per_token_stored: u128,
 
-        user_reward_per_token_stored: Table<ID, u64>, // udpate when user deposit
+        user_reward_per_token_stored: Table<ID, u128>, // udpate when user deposit
 
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
         last_earn: Table<ID, u64>, // last time player votes
@@ -37,7 +37,7 @@ module suiDouBashiVest::reward{
             reward_per_token_stored: 0,
             reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
 
-            user_reward_per_token_stored: table::new<ID, u64>(ctx),
+            user_reward_per_token_stored: table::new<ID, u128>(ctx),
             last_earn: table::new<ID, u64>(ctx),
         }
     }
@@ -63,7 +63,7 @@ module suiDouBashiVest::reward{
         self.last_update_time
     }
 
-    public fun reward_per_token_stored<X,Y,T>(self: &Reward<X,Y,T>):u64{
+    public fun reward_per_token_stored<X,Y,T>(self: &Reward<X,Y,T>):u128{
         self.reward_per_token_stored
     }
 
@@ -79,7 +79,7 @@ module suiDouBashiVest::reward{
 
 
 
-    public fun user_reward_per_token_stored<X,Y,T>(self: &Reward<X,Y,T>, id: ID):u64{
+    public fun user_reward_per_token_stored<X,Y,T>(self: &Reward<X,Y,T>, id: ID):u128{
         *table::borrow(&self.user_reward_per_token_stored, id)
     }
 
@@ -93,11 +93,11 @@ module suiDouBashiVest::reward{
 
 
     // ===== Setter =====
-    public fun add_new_user_reward<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, v:u64){
+    public fun add_new_user_reward<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, v:u128){
         table::add(&mut self.user_reward_per_token_stored, id, v);
     }
 
-    public fun update_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, reward_per_token_stored:u64){
+    public fun update_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, reward_per_token_stored:u128){
         self.reward_per_token_stored = reward_per_token_stored;
     }
 
@@ -117,7 +117,7 @@ module suiDouBashiVest::reward{
         self.period_finish = period_finish;
     }
 
-    public fun update_user_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, user_reward_per_token_stored:u64){
+    public fun update_user_reward_per_token_stored<X,Y,T>(self: &mut Reward<X,Y,T>, id: ID, user_reward_per_token_stored:u128){
         *table::borrow_mut(&mut self.user_reward_per_token_stored, id) = user_reward_per_token_stored ;
     }
 

@@ -282,10 +282,8 @@ module suiDouBashiVest::voter{
         ctx: &mut TxContext
     ){
         distribute(self, minter, distributor, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
-        let staker = tx_context::sender(ctx);
-
         // Guage collect SDB weekly emission
-        gauge::get_reward<X,Y>(gauge, staker, clock, ctx);
+        gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
 
     /// External Bribe --> voter

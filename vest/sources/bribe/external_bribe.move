@@ -48,9 +48,8 @@ module suiDouBashiVest::external_bribe{
         balance: Balance<T>,
         token_rewards_per_epoch: Table<u64, u64>,
         period_finish: u64,
-        last_earn: Table<ID, u64>,
+        last_earn: Table<ID, u64>, // last time voter withdraw
     }
-
 
     // - Reward
     fun create_reward<X,Y,T>(self: &mut ExternalBribe<X,Y>, ctx: &mut TxContext){
@@ -74,6 +73,13 @@ module suiDouBashiVest::external_bribe{
         ob::borrow_mut(&mut self.rewards, type_name)
     }
     public fun total_rewwards_length<X,Y>(self: &ExternalBribe<X,Y>): u64 { ob::length(&self.rewards) }
+
+    #[test_only]
+    public fun get_reward_balance<X,Y,T>(reward: &Reward<X,Y,T>):u64 { balance::value(&reward.balance) }
+    #[test_only]
+    public fun get_reward_per_token_stored<X,Y,T>(reward: &Reward<X,Y,T>): &Table<u64, u64>{ &reward.token_rewards_per_epoch }
+    #[test_only]
+    public fun get_period_finish<X,Y,T>(reward: &Reward<X,Y,T>): u64{ reward.period_finish }
 
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
@@ -254,8 +260,6 @@ module suiDouBashiVest::external_bribe{
         };
     }
 
-
-
     public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         math::min(clock::timestamp_ms(clock), reward.period_finish)
     }
@@ -423,7 +427,7 @@ module suiDouBashiVest::external_bribe{
         }
     }
 
-    // protocol deposit external bribe
+    /// Allow protoocl deposit the bribes
     public entry fun bribe<X,Y,T>(
         self: &mut ExternalBribe<X,Y>,
         coin: Coin<T>,
