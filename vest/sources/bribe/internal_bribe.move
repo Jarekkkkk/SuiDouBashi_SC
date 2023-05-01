@@ -35,7 +35,7 @@ module suiDouBashiVest::internal_bribe{
 
         /// Voting weight
         total_supply: u64,
-        balace_of: Table<ID, u64>,
+        balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
         checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> balance checkpoint
@@ -45,6 +45,9 @@ module suiDouBashiVest::internal_bribe{
 
     // - Self
     public fun total_voting_weight<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_supply }
+    public fun get_balance_of<X,Y>(self: &InternalBribe<X,Y>, vsdb: &VSDB):u64 {
+        *table::borrow(&self.balance_of, object::id(vsdb))
+    }
 
     // - Reward
     fun create_reward<X,Y,T>(self: &mut InternalBribe<X,Y>, ctx: &mut TxContext){
@@ -78,7 +81,7 @@ module suiDouBashiVest::internal_bribe{
         let bribe = InternalBribe<X,Y>{
             id: object::new(ctx),
             total_supply:0,
-            balace_of: table::new<ID, u64>(ctx),
+            balance_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
             checkpoints: table::new<ID, vector<Checkpoint>>(ctx), // voting weights for each voter,
@@ -565,10 +568,10 @@ module suiDouBashiVest::internal_bribe{
 
         self.total_supply = self.total_supply + amount;
 
-        if(table::contains(&self.balace_of, id)){
-            *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) + amount;
+        if(table::contains(&self.balance_of, id)){
+            *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(& self.balance_of, id) + amount;
         }else{
-            table::add(&mut self.balace_of, id, amount);
+            table::add(&mut self.balance_of, id, amount);
         };
 
         write_checkpoint_(self, vsdb, amount, clock);
@@ -586,10 +589,10 @@ module suiDouBashiVest::internal_bribe{
         update_reward_for_all_tokens_(self, clock);
 
         let id = object::id(vsdb);
-        assert!(table::contains(&self.balace_of, id), err::invalid_voter());
+        assert!(table::contains(&self.balance_of, id), err::invalid_voter());
         assert!(self.total_supply >= amount, err::insufficient_voting());
         self.total_supply = self.total_supply - amount;
-        *table::borrow_mut(&mut self.balace_of, id) = *table::borrow(& self.balace_of, id) - amount;
+        *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(& self.balance_of, id) - amount;
 
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);

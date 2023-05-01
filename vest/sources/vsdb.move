@@ -8,6 +8,7 @@ module suiDouBashiVest::vsdb{
     use std::vector as vec;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
+    use sui::vec_map::{Self, VecMap};
     use sui::table_vec::{Self, TableVec};
     use sui::coin::{Self, Coin};
     use std::option::{Self, Option};
@@ -48,12 +49,12 @@ module suiDouBashiVest::vsdb{
         user_point_history: Table<u64, Point>, // epoch -> point_history
         locked_balance: LockedSDB,
 
-        // Gauge Voting
+        /// TODO: remove
         attachments: u64,
-        voted: bool,
 
         // voter voting
-        pool_votes: Table<ID, u64>, // pool -> voting weight
+        pool_votes: VecMap<ID, u64>, // pool -> voting weight
+        voted: bool,
         used_weights: u64,
         last_voted: u64 // ts
     }
@@ -376,7 +377,9 @@ module suiDouBashiVest::vsdb{
 
     public fun last_voted(self: &VSDB): u64{ self.last_voted }
 
-    public fun pool_votes(self: &VSDB, pool:ID): u64{ *table::borrow(&self.pool_votes, pool) }
+    public fun pool_votes_borrow(self: &VSDB):&VecMap<ID, u64> { &self.pool_votes }
+    public fun pool_votes(self: &VSDB, pool: &ID): u64{ *vec_map::get(&self.pool_votes, pool) }
+    public fun pool_votes_length(self: &VSDB): u64 { vec_map::size(&self.pool_votes) }
 
     // - point
     public fun get_user_epoch(self: &VSDB): u64 { self.user_epoch }
@@ -514,7 +517,7 @@ module suiDouBashiVest::vsdb{
             attachments: 0,
             voted: false,
 
-            pool_votes: table::new<ID, u64>(ctx),
+            pool_votes: vec_map::empty<ID, u64>(),
             used_weights: 0,
             last_voted: 0
         };
@@ -573,8 +576,8 @@ module suiDouBashiVest::vsdb{
         } = locked_balance;
 
         table::drop<u64, Point>(user_point_history);
-        table::drop<ID, u64>(pool_votes);
         balance::destroy_zero(balance);
+        vec_map::destroy_empty(pool_votes);
         object::delete(id);
     }
 
@@ -849,24 +852,34 @@ module suiDouBashiVest::vsdb{
     public (friend) fun abstain(self: &mut VSDB){
         self.voted = false;
     }
+    #[test_only] public fun get_voted(self: &VSDB): bool { self.voted }
 
     // ===== Voter =====
     // TODO: move to VSDB, leverage on dynamic fields
     public (friend) fun new_pool_votes(self: &mut VSDB, pool_id: ID){
-        table::add(&mut self.pool_votes, pool_id, 0);
+        vec_map::insert(&mut self.pool_votes, pool_id, 0);
+    }
+    public (friend) fun pool_votes_into(self: &mut VSDB): VecMap<ID, u64> {
+        let pool_votes = *&self.pool_votes;
+        self.pool_votes = vec_map::empty<ID, u64>();
+
+        return pool_votes
     }
     public fun pool_votes_exist(self: &VSDB, pool_id: ID):bool{
-        table::contains(&self.pool_votes, pool_id)
+        vec_map::contains(&self.pool_votes, &pool_id)
     }
-    public (friend) fun update_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
-        *table::borrow_mut(&mut self.pool_votes, pool_id) = value;
+    public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
+        vec_map::insert(&mut self.pool_votes, pool_id, value);
     }
-    public (friend) fun clear_pool_votes(self: &mut VSDB, pool_id: ID){
-        table::remove(&mut self.pool_votes, pool_id);
+    /// Remove both entry & value
+    public (friend) fun clear_pool_votes(self: &mut VSDB, idx: u64):(ID, u64){
+        vec_map::remove_entry_by_idx(&mut self.pool_votes, idx)
     }
     public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
         self.used_weights = w;
     }
+    #[test_only] public fun get_used_weights(self: &VSDB): u64 { self.used_weights }
+
     public (friend) fun update_last_voted(self: &mut VSDB, v: u64){
         self.last_voted = v;
     }
