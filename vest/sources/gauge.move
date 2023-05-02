@@ -47,7 +47,7 @@ module suiDouBashiVest::gauge{
         checkpoints: Table<address, TableVec<Checkpoint>>, // each address can stake once for each pool
 
         // voting, distributing, fee
-        supply_index: u64,
+        supply_index: u128,
         claimable: u64
     }
 
@@ -216,10 +216,10 @@ module suiDouBashiVest::gauge{
     public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
 
     public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
-    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u64{ self.supply_index }
+    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u128{ self.supply_index }
     public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
 
-    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.supply_index = v; }
+    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u128){ self.supply_index = v; }
     public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
 
     public fun get_prior_balance_index<X,Y>(

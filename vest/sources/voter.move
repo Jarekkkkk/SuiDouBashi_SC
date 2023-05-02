@@ -25,12 +25,13 @@ module suiDouBashiVest::voter{
     use suiDouBashiVest::external_bribe::{Self, ExternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
+    const SCALE_FACTOR: u128 = 1_000_000_000_000_000_000; // 10e18
 
     const E_EMPTY_VALUE: u64 = 0;
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
+    /// OTW is not allowed to own drop attribution
     struct VOTER_SDB has store, drop {}
 
     struct Voter has key, store{
@@ -45,8 +46,10 @@ module suiDouBashiVest::voter{
         weights: Table<ID, u64>, // gauge -> distributed weights
         registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]: for front_end fetching
 
-        index: u64 // weekly sdb rebase * 10e18 / total_weight
+        index: u128 // distributed_sdb per voting weights ( 1e18 exntension )
     }
+    #[test_only] public fun get_index(self: &Voter): u128 { self.index }
+    #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
     // TODO: seperate Fields in VSDB
     struct VotingState has store{
@@ -221,10 +224,11 @@ module suiDouBashiVest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ): Potato{
+        assert!(potato.reset, E_NOT_VOTE);
         // index weights by given gauge
         let pool_id = gauge::pool_id(gauge);
 
-        if(vec_map::contains(&potato.weights, &pool_id) && potato.reset){
+        if(vec_map::contains(&potato.weights, &pool_id)){
             let (_, weights) = vec_map::remove(&mut potato.weights, &gauge::pool_id(gauge));
 
             assert!(weights > 0, E_NOT_VOTE);
@@ -417,8 +421,9 @@ module suiDouBashiVest::voter{
     }
 
     // ===== Internal =====
-    /// update each Gauge
-    fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
+    // TODO: remove public
+    /// Similar with LP position in AMM, have to be settled beofre any balances chagned
+    public fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
         let supply = *table::borrow(&self.weights, gauge::pool_id(gauge));
         if(supply > 0){
             let s_idx = gauge::get_supply_index(gauge);
@@ -427,7 +432,7 @@ module suiDouBashiVest::voter{
 
             let delta = index_ - s_idx;
             if(delta > 0){
-                let share = (supply as u256) * (delta as u256) / SCALE_FACTOR;// add accrued difference for each supplied token
+                let share = (supply as u128) * (delta as u128) / SCALE_FACTOR;// add accrued difference for each supplied token
                 if(gauge::is_alive(gauge)){
                     let updated = (share as u64) + gauge::get_claimable(gauge);
                     gauge::update_claimable(gauge, updated);
@@ -440,12 +445,12 @@ module suiDouBashiVest::voter{
     }
 
     // - Weekly emissions
-    fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
+    public fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
         // update global index
         let value = coin::value(&sdb);
-        let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
+        let ratio = (value as u128) * SCALE_FACTOR / (self.total_weight as u128) ;
         if(ratio > 0){
-            self.index = self.index + (ratio as u64);
+            self.index = self.index + (ratio as u128);
         };
         coin::put(&mut self.balance, sdb);
 
