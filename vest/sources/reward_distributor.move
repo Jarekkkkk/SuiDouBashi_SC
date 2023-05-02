@@ -13,7 +13,7 @@ module suiDouBashiVest::reward_distributor{
 
     use suiDouBashiVest::event;
     use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::vsdb::{Self, VSDB,VSDBRegistry};
+    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
     use suiDouBashiVest::point;
     use suiDouBashi::i128;
 

@@ -6,6 +6,7 @@ module suiDouBashiVest::minter{
     use sui::transfer;
     use sui::object::{Self, UID};
     use std::option::{Self, Option};
+    use std::vector as vec;
 
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::err;
@@ -18,7 +19,7 @@ module suiDouBashiVest::minter{
     const WEEK: u64 = {7 * 86400};
     const EMISSION: u64 = 990; // linearly decrease 1 %
     const PRECISION: u64 = 1000;
-    const TAIL_EMISSION: u64 = 2;
+    const TAIL_EMISSION: u64 = 2; // minium 0.2%
     const WEEKLY: u256 = 15_000_000 ; // 15M
     const LOCK: u64 = { 86400 * 365 * 4 };
 
@@ -30,35 +31,52 @@ module suiDouBashiVest::minter{
         id: UID,
         supply: Supply<SDB>,
         balance: Balance<SDB>,
-
         team: address,
         team_rate: u64,
         active_period: u64,
-
-        weekly: u64 // may exceed
+        weekly: u64
     }
 
-    // one time trigger
-    public fun new(treasury: TreasuryCap<SDB>, ctx: &mut TxContext){
+    // consume treasury to trigger one time initialize
+    public fun initialize(
+        treasury: TreasuryCap<SDB>,
+        vsdb_reg: &mut VSDBRegistry,
+        initiali_amount: u64,
+        claimants: vector<address>,
+        claim_amounts: vector<u64>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
         let minter = Minter{
             id: object::new(ctx),
             supply: coin::treasury_into_supply(treasury),
             balance: balance::zero<SDB>(),
             team: tx_context::sender(ctx),
             team_rate: 30,
-            active_period: ( tx_context::epoch_timestamp_ms(ctx) + ( 2 * WEEK) ) / WEEK * WEEK,
-
-            weekly: 15_000_000 * (math::pow(10, 6)) // 6 decimals
+            active_period: tx_context::epoch_timestamp_ms(ctx) / WEEK * WEEK,
+            weekly: 15_000_000 * (math::pow(10, 9)) // 9 decimals
         };
+        let sdb_balance = balance::increase_supply(&mut minter.supply, initiali_amount);
+
+        // transfer VeNFT
+        let i = 0;
+        while ( i < vec::length(&claimants)){
+            let ads = vec::pop_back(&mut claimants);
+            let amount = vec::pop_back(&mut claim_amounts);
+            let sdb_coin = coin::take(&mut sdb_balance, amount, ctx);
+            vsdb::lock_for(vsdb_reg, sdb_coin, 4 * 365 * 86400, ads, clock, ctx);
+        };
+
+        balance::join(&mut minter.balance, sdb_balance);
         transfer::share_object(minter);
     }
 
-    public entry fun set_team(self: &mut Minter, team: address, ctx: &mut TxContext){
+    entry fun set_team(self: &mut Minter, team: address, ctx: &mut TxContext){
         assert!(tx_context::sender(ctx) == self.team, err::invalid_team());
         self.team = team;
     }
 
-    public entry fun set_team_rate(self: &mut Minter, rate: u64, ctx: &mut TxContext){
+    entry fun set_team_rate(self: &mut Minter, rate: u64, ctx: &mut TxContext){
         assert!(tx_context::sender(ctx) == self.team, err::invalid_team());
         assert!( rate < MAX_TEAM_RATE, err::max_rate());
         self.team_rate = rate;
@@ -66,7 +84,7 @@ module suiDouBashiVest::minter{
 
     // calculate circulating supply as total token supply - locked supply
     public fun circulating_supply(self: &Minter, vsdb_reg: &VSDBRegistry): u64{
-        balance::supply_value(&self.supply) - vsdb::total_supply(vsdb_reg)
+        balance::supply_value(&self.supply) - vsdb::total_minted(vsdb_reg)
     }
 
     /// decay at 1% per week
@@ -83,7 +101,7 @@ module suiDouBashiVest::minter{
     }
     /// (veVELO.totalSupply / VELO.totalsupply)^3 * 0.5 * Emissions
     public fun calculate_growth(self: &Minter, vsdb_reg: &VSDBRegistry, minted: u64): u64{
-        let ve_total = vsdb::total_supply(vsdb_reg);
+        let ve_total = vsdb::total_minted(vsdb_reg);
         let sdb_total = balance::supply_value(&self.supply);
         ((minted * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2
     }
@@ -105,13 +123,18 @@ module suiDouBashiVest::minter{
 
             let weekly = self.weekly;
             // rebase
-            let growth = calculate_growth(self, vsdb_reg, weekly);
-            let team_emission = (self.team_rate * (growth + self.weekly)) / (PRECISION - self.team_rate);
-            let required = growth + self.weekly + team_emission;
+            let rebase = calculate_growth(self, vsdb_reg, weekly);
+            let team_emission = (self.team_rate * (rebase + weekly)) / (PRECISION - self.team_rate);
+            let required = rebase + weekly + team_emission;
             let balance = balance::value(&self.balance);
 
+std::debug::print(&weekly);
+std::debug::print(&rebase);
+std::debug::print(&team_emission);
+std::debug::print(&required);
+
             if(required > balance){
-                // infinite supply, which has to be control
+                // infinite supply, decimals should be adjusted
                 let minted = balance::increase_supply(&mut self.supply, required - balance);
                 balance::join(&mut self.balance, minted);
             };
@@ -120,7 +143,7 @@ module suiDouBashiVest::minter{
             let team_coin = coin::take(&mut self.balance, team_emission, ctx);
             transfer::public_transfer(team_coin, self.team);
             // rebase
-            let rebase_coin = coin::take(&mut self.balance, growth, ctx);
+            let rebase_coin = coin::take(&mut self.balance, rebase, ctx);
             reward_distributor::deposit_reward(distributor, rebase_coin);
 
             // checkpoint balance that was just distributed

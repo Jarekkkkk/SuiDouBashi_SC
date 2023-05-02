@@ -83,8 +83,8 @@ module suiDouBashiVest::voter{
     // - Getter
     public fun get_governor(self: &Voter): address { self.governor }
     public fun get_emergency(self: &Voter): address { self.emergency}
-    public fun get_total_weight(self: &Voter): u64 { self.total_weight}
-    public fun get_weights_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>):u64{
+    public fun get_total_weight(self: &Voter): u64 { self.total_weight }
+    public fun get_weights_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>): u64{
         *table::borrow(&self.weights, object::id(pool))
     }
 
@@ -389,8 +389,9 @@ module suiDouBashiVest::voter{
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
-    // distribute weekly emission
-    fun distribute<X,Y>(
+    // TODO: remove public
+    /// distribute weekly emission
+    public fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
         distributor: &mut Distributor,

@@ -192,6 +192,16 @@ module suiDouBashiVest::vsdb{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        lock_for(reg, coin, duration, tx_context::sender(ctx),clock, ctx);
+    }
+    public entry fun lock_for(
+        reg: &mut VSDBRegistry,
+        coin:Coin<SDB>,
+        duration: u64,
+        recipient: address,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
         let ts = clock::timestamp_ms(clock);
         let unlock_time = round_down_week(duration + ts);
 
@@ -206,8 +216,8 @@ module suiDouBashiVest::vsdb{
         checkpoint_(true, reg, &vsdb, 0, 0, clock);
 
         let id = object::id(&vsdb);
-
-        transfer::public_transfer(vsdb, tx_context::sender(ctx));
+        vsdb.logical_owner = recipient;
+        transfer::public_transfer(vsdb, recipient);
 
         event::deposit(id, amount, unlock_time);
     }
