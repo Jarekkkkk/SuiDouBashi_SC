@@ -156,10 +156,7 @@ module test::setup{
             assert!(pool::get_lp_balance(&lp_b) == res_lp_b - 1000, 0);
             assert!(pool::get_output<SDB, USDC, SDB>(&pool_b, sui_1()) == 499_874, 0);
             assert!(pool::get_output<SDB, USDC, USDC>(&pool_b, usdc_1()) == 499_874_968, 0);
-            //std::debug::print(&pool::get_output<USDC, USDT, USDC>(&pool_a, usdc_1()));
-            //std::debug::print(&pool::get_output<USDC, USDT, USDT>(&pool_a, usdc_1()));
-            //std::debug::print(&pool::get_output<SDB, USDC, SDB>(&pool_b, sui_1()));
-            //std::debug::print(&pool::get_output<SDB, USDC, USDC>(&pool_b, usdc_1()));
+
             test::return_shared(pool_gov);
             test::return_shared(pool_a);
             test::return_shared(pool_b);
@@ -168,14 +165,26 @@ module test::setup{
         };
     }
 
-    use suiDouBashiVest::minter;
+    use suiDouBashiVest::minter::{Self, Minter};
     use suiDouBashiVest::reward_distributor;
-    public fun deploy_minter(s: &mut Scenario){
-        let ( a, _, _ ) = people();
+    use suiDouBashiVest::vsdb::VSDBRegistry;
+    public fun deploy_minter(clock: &mut Clock, s: &mut Scenario){
+        let ( a, _, c) = people();
         next_tx(s,a);{
+            let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let sdb_cap = test::take_from_sender<TreasuryCap<SDB>>(s);
-            minter::new(sdb_cap, ctx(s));
+            let claimants = vec::empty<address>();
+            let claim_amounts = vec::empty<u64>();
+            // maxL 20M
+            minter::initialize(sdb_cap, &mut vsdb_reg, 20 * sui_1M(), claimants, claim_amounts, clock, ctx(s));
             reward_distributor::init_for_testing(ctx(s));
+
+            test::return_shared(vsdb_reg);
+        };
+        next_tx(s,a);{
+            let minter = test::take_shared<Minter>(s);
+            minter::set_team(&mut minter, c, ctx(s));
+            test::return_shared(minter);
         };
     }
 
@@ -217,9 +226,6 @@ module test::setup{
         };
         next_tx(s,a);{ // Assertion: create gauge, I_birbe & E_bribe successfully
             let voter = test::take_shared<Voter>(s);
-
-
-
 
             assert!(voter::get_registry_length(&voter) == 2, 0);
 

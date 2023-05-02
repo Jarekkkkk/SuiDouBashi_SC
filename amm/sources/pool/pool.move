@@ -693,7 +693,6 @@ module suiDouBashi::pool{
 
         let output_y =  get_output_<X,Y,X>(self, dx);
 
-
         assert!(output_y >= output_y_min, err::slippage());
         let _res_x = balance::value(&self.reserve_x);
         let _res_y = balance::value(&self.reserve_y);
@@ -836,6 +835,7 @@ module suiDouBashi::pool{
         formula::get_output(self.stable, dy, (res_y as u64), (res_x as u64), self.decimal_y, self.decimal_x)
     }
 
+    // TODO: remove public, currently for teseting usage
     // - Fee Distribution
     public entry fun claim_fees_player<X,Y>(
         self: &mut Pool<X,Y>,
@@ -889,10 +889,6 @@ module suiDouBashi::pool{
         lp_position.claimable_y = 0;
 
         (coin_x, coin_y)
-    }
-
-    #[test_only] public fun mint_lp<X,Y>(v: u64, ctx: &mut TxContext):Coin<LP_TOKEN<X,Y>>{
-        coin::mint_for_testing(v, ctx)
     }
 }
 

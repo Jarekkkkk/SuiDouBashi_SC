@@ -36,12 +36,12 @@ module suiDouBashiVest::minter{
         active_period: u64,
         weekly: u64
     }
-
+    public fun balance(self: &Minter): u64 { balance::value(&self.balance) }
     // consume treasury to trigger one time initialize
     public fun initialize(
         treasury: TreasuryCap<SDB>,
         vsdb_reg: &mut VSDBRegistry,
-        initiali_amount: u64,
+        initial_amount: u64,
         claimants: vector<address>,
         claim_amounts: vector<u64>,
         clock: &Clock,
@@ -56,7 +56,7 @@ module suiDouBashiVest::minter{
             active_period: tx_context::epoch_timestamp_ms(ctx) / WEEK * WEEK,
             weekly: 15_000_000 * (math::pow(10, 9)) // 9 decimals
         };
-        let sdb_balance = balance::increase_supply(&mut minter.supply, initiali_amount);
+        let sdb_balance = balance::increase_supply(&mut minter.supply, initial_amount);
 
         // transfer VeNFT
         let i = 0;
@@ -71,12 +71,12 @@ module suiDouBashiVest::minter{
         transfer::share_object(minter);
     }
 
-    entry fun set_team(self: &mut Minter, team: address, ctx: &mut TxContext){
+    public entry fun set_team(self: &mut Minter, team: address, ctx: &mut TxContext){
         assert!(tx_context::sender(ctx) == self.team, err::invalid_team());
         self.team = team;
     }
 
-    entry fun set_team_rate(self: &mut Minter, rate: u64, ctx: &mut TxContext){
+    public entry fun set_team_rate(self: &mut Minter, rate: u64, ctx: &mut TxContext){
         assert!(tx_context::sender(ctx) == self.team, err::invalid_team());
         assert!( rate < MAX_TEAM_RATE, err::max_rate());
         self.team_rate = rate;
