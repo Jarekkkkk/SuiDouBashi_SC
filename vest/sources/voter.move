@@ -25,7 +25,7 @@ module suiDouBashiVest::voter{
     use suiDouBashiVest::external_bribe::{Self, ExternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
-    const SCALE_FACTOR: u128 = 1_000_000_000_000_000_000; // 10e18
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
 
     const E_EMPTY_VALUE: u64 = 0;
     const E_NOT_RESET: u64 = 1;
@@ -46,9 +46,9 @@ module suiDouBashiVest::voter{
         weights: Table<ID, u64>, // gauge -> distributed weights
         registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]: for front_end fetching
 
-        index: u128 // distributed_sdb per voting weights ( 1e18 exntension )
+        index: u256 // distributed_sdb per voting weights ( 1e18 exntension )
     }
-    #[test_only] public fun get_index(self: &Voter): u128 { self.index }
+    #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
     // TODO: seperate Fields in VSDB
@@ -70,7 +70,6 @@ module suiDouBashiVest::voter{
 
     // assertion
     fun assert_new_epoch(vsdb: &VSDB, clock: &Clock){
-       //std::debug::print(&(clock::timestamp_ms(clock) / DURATION));
         assert!((clock::timestamp_ms(clock) / DURATION) * DURATION > vsdb::last_voted(vsdb), err::already_voted());
     }
     fun assert_governor(self: &Voter, ctx: &mut TxContext){
@@ -341,7 +340,7 @@ module suiDouBashiVest::voter{
 
     // - Rewards
     /// weekly minted SDB to incentivize pools --> LP_Staker
-    entry fun claim_rewards<X,Y>(
+    public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
         distributor: &mut Distributor,
@@ -415,6 +414,7 @@ module suiDouBashiVest::voter{
             gauge::update_claimable(gauge, 0);
             // deposit the rebase to gauge
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
+
             gauge::distribute_emissions<X,Y>(gauge, internal_bribe, pool, coin_sdb, clock, ctx);
 
             event::distribute_reward<X,Y>(tx_context::sender(ctx), claimable);
@@ -425,33 +425,36 @@ module suiDouBashiVest::voter{
     // TODO: remove public
     /// Similar with LP position in AMM, have to be settled beofre any balances chagned
     public fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
-        let supply = *table::borrow(&self.weights, gauge::pool_id(gauge));
-        if(supply > 0){
+        let gauge_weights = *table::borrow(&self.weights, gauge::pool_id(gauge));
+        if(gauge_weights > 0){
             let s_idx = gauge::get_supply_index(gauge);
             let index_ = self.index;
             gauge::update_supply_index(gauge, index_);
 
             let delta = index_ - s_idx;
             if(delta > 0){
-                let share = (supply as u128) * (delta as u128) / SCALE_FACTOR;// add accrued difference for each supplied token
+                let share = (gauge_weights as u256) * (delta as u256) / SCALE_FACTOR;// add accrued difference for each supplied token
+               std::debug::print(&index_);
+               std::debug::print(&s_idx);
+               std::debug::print(&gauge_weights);
                 if(gauge::is_alive(gauge)){
                     let updated = (share as u64) + gauge::get_claimable(gauge);
                     gauge::update_claimable(gauge, updated);
                 }
-            }
+            };
         }else{
             // new gauge set to global state
             gauge::update_supply_index(gauge, self.index);
         };
     }
 
-    // - Weekly emissions
+    /// update self.index by given weekly emissions
     public fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
         // update global index
         let value = coin::value(&sdb);
-        let ratio = (value as u128) * SCALE_FACTOR / (self.total_weight as u128) ;
+        let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
         if(ratio > 0){
-            self.index = self.index + (ratio as u128);
+            self.index = self.index + (ratio as u256);
         };
         coin::put(&mut self.balance, sdb);
 

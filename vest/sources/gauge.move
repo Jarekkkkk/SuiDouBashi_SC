@@ -25,7 +25,7 @@ module suiDouBashiVest::gauge{
     use suiDouBashi::pool::{Self, Pool, LP};
 
     const DURATION: u64 = { 7 * 86400 };
-    const PRECISION: u128 = 1_000_000_000;
+    const PRECISION: u128 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     friend suiDouBashiVest::voter;
@@ -47,7 +47,7 @@ module suiDouBashiVest::gauge{
         checkpoints: Table<address, TableVec<Checkpoint>>, // each address can stake once for each pool
 
         // voting, distributing, fee
-        supply_index: u128,
+        supply_index: u256, // track the balance
         claimable: u64
     }
 
@@ -75,9 +75,7 @@ module suiDouBashiVest::gauge{
         period_finish: u64,
 
         last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
-        /// TODO: upgrade to u256
         reward_per_token_stored: u128,
-        /// TODO: upgrade to u256
         user_reward_per_token_stored: Table<address, u128>, // record latest withdrawl of staker
         last_earn: Table<address, u64>, // last time staker claim rewards
 
@@ -95,23 +93,23 @@ module suiDouBashiVest::gauge{
     #[test_only]
     public fun get_reward_rate<X,Y>(reward: &Reward<X,Y>):u64 { reward.reward_rate }
     #[test_only]
+    public fun get_period_finish<X,Y>(reward: &Reward<X,Y>): u64{ reward.period_finish }
+    #[test_only]
+    public fun get_last_update_time<X,Y>(reward: &Reward<X,Y>): u64{ reward.last_update_time }
+    #[test_only]
     public fun get_reward_per_token_stored<X,Y>(reward: &Reward<X,Y>): u128{ reward.reward_per_token_stored }
     #[test_only]
-    public fun get_period_finish<X,Y>(reward: &Reward<X,Y>): u64{ reward.period_finish }
-
+    public fun user_reward_per_token_stored_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u128>{
+        &reward.user_reward_per_token_stored
+    }
+    #[test_only]
+    public fun last_earn_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u64>{
+        &reward.last_earn
+    }
     #[test_only]
     public fun reward_checkpoints_borrow<X,Y>(reward: &Reward<X,Y>):&TableVec<RewardPerTokenCheckpoint>{
         &reward.reward_per_token_checkpoints
     }
-     #[test_only]
-    public fun user_reward_per_token_stored_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u128>{
-        &reward.user_reward_per_token_stored
-    }
-     #[test_only]
-    public fun last_earn_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u64>{
-        &reward.last_earn
-    }
-
 
     // Assertion
     public fun assert_alive<X,Y>(self: &Gauge<X,Y>){
@@ -216,10 +214,10 @@ module suiDouBashiVest::gauge{
     public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
 
     public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
-    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u128{ self.supply_index }
+    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u256{ self.supply_index }
     public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
 
-    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u128){ self.supply_index = v; }
+    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){ self.supply_index = v; }
     public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
 
     public fun get_prior_balance_index<X,Y>(
@@ -397,7 +395,7 @@ module suiDouBashiVest::gauge{
 
     // TODO: add friend module
     /// allow staker to withdraw emission, should be called after voter distribute the emissions
-    public fun get_reward<X, Y>(
+    public fun get_reward<X,Y>(
         self: &mut Gauge<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
@@ -406,7 +404,6 @@ module suiDouBashiVest::gauge{
         assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
-
         let _reward = earned<X,Y>(self, staker, clock);
 
         let reward = borrow_reward_mut<X,Y>(self);
@@ -440,18 +437,18 @@ module suiDouBashiVest::gauge{
         clock: &Clock
     ): u128{
         let reward = borrow_reward<X,Y>(self);
-        let reward_stored = reward.reward_per_token_stored;
+        let reward_per_token_stored = reward.reward_per_token_stored;
         let total_supply = pool::get_lp_balance(&self.total_supply);
-        // no accumualated voting
+        // no one staking
         if(total_supply == 0){
-            return reward_stored
+            return reward_per_token_stored
         };
 
         let last_update = reward.last_update_time;
         let period_finish = reward.period_finish;
         let reward_rate = reward.reward_rate;
         let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(last_update, period_finish)) as u128);
-        return reward_stored + elapsed * (reward_rate as u128) * PRECISION / (total_supply as u128)
+        return reward_per_token_stored + (reward_rate as u128) * PRECISION / (total_supply as u128) * elapsed
     }
 
     fun derived_balance<X, Y>(
@@ -531,7 +528,6 @@ module suiDouBashiVest::gauge{
 
         borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
         borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
-
     }
 
     fun update_reward_per_token_<X,Y>(
@@ -617,7 +613,6 @@ module suiDouBashiVest::gauge{
         let start_idx = get_prior_balance_index(self, staker, start_timestamp);
         let end_idx = table_vec::length(bps_borrow) - 1;
         let earned_reward = 0;
-
         // accumulate rewards in each reward checkpoints derived from balance checkpoints
         if(end_idx > 0){
             let i = start_idx;
@@ -632,6 +627,7 @@ module suiDouBashiVest::gauge{
             }
         };
 
+        // accumulating rewards
         let cp = table_vec::borrow(bps_borrow, end_idx);
         let ( _, reward_stored ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
         let user_reward_per_token_stored = if(table::contains(&reward.user_reward_per_token_stored, staker)){

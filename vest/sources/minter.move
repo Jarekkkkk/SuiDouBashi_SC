@@ -128,11 +128,6 @@ module suiDouBashiVest::minter{
             let required = rebase + weekly + team_emission;
             let balance = balance::value(&self.balance);
 
-std::debug::print(&weekly);
-std::debug::print(&rebase);
-std::debug::print(&team_emission);
-std::debug::print(&required);
-
             if(required > balance){
                 // infinite supply, decimals should be adjusted
                 let minted = balance::increase_supply(&mut self.supply, required - balance);
@@ -151,7 +146,6 @@ std::debug::print(&required);
             reward_distributor::checkpoint_total_supply(distributor, vsdb_reg, clock);
 
             event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg), circulating_emission(self, vsdb_reg));
-
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))
         };
         option::none()
