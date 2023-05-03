@@ -164,7 +164,9 @@ module test::main{
     use suiDouBashiVest::voter::{Self, Voter};
     use suiDouBashiVest::reward_distributor::{Distributor};
     use suiDouBashiVest::minter::{ Minter};
-    const SCALE_FACTOR: u128 = 1_000_000_000_000_000_000; // 10e18
+    use sui::table;
+    use sui::table_vec;
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
 
     fun distribute_fees_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, c ) = setup::people();
@@ -185,16 +187,14 @@ module test::main{
         next_tx(s,a);{ // Assertion: voter state is successfully updated
             let voter = test::take_shared<Voter>(s);
             let total_voting_weight = voter::get_total_weight(&voter);
-            let index = (setup::stake_1() as u128) * SCALE_FACTOR / (total_voting_weight as u128);
-
+            let index = (setup::stake_1() as u256) * SCALE_FACTOR / (total_voting_weight as u256);
             // voter
             assert!(voter::get_index(&voter) == index, 404);
             assert!(voter::get_balance(&voter) == setup::stake_1(), 404);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge= test::take_shared<Gauge<USDC, USDT>>(s);
-                let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u128);
-
+                let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u256);
                 assert!(gauge::get_supply_index(&gauge) == index, 404);
                 assert!(gauge::get_claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
 
@@ -204,15 +204,13 @@ module test::main{
             {// pool_b
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
                 let gauge= test::take_shared<Gauge<SDB, USDC>>(s);
-                let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u128);
+                let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u256);
 
                 assert!(gauge::get_supply_index(&gauge) == index, 404);
                 assert!(gauge::get_claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
-
                 test::return_shared(pool);
                 test::return_shared(gauge);
             };
-
             test::return_shared(voter);
         };
         next_tx(s,a);{ // Actions: distribute weekly emissions
@@ -234,12 +232,21 @@ module test::main{
             test::return_shared(gauge);
             test::return_shared(i_bribe);
         };
-        next_tx(s,c);{
+        next_tx(s,c);{ // Assertion: first time distribution
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
             let distributor = test::take_shared<Distributor>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let sdb_team = test::take_from_sender<Coin<SDB>>(s);
+
+           { // new weekly index
+                let _weekly = 14850000000000000;
+                let _supply_index = 1262431592936673;
+                let prev_idx = 85012;
+                let total_voting_weight = voter::get_total_weight(&voter);
+                let index = prev_idx + (_weekly as u256) * SCALE_FACTOR / (total_voting_weight as u256);
+                assert!(voter::get_index(&voter) == index, 404);
+             };
 
             assert!(coin::value(&sdb_team) == 459278350515463 , 404);
             assert!(voter::get_balance(&voter) == 7425000000500008, 404);
@@ -251,9 +258,40 @@ module test::main{
             test::return_shared(minter);
             test::return_shared(distributor);
         };
-        next_tx(s,a);{ // Action: withdraw weekly emissions
+        next_tx(s,a);{ // Action: staker A withdraw weekly emissions
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             gauge::get_reward(&mut gauge, clock, ctx(s));
+            test::return_shared(gauge);
+        };
+        next_tx(s,a);{ // Assertion:
+            let sdb = test::take_from_sender<Coin<SDB>>(s);
+            let voter = test::take_shared<Voter>(s);
+            let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
+            let reward = gauge::borrow_reward(&gauge);
+            let _new_claiabe = 7425000000499992;
+
+            assert!(gauge::get_supply_index(&gauge) == voter::get_index(&voter), 404);
+           // staked for 6 days, previous epoch rate stay at 1
+            assert!(coin::value(&sdb) == 1 * 6 * 86400, 404);
+            assert!( gauge::get_reward_balance(reward) == 7425000001413592 - coin::value(&sdb), 404);
+
+           // reward
+            assert!(gauge::get_period_finish(reward) == get_time(clock) + setup::week() , 404);
+            assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock) , 404);
+
+            //std::debug::print(&gauge::get_reward_rate(reward));
+            //std::debug::print(&gauge::get_reward_per_token_stored(reward));
+            //std::debug::print(table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a));
+            let rps = gauge::reward_checkpoints_borrow(reward);
+            let len = table_vec::length(rps);
+            std::debug::print(table_vec::borrow(rps, len - 1));
+
+            // guage
+            //std::debug::print(&gauge::get_supply_index(&gauge));
+            assert!(gauge::get_claimable(&gauge) == 0, 404);
+
+            burn(sdb);
+            test::return_shared(voter);
             test::return_shared(gauge);
         }
     }
