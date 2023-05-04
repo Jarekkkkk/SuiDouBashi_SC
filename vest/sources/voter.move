@@ -423,7 +423,7 @@ module suiDouBashiVest::voter{
 
     // ===== Internal =====
     // TODO: remove public
-    /// Similar with LP position in AMM, have to be settled beofre any balances chagned
+    /// update gauge's index to check if there's any distributed emissions
     public fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
         let gauge_weights = *table::borrow(&self.weights, gauge::pool_id(gauge));
         if(gauge_weights > 0){
@@ -434,9 +434,6 @@ module suiDouBashiVest::voter{
             let delta = index_ - s_idx;
             if(delta > 0){
                 let share = (gauge_weights as u256) * (delta as u256) / SCALE_FACTOR;// add accrued difference for each supplied token
-               std::debug::print(&index_);
-               std::debug::print(&s_idx);
-               std::debug::print(&gauge_weights);
                 if(gauge::is_alive(gauge)){
                     let updated = (share as u64) + gauge::get_claimable(gauge);
                     gauge::update_claimable(gauge, updated);

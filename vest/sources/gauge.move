@@ -750,11 +750,13 @@ module suiDouBashiVest::gauge{
 
         let reward = borrow_reward_mut<X,Y>(self);
         // initial bribe in each epoch
+
         if(ts >= reward.period_finish){
             coin::put(&mut reward.balance, coin);
             reward.reward_rate = value / DURATION;
         }else{
             // accumulate bribes in each eopch
+
             let _remaining = reward.period_finish - ts;
             let _left = _remaining * reward.reward_rate;
             assert!(value > _left, err::insufficient_bribes());
