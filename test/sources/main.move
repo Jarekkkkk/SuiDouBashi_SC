@@ -530,21 +530,18 @@ module test::main{
             test::return_to_sender(s, sdb);
         };
     }
-    use suiDouBashi::i128::{Self};
     fun vsdb_decay(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
-
-        add_time(clock, 121046382);
+        add_time(clock, 122255982);
 
         next_tx(s,a);{ // Decay the vsdb
             let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb_1 = test::take_from_sender<VSDB>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             assert!(vsdb::latest_voting_weight(&vsdb, clock) == 0, 404);
-           std::debug::print(&i128::zero());
-           std::debug::print(&i128::from(1));
-           std::debug::print(&i128::neg_from(1));
             assert!(vsdb::total_supply_(&vsdb_reg, clock) == 0, 404); //9589041094752000
             test::return_to_sender(s, vsdb);
+            test::return_to_sender(s, vsdb_1);
             test::return_shared(vsdb_reg);
         };
     }
