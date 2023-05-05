@@ -27,8 +27,6 @@ module suiDouBashi::pool{
 
     const MINIMUM_LIQUIDITY: u64 = 1_000;
 
-    const MAX_POOL_VALUE: u64 = { 18446744073709551615 / 10000 }; // MAX_U64 / 10000
-
     const ERR_INVALID_TYPE: u64 = 0;
 
     struct LP_TOKEN<phantom X, phantom Y> has drop {}
@@ -181,7 +179,6 @@ module suiDouBashi::pool{
     public fun quote(res_x:u64, res_y:u64, input_x:u64): u64{
         assert!(res_x > 0 && res_y > 0, err::empty_reserve());
         assert!(input_x > 0, err::zero_amount());
-
         amm_math::mul_div(res_y, input_x, res_x)
     }
 
@@ -352,7 +349,8 @@ module suiDouBashi::pool{
 
         event::liquidity_removed<X,Y>( withdrawl_value_x, withdrawl_value_y, burned_lp);
     }
-    // - swap
+    // TODO: add progrmable tx features to gugarantee future router features
+    /// - swap
     public entry fun swap_for_y<X, Y>(
         pool: &mut Pool<X, Y>,
         coin_x: Coin<X>,
@@ -368,6 +366,21 @@ module suiDouBashi::pool{
 
         event::swap<X,Y>(input, output);
     }
+    // public entry fun swap_for_y_dev<X, Y>(
+    //     pool: &mut Pool<X, Y>,
+    //     coin_x: Coin<X>,
+    //     output_y_min: u64,
+    //     clock: &Clock,
+    //     ctx: &mut TxContext
+    // ){
+    //     assert_pool_unlocked(pool);
+
+    //     let (coin_y, input, output) = swap_for_y_(pool, coin_x, output_y_min,clock, ctx);
+
+    //     transfer::public_transfer(coin_y, tx_context::sender(ctx));
+
+    //     event::swap<X,Y>(input, output);
+    // }
     public entry fun swap_for_x<X, Y>(
         pool: &mut Pool<X, Y>,
         coin_y: Coin<Y>,
@@ -609,9 +622,8 @@ module suiDouBashi::pool{
         };
         // pool update
         update_timestamp_(pool, clock);
-        let pool_coin_x = balance::join<X>(&mut pool.reserve_x, coin::into_balance(coin_x));
-        let pool_coin_y = balance::join<Y>(&mut pool.reserve_y,  coin::into_balance(coin_y));
-        assert!(pool_coin_x < MAX_POOL_VALUE && pool_coin_y < MAX_POOL_VALUE ,err::pool_max_value());
+        balance::join<X>(&mut pool.reserve_x, coin::into_balance(coin_x));
+        balance::join<Y>(&mut pool.reserve_y,  coin::into_balance(coin_y));
 
         let lp_balance = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, lp_output);
 
@@ -698,8 +710,7 @@ module suiDouBashi::pool{
         let _res_y = balance::value(&self.reserve_y);
         update_timestamp_(self, clock);
 
-        let self_bal_x = balance::join<X>(&mut self.reserve_x, coin::into_balance(coin_x));
-        assert!(self_bal_x <= MAX_POOL_VALUE, err::pool_max_value());
+        balance::join<X>(&mut self.reserve_x, coin::into_balance(coin_x));
         let coin_y = coin::take<Y>(&mut self.reserve_y, output_y, ctx);
 
         let coin_fee = coin::take(&mut self.reserve_x, fee_x, ctx);
@@ -748,8 +759,7 @@ module suiDouBashi::pool{
         update_timestamp_(self, clock);
 
         let coin_y_balance = coin::into_balance(coin_y);
-        let pool_bal_y = balance::join<Y>(&mut self.reserve_y, coin_y_balance);
-        assert!(pool_bal_y <= MAX_POOL_VALUE, err::pool_max_value());
+        balance::join<Y>(&mut self.reserve_y, coin_y_balance);
 
         let coin_y = coin::take<X>(&mut self.reserve_x, output_x, ctx);
 
