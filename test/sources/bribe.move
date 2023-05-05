@@ -100,7 +100,7 @@ module test::bribe_test{
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
             assert!(gauge::earned(&gauge_a, a, clock) == 86400 , 404);
-            //assert!(gauge::earned(&gauge_b, a, clock) == 86400 , 404);
+            assert!(gauge::earned(&gauge_b, a, clock) == 86400 , 404);
 
             gauge::unstake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
             gauge::unstake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));

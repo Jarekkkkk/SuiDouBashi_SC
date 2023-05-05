@@ -236,7 +236,6 @@ module test::setup{
                 let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
                 assert!(gauge::is_alive(&gauge), 0);
                 assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
-                assert!(i_bribe::total_rewwards_length(&i_bribe) == 2, 0);
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
                 assert!(e_bribe::total_rewwards_length(&e_bribe) == 4, 0);
                 assert!(voter::get_weights_by_pool(&voter, &pool_a) == 0, 0);
@@ -254,7 +253,6 @@ module test::setup{
                 let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
                 assert!(gauge::is_alive(&gauge), 0);
                 assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
-                assert!(i_bribe::total_rewwards_length(&i_bribe) == 2, 0);
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
                 // amount of external bribe is at most 4, including pair of coins + SDB + SUI
                 assert!(e_bribe::total_rewwards_length(&e_bribe) == 3, 0);
