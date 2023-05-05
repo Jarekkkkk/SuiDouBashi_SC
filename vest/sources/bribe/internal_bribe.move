@@ -26,19 +26,16 @@ module suiDouBashiVest::internal_bribe{
     friend suiDouBashiVest::voter;
 
     const DURATION: u64 = { 7 * 86400 };
-    const PRECISION: u128 = 1_000_000_000;
+    const PRECISION: u128 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
-
         /// Voting weight
         total_supply: u64,
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
-
         checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> balance checkpoint
-
     }
 
     // - Self
@@ -49,13 +46,10 @@ module suiDouBashiVest::internal_bribe{
 
     struct Reward<phantom X, phantom Y, phantom T> has key, store{
         id: UID,
-
+        /// Reward
         balance: Balance<T>,
-
-        //update when bribe is deposited
         reward_rate: u64, // bribe_amount/ 7 days
-        period_finish: u64, // update when bribe is deposited, (internal_bribe -> fee ), (external_bribe -> doverse coins)
-
+        period_finish: u64,
         last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
         reward_per_token_stored: u128,
 
@@ -74,6 +68,11 @@ module suiDouBashiVest::internal_bribe{
         assert_generic_type<X,Y,T>();
         dof::borrow_mut(&mut self.id, type_name::get<T>())
     }
+    #[test_only]
+    public fun get_reward_rate<X,Y,T>(reward: &Reward<X,Y,T>):u64 { reward.reward_rate }
+    #[test_only]
+    public fun get_period_finish<X,Y,T>(reward: &Reward<X,Y,T>): u64{ reward.period_finish }
+    public fun get_reward_balance<X,Y,T>(reward: &Reward<X,Y,T>): u64{ balance::value(&reward.balance) }
 
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
@@ -93,7 +92,6 @@ module suiDouBashiVest::internal_bribe{
             checkpoints: table::new<ID, vector<Checkpoint>>(ctx), // voting weights for each voter,
         };
         let id = object::id(&bribe);
-
 
         let reward_x = Reward<X,Y,X>{
             id: object::new(ctx),
@@ -366,7 +364,7 @@ module suiDouBashiVest::internal_bribe{
     }
 
     /// each pro rata coin distribution with total voting supply
-    fun reward_per_token<X, Y, T>(
+    public fun reward_per_token<X, Y, T>(
         self: &InternalBribe<X,Y>,
         clock: &Clock
     ): u128{
@@ -450,7 +448,6 @@ module suiDouBashiVest::internal_bribe{
         let end_time = math::max(timestamp_1, start_timestamp);
         let start_time = math::max(timestamp_0, start_timestamp);
         let reward =  ((math::min(end_time, reward.period_finish) - math::min(start_time, reward.period_finish)) as u128) * (reward.reward_rate as u128) * PRECISION / (supply as u128) ;
-
         (reward, end_time)
     }
 
@@ -479,6 +476,7 @@ module suiDouBashiVest::internal_bribe{
         reward.reward_per_token_stored = reward_per_token_stored;
         reward.last_update_time = last_update_time;
     }
+
     /// require when
     /// 1. reward claims,
     /// 2. deposit ( votes )
@@ -528,7 +526,6 @@ module suiDouBashiVest::internal_bribe{
                 i = i + 1;
             }
         };
-
         if(actual_last){
             let sp_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, end_idx));
             let sp_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, end_idx));

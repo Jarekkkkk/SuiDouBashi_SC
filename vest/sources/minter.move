@@ -106,8 +106,9 @@ module suiDouBashiVest::minter{
         ((minted * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2
     }
 
+     // TODO: add firned module
      /// update period can only be called once per epoch (1 week)
-     public (friend) fun update_period (
+     public fun update_period (
         self: &mut Minter,
         distributor: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry ,

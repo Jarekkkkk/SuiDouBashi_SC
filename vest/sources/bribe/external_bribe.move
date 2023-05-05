@@ -287,7 +287,7 @@ module suiDouBashiVest::external_bribe{
             get_reward<X,Y,SDB>(self, vsdb, clock, ctx);
         };
     }
-    /// allows a voter to claim reward for external bribea
+    /// allows a voter to claim reward for external bribes
     public entry fun get_reward<X, Y, T>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
@@ -301,13 +301,15 @@ module suiDouBashiVest::external_bribe{
         let _reward = earned<X,Y,T>(self, vsdb, clock);
 
         let reward = borrow_reward_mut<X,Y,T>(self);
+        if(!table::contains(&reward.last_earn, id)){
+            table::add(&mut reward.last_earn, id, 0);
+        };
         *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock);
-
         if(_reward > 0){
-            let coin_x = coin::take(&mut reward.balance, _reward, ctx);
-            let value_x = coin::value(&coin_x);
+            let coin = coin::take(&mut reward.balance, _reward, ctx);
+            let value_x = coin::value(&coin);
             transfer::public_transfer(
-                coin_x,
+                coin,
                 tx_context::sender(ctx)
             );
             event::claim_reward(tx_context::sender(ctx), value_x);
@@ -323,11 +325,16 @@ module suiDouBashiVest::external_bribe{
         assert_generic_type<X,Y,T>();
         let id = object::id(vsdb);
         let reward = borrow_reward<X,Y,T>(self);
-        if(!table::contains(&reward.last_earn, id) || !table::contains(&self.checkpoints, id) || table::length(&reward.token_rewards_per_epoch) == 0 ){
+        if(!table::contains(&self.checkpoints, id) || table::length(&reward.token_rewards_per_epoch) == 0 ){
             return 0
         };
 
-        let start_timestamp = *table::borrow(&reward.last_earn, id);
+        let start_timestamp = if(table::contains(&reward.last_earn, id)){
+            *table::borrow(&reward.last_earn, id)
+        }else{
+            0
+        };
+
         let bps_borrow = table::borrow(&self.checkpoints, id);
         if(vec::length(bps_borrow) == 0) return 0;
 
@@ -357,7 +364,9 @@ module suiDouBashiVest::external_bribe{
                 }else{
                     0
                 };
-                pre_reward_bal = checkpoints::balance(cp_0) * rewards / _pre_supply;
+                pre_reward_bal = (checkpoints::balance(cp_0) as u128) * (rewards as u128) / (_pre_supply as u128);
+
+                i = i + 1;
             }
         };
 
@@ -373,10 +382,10 @@ module suiDouBashiVest::external_bribe{
             }else{
                 0
             };
-            earned_reward = earned_reward + checkpoints::balance(cp) * rewards / supply;
+            earned_reward = earned_reward + (checkpoints::balance(cp) as u128) * (rewards as u128) / (supply as u128);
         };
 
-        return earned_reward
+        return (earned_reward as u64)
     }
 
 
@@ -458,6 +467,7 @@ module suiDouBashiVest::external_bribe{
             table::add(&mut reward.token_rewards_per_epoch, adjusted_ts, epoch_rewards + value);
         };
         reward.period_finish = adjusted_ts + DURATION;
+
 
         event::notify_reward<X>(tx_context::sender(ctx), value);
     }

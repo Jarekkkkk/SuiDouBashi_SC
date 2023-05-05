@@ -120,16 +120,7 @@ module suiDouBashiVest::voter{
     ):Potato{
         assert_new_epoch(vsdb, clock);
         vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-
-        let weights = vec_map::empty<ID, u64>();
-        let ( i, len ) = ( 0, vsdb::pool_votes_length(vsdb) );
-
-        // TODO: copy or loop ?
-        while( i < len ){
-            let (pool_id, value ) = vsdb::clear_pool_votes(vsdb, i);
-            vec_map::insert(&mut weights, pool_id, value);
-            i = i + 1;
-        };
+        let weights = vsdb::clear_pool_votes(vsdb);
         // successfully clean the vec_map in vsdb
         assert!(vec_map::size(vsdb::pool_votes_borrow(vsdb)) == 0, E_NOT_RESET);
 
@@ -159,7 +150,7 @@ module suiDouBashiVest::voter{
         vsdb::abstain(vsdb);
     }
 
-    /// Be called in multiple function
+    /// Be called in programmable tx
     public fun reset_<X,Y>(
         potato: Potato,
         self: &mut Voter,
@@ -195,6 +186,7 @@ module suiDouBashiVest::voter{
 
     public fun poke_entry(
         potato: Potato,
+        self: &mut Voter,
         vsdb: &mut VSDB,
     ):Potato{
         assert!(!potato.reset && potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
@@ -210,7 +202,7 @@ module suiDouBashiVest::voter{
             vec::push_back( &mut pools, object::id_to_address(pool_id));
         };
 
-        vote_entry(potato, pools, weights)
+        vote_entry(potato, self, pools, weights)
     }
 
     public fun vote_<X,Y>(
@@ -256,20 +248,22 @@ module suiDouBashiVest::voter{
     /// Should be called after reset
     public fun vote_entry(
         potato: Potato,
+        self: &mut Voter,
         pools: vector<address>,
         weights: vector<u64>,
     ):Potato{
         assert!(potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
         assert!(vec::length(&pools) == vec::length(&weights), E_NOT_VOTE );
-
+        self.total_weight = self.total_weight - potato.used_weight;
         let total_weight = 0;
 
-        let i = 0;
-        while( i < vec::length(&weights)){
+        let (i ,len) = ( 0, vec::length(&weights));
+        while( i < len){
             let weight = vec::pop_back(&mut weights);
             let pool = vec::pop_back(&mut pools);
             total_weight = total_weight + weight;
             vec_map::insert(&mut potato.weights, object::id_from_address(pool), weight);
+            i = i + 1;
         };
 
         potato.used_weight = 0;
@@ -351,34 +345,35 @@ module suiDouBashiVest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        distribute(self, minter, distributor, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
+        // could be optimized by checking if weekly emision is distributed to cost down the gas usage
+        distribute_(self, minter, distributor, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
         // Guage collect SDB weekly emission
         gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
 
     /// External Bribe --> voter
-    entry fun claim_bribes<X,Y, T>(
+    public entry fun claim_bribes<X,Y>(
         external_bribe: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        // external
-        external_bribe::get_reward<X,Y,T>(external_bribe, vsdb, clock, ctx);
+        external_bribe::get_all_rewards<X,Y>(external_bribe, vsdb, clock, ctx);
     }
 
     /// Internal Bribe --> voter
-    entry fun claim_fees<X,Y, T>(
+    public entry fun claim_fees<X,Y>(
         internal_bribe: &mut InternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        internal_bribe::get_reward<X,Y,T>(internal_bribe, vsdb, clock, ctx);
+        internal_bribe::get_reward<X,Y,X>(internal_bribe, vsdb, clock, ctx);
+        internal_bribe::get_reward<X,Y,Y>(internal_bribe, vsdb, clock, ctx);
     }
 
     // collect Fees from Pool
-    entry fun distribute_fees<X,Y>(
+    public entry fun distribute_fees<X,Y>(
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
@@ -388,9 +383,9 @@ module suiDouBashiVest::voter{
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
-    // TODO: remove public
-    /// distribute weekly emission
-    public fun distribute<X,Y>(
+
+    /// distribute weekly emission, have to be called each week, otherwise all the stakers of the gauge lose its shares
+    public fun distribute_<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
         distributor: &mut Distributor,

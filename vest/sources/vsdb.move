@@ -448,7 +448,8 @@ module suiDouBashiVest::vsdb{
         voting_weight(self, clock::timestamp_ms(clock))
     }
 
-    public fun latest_total_voting_weight(reg: &VSDBRegistry, clock: &Clock): u64{
+    // TODO: IMPORTANT!
+    public fun total_supply_(reg: &VSDBRegistry, clock: &Clock): u64{
         total_voting_weight(reg, clock::timestamp_ms(clock))
     }
 
@@ -469,7 +470,11 @@ module suiDouBashiVest::vsdb{
             if(t_i > ts){
                 t_i = ts ;
             }else{
-                d_slope = *table::borrow(&self.slope_changes, t_i);
+                d_slope = if(table::contains(&self.slope_changes, t_i)){
+                    *table::borrow(&self.slope_changes, t_i)
+                }else{
+                    i128::zero()
+                };
             };
             let time_left_unlock = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
             last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left_unlock));
@@ -483,7 +488,7 @@ module suiDouBashiVest::vsdb{
             i = i +1 ;
         };
 
-        if(i128::compare(&last_point_bias, &i128::zero()) == 1){
+        if(i128::is_neg(&last_point_bias)){
             last_point_bias = i128::zero();
         };
 
@@ -869,12 +874,6 @@ module suiDouBashiVest::vsdb{
     public (friend) fun new_pool_votes(self: &mut VSDB, pool_id: ID){
         vec_map::insert(&mut self.pool_votes, pool_id, 0);
     }
-    public (friend) fun pool_votes_into(self: &mut VSDB): VecMap<ID, u64> {
-        let pool_votes = *&self.pool_votes;
-        self.pool_votes = vec_map::empty<ID, u64>();
-
-        return pool_votes
-    }
     public fun pool_votes_exist(self: &VSDB, pool_id: ID):bool{
         vec_map::contains(&self.pool_votes, &pool_id)
     }
@@ -882,8 +881,13 @@ module suiDouBashiVest::vsdb{
         vec_map::insert(&mut self.pool_votes, pool_id, value);
     }
     /// Remove both entry & value
-    public (friend) fun clear_pool_votes(self: &mut VSDB, idx: u64):(ID, u64){
-        vec_map::remove_entry_by_idx(&mut self.pool_votes, idx)
+    public (friend) fun clear_pool_votes(self: &mut VSDB): VecMap<ID, u64>{
+        let pool_votes = *&self.pool_votes;
+        self.pool_votes = vec_map::empty<ID, u64>();
+        // while( i < len){
+
+        // };
+        pool_votes
     }
     public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
         self.used_weights = w;
