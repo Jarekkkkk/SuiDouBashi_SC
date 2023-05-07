@@ -2,8 +2,7 @@
 module suiDouBashi::formula{
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
-    use suiDouBashi::math;
-    use sui::math as s_math;
+    use sui::math;
 
     public fun k_(res_x: u64, res_y: u64, scale_x: u64, scale_y: u64): u256 {
         // x^3y + xy^3 = k
@@ -29,8 +28,8 @@ module suiDouBashi::formula{
                 dx,
                 reserve_x,
                 reserve_y,
-                s_math::pow(10, decimal_x),
-                s_math::pow(10, decimal_y)
+                math::pow(10, decimal_x),
+                math::pow(10, decimal_y)
             ) as u64)
         }else{
             (variable_swap_output( dx, reserve_x, reserve_y) as u64)
@@ -68,7 +67,7 @@ module suiDouBashi::formula{
     }
 
     /// Calculate optimized one-side adding liquidity
-    public fun zap_optimized_output(res_x: u256, input_x: u256, fee_percentage: u64):u256{
+    public fun zap_optimized_output(res_x: u256, input_x: u256, fee_percentage: u8):u256{
         // let var_1 = ( 4 * scaling_ * scaling_ - 4 * fee_ * scaling_ + fee_ * fee_);
         // let var_2 =  4 * scaling_ * scaling_ -  4 * fee_ * scaling_ ;
         // let var_3 = ( 2 * scaling_ - fee_);
@@ -85,7 +84,7 @@ module suiDouBashi::formula{
             (399_800_025, 399_800_000, 19_995, 19_990)
         };
 
-        (math::sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4
+        (sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4
     }
 
     fun get_y(x0: u256, xy: u256, y: u256): u256 {
@@ -127,6 +126,32 @@ module suiDouBashi::formula{
     fun d(x0: u256, y: u256): u256 {
         3 * x0 * (y * y/ SCALE_FACTOR) / SCALE_FACTOR + (x0 * x0 / SCALE_FACTOR * x0 / SCALE_FACTOR)
         //3*x0*y^2 + x0^3
+    }
+
+    public fun sqrt_u256(y: u256):u256 {
+        let z = 0;
+        if (y > 3) {
+            z = y;
+            let x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+            z = 1;
+        };
+        z
+    }
+
+    #[test] fun test_sqrt256(){
+        let foo = sqrt_u256(3);
+        let bar = sqrt_u256(100);
+
+        let baz = sqrt_u256(289465520400);
+
+        assert!(foo == 1, 0);
+        assert!(bar == 10, 0);
+        assert!(baz == 538020, 1);
     }
     #[test]
     fun test_varable_swap_output(){

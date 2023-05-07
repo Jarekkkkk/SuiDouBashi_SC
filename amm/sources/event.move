@@ -4,19 +4,7 @@ module suiDouBashi::event{
 
     // == event ==
 
-    // - Profile
-    struct ItemAdded<phantom T> has copy, drop {
-        profile_id: ID,
-        did_id: ID
-    }
-    struct ItemRemoved<phantom T> has copy, drop {
-        profile_id: ID,
-        did_id: ID,
-    }
     // - AMM
-    struct GuardianAdded has copy, drop{
-        guardian: address
-    }
     struct PoolCreated<phantom X, phantom Y> has copy, drop{
         pool_id: ID,
         creator: address
@@ -29,7 +17,7 @@ module suiDouBashi::event{
     struct LiquidityRemoved<phantom X, phantom Y> has copy, drop{
         withdrawl_x: u64,
         withdrawl_y: u64,
-        burned_lp: u64
+        lp_token: u64
     }
     struct Swap<phantom X, phantom Y> has copy, drop{
         input: u64,
@@ -52,37 +40,9 @@ module suiDouBashi::event{
         amount_y: u64
     }
 
-    // - ESCROW
-    struct Deposit {}
-    struct Withdraw {}
-    struct Supply {}
 
-    // - Profile
-    public fun item_added<T>(profile_id:ID, did_id: ID){
-        emit(
-            ItemAdded<T>{
-                profile_id,
-                did_id
-            }
-        );
-    }
-    public fun item_removed<T>(profile_id:ID, did_id: ID){
-        emit(
-            ItemRemoved<T>{
-                profile_id,
-                did_id
-            }
-        );
-    }
+    // - AMM
 
-    // - AMM_v1
-    public fun guardian_added(guardian: address){
-        emit(
-            GuardianAdded{
-                guardian
-            }
-        )
-    }
     public fun pool_created <X, Y>(pool_id: ID, creator: address){
         emit(
             PoolCreated<X,Y>{
@@ -100,12 +60,12 @@ module suiDouBashi::event{
             }
         )
     }
-    public fun liquidity_removed <X, Y>(withdrawl_x: u64, withdrawl_y: u64, burned_lp: u64){
+    public fun liquidity_removed <X, Y>(withdrawl_x: u64, withdrawl_y: u64, lp_token: u64){
         emit(
             LiquidityRemoved<X, Y>{
                 withdrawl_x,
                 withdrawl_y,
-                burned_lp
+                lp_token
             }
         )
     }

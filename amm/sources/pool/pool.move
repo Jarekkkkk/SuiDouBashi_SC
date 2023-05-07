@@ -10,14 +10,11 @@ module suiDouBashi::pool{
     use std::option::{Self, Option};
     use std::type_name;
 
-    use suiDouBashi::err;
     use suiDouBashi::event;
     use suiDouBashi::amm_math;
     use suiDouBashi::formula;
 
     friend suiDouBashi::pool_reg;
-
-    //friend suiDouBashiVest::gauge;
 
     const FEE_SCALING:u64 = 10000; //fee percentage: [0.01%, 100%]
 
@@ -27,7 +24,18 @@ module suiDouBashi::pool{
 
     const MINIMUM_LIQUIDITY: u64 = 1_000;
 
-    const ERR_INVALID_TYPE: u64 = 0;
+    // ERROR
+    // - Pool
+    const ERR_INVALID_TYPE: u64 = 000;
+    const ERR_POOL_LOCK: u64 = 001;
+    const ERR_EMPTY_INPUT: u64 = 002;
+    const ERR_INSIFFICIENT_INPUT: u64 = 003;
+    const ERR_EMPTY_RESERVE: u64 = 004;
+    const ERR_K: u64 = 005;
+    // - Flashloan
+    const ERR_INSUFFICIENT_LOAN: u64 = 100;
+    const ERR_INVALID_REPAY: u64 = 101;
+
 
     struct LP_TOKEN<phantom X, phantom Y> has drop {}
 
@@ -58,7 +66,7 @@ module suiDouBashi::pool{
         fee_y:  Balance<Y>,
         index_x: u256, // fee_x/ total_supply * 10e18
         index_y: u256, // fee_y/ total_supply * 10e18
-        fee_percentage:u64, // 2 decimal places
+        fee_percentage: u8, // 2 decimal placee, range[ 1%, 5% ]
     }
 
     public fun get_fee_x<X,Y>(self:&Pool<X,Y>):u64{ balance::value(&self.fee.fee_x) }
@@ -92,8 +100,8 @@ module suiDouBashi::pool{
     struct LP<phantom X, phantom Y> has key, store{
         id: UID,
         lp_balance: Balance<LP_TOKEN<X,Y>>,
-        position_x: u256, //
-        position_y: u256,
+        index_x: u256, //
+        index_y: u256,
         claimable_x: u64,
         claimable_y: u64
     }
@@ -102,26 +110,26 @@ module suiDouBashi::pool{
         LP<X,Y>{
             id: object::new(ctx),
             lp_balance: balance::zero<LP_TOKEN<X,Y>>(),
-            position_x: self.fee.index_x,
-            position_y: self.fee.index_y,
+            index_x: self.fee.index_x,
+            index_y: self.fee.index_y,
             claimable_x: 0,
             claimable_y: 0,
         }
     }
 
     /// IMPORTANT: all the claimable fees have to be settled before balance changes
-    public entry fun join_lp<X,Y>(self: &Pool<X,Y>, payee: &mut LP<X,Y>, payer: &mut LP<X,Y>, value: u64){
-        update_lp_(self, payee);
-        update_lp_(self, payer);
-        let balance = balance::split(&mut payer.lp_balance, value);
-        balance::join(&mut payee.lp_balance, balance);
+    public entry fun join_lp<X,Y>(self: &Pool<X,Y>, payee_lp: &mut LP<X,Y>, payer_lp: &mut LP<X,Y>, value: u64){
+        update_lp_(self, payee_lp);
+        update_lp_(self, payer_lp);
+        let balance = balance::split(&mut payer_lp.lp_balance, value);
+        balance::join(&mut payee_lp.lp_balance, balance);
     }
     public entry fun delete_lp<X,Y>(lp: LP<X,Y>){
         let LP {
             id,
             lp_balance,
-            position_x: _,
-            position_y: _,
+            index_x: _,
+            index_y: _,
             claimable_x: _,
             claimable_y: _
         } = lp;
@@ -131,8 +139,6 @@ module suiDouBashi::pool{
     public fun get_lp_balance<X,Y>(claim: &LP<X,Y>):u64{ balance::value(&claim.lp_balance) }
     public fun get_claimable_x<X,Y>(lp: &LP<X,Y>):u64{ lp.claimable_x }
     public fun get_claimable_y<X,Y>(lp: &LP<X,Y>):u64{ lp.claimable_y }
-    public fun get_position_x<X,Y>(lp: &LP<X,Y>):u256{ lp.position_x }
-    public fun get_position_y<X,Y>(lp: &LP<X,Y>):u256{ lp.position_y }
 
     // Flash Loan
     struct Receipt<phantom X, phantom Y, phantom T> {
@@ -142,7 +148,7 @@ module suiDouBashi::pool{
 
     // ===== Assertion =====
     fun assert_pool_unlocked<X, Y>(pool: &Pool<X, Y>){
-        assert!(pool.locked == false, err::pool_unlocked());
+        assert!(pool.locked == false, ERR_POOL_LOCK);
     }
     fun assert_valid_type<X,Y,T>(){
         let type = type_name::get<T>();
@@ -171,17 +177,18 @@ module suiDouBashi::pool{
     public fun get_price(base: u64, quote:u64): u64{
         quote / base
     }
-    public fun calculate_fee(value: u64, fee: u64): u64{
-        value * fee / FEE_SCALING
+    public fun calculate_fee(value: u64, fee: u8): u64{
+        value * (fee as u64) / FEE_SCALING
     }
 
     /// b' (optimzied_) = (Y/X) * a, subjected to Y/X = b/a
     public fun quote(res_x:u64, res_y:u64, input_x:u64): u64{
-        assert!(res_x > 0 && res_y > 0, err::empty_reserve());
-        assert!(input_x > 0, err::zero_amount());
+        assert!(res_x > 0 && res_y > 0, ERR_EMPTY_INPUT);
+        assert!(input_x > 0, ERR_EMPTY_INPUT);
         amm_math::mul_div(res_y, input_x, res_x)
     }
 
+    // TBD: should this be divided into get_output_x & get_output_y
     /// T = input_type, input_x: swap_amount
     public fun get_output<X,Y,T>(
         self: &Pool<X,Y>,
@@ -228,7 +235,7 @@ module suiDouBashi::pool{
     }
 
     // ===== Setter =====
-    public (friend) fun update_fee<X,Y>(self: &mut Pool<X,Y>, fee: u64){
+    public (friend) fun update_fee<X,Y>(self: &mut Pool<X,Y>, fee: u8){
         self.fee.fee_percentage = fee;
     }
     public (friend) fun udpate_lock<X,Y>(self: &mut Pool<X,Y>, locked: bool){
@@ -266,10 +273,10 @@ module suiDouBashi::pool{
         let lp_balance = get_lp_balance(lp_position);
         if(lp_balance > 0){
             // record down the percentage diffreence
-            let delta_x = self.fee.index_x - lp_position.position_x;
-            let delta_y = self.fee.index_y - lp_position.position_y;
-            lp_position.position_x = self.fee.index_x;
-            lp_position.position_y = self.fee.index_y;
+            let delta_x = self.fee.index_x - lp_position.index_x;
+            let delta_y = self.fee.index_y - lp_position.index_y;
+            lp_position.index_x = self.fee.index_x;
+            lp_position.index_y = self.fee.index_y;
 
             if(delta_x > 0){
                 let share = (lp_balance as u256) * delta_x / SCALE_FACTOR;
@@ -280,8 +287,8 @@ module suiDouBashi::pool{
                 lp_position.claimable_y = lp_position.claimable_y + (share as u64);
             };
         }else{
-            lp_position.position_x = self.fee.index_x;
-            lp_position.position_y = self.fee.index_y;
+            lp_position.index_x = self.fee.index_x;
+            lp_position.index_y = self.fee.index_y;
         };
     }
     /// Update global fee distribution when swapping
@@ -300,8 +307,7 @@ module suiDouBashi::pool{
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
         coin_y: Coin<Y>,
-        // required when deposit, this is easily achieved by leveraging on programmable tx
-        lp_position: &mut LP<X,Y>,
+        lp: &mut LP<X,Y>, // should create in advance
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
@@ -313,15 +319,15 @@ module suiDouBashi::pool{
         , clock, ctx);
         let lP_value = balance::value(&lp_bal);
         // lp position update
-        update_lp_(self, lp_position);
-        balance::join(&mut lp_position.lp_balance, lp_bal);
+        update_lp_(self, lp);
+        balance::join(&mut lp.lp_balance, lp_bal);
 
         event::liquidity_added<X,Y>(deposit_x, deposit_y, lP_value)
     }
     // - remove liquidity
     public entry fun remove_liquidity<X, Y>(
         self:&mut Pool<X, Y>,
-        lp_position: &mut LP<X,Y>,
+        lp: &mut LP<X,Y>,
         value: u64,
         withdrawl_x_min:u64,
         withdrawl_y_min:u64,
@@ -330,8 +336,8 @@ module suiDouBashi::pool{
     ){
         assert_pool_unlocked(self);
         // lp position update
-        update_lp_(self, lp_position);
-        let lp_token = coin::take(&mut lp_position.lp_balance, value, ctx);
+        update_lp_(self, lp);
+        let lp_token = coin::take(&mut lp.lp_balance, value, ctx);
 
         let ( withdrawl_x, withdrawl_y, burned_lp) = remove_liquidity_(self, lp_token, withdrawl_x_min, withdrawl_y_min, clock, ctx);
 
@@ -445,7 +451,7 @@ module suiDouBashi::pool{
     ):(Coin<X>, Receipt<X,Y,X>){
         let (res_x, _,  _) = get_reserves(self);
 
-        assert!( amount <= res_x, err::insufficient_borrow());
+        assert!( amount <= res_x, ERR_INSUFFICIENT_LOAN);
         let fee = calculate_fee(amount, self.fee.fee_percentage);
         let loan = coin::take(&mut self.reserve_x, amount, ctx);
 
@@ -458,7 +464,7 @@ module suiDouBashi::pool{
     ):(Coin<Y>, Receipt<X,Y,Y>){
         let (_, res_y,  _) = get_reserves(self);
 
-        assert!( amount <= res_y, err::insufficient_borrow());
+        assert!( amount <= res_y, ERR_INSUFFICIENT_LOAN);
         let fee = calculate_fee(amount, self.fee.fee_percentage);
         let loan = coin::take(&mut self.reserve_y, amount, ctx);
 
@@ -466,7 +472,7 @@ module suiDouBashi::pool{
     }
     public fun repay_loan_x<X,Y>(self: &mut Pool<X,Y>, payment: Coin<X>, receipt: Receipt<X,Y,X>, clock:&Clock, ctx: &mut TxContext) {
         let Receipt { amount, fee } = receipt;
-        assert!(coin::value(&payment) == amount + fee, err::invalid_repay_amount());
+        assert!(coin::value(&payment) == amount + fee, ERR_INVALID_REPAY);
 
         let coin_fee = coin::split(&mut payment, fee, ctx);
         coin::put(&mut self.fee.fee_x, coin_fee);
@@ -477,7 +483,7 @@ module suiDouBashi::pool{
     }
     public fun repay_loan_y<X,Y>(self: &mut Pool<X,Y>, payment: Coin<Y>, receipt: Receipt<X,Y,Y>, clock: &Clock, ctx: &mut TxContext) {
         let Receipt { amount, fee } = receipt;
-        assert!(coin::value(&payment) == amount + fee, err::invalid_repay_amount());
+        assert!(coin::value(&payment) == amount + fee, ERR_INVALID_REPAY);
 
         let coin_fee = coin::split(&mut payment, fee, ctx);
         coin::put(&mut self.fee.fee_y, coin_fee);
@@ -492,7 +498,7 @@ module suiDouBashi::pool{
         stable: bool,
         metadata_x: &CoinMetadata<X>,
         metadata_y: &CoinMetadata<Y>,
-        fee_percentage: u64,
+        fee_percentage: u8,
         ctx: &mut TxContext
     ):ID{
         let lp_supply = balance::create_supply(LP_TOKEN<X, Y>{});
@@ -547,13 +553,13 @@ module suiDouBashi::pool{
         }else{
             let opt_y  = quote(res_x, res_y, input_x);
             if (opt_y <= input_y){
-                assert!(opt_y >= deposit_y_min, err::insufficient_input());
+                assert!(opt_y >= deposit_y_min, ERR_INSIFFICIENT_INPUT);
 
                 (input_x, opt_y)
             }else{
                 let opt_x = quote(res_y, res_x, input_y);
-                assert!(opt_x <= input_x, err::insufficient_input());
-                assert!(opt_x >= deposit_x_min, err::below_minimum());
+                assert!(opt_x <= input_x, ERR_INSIFFICIENT_INPUT);
+                assert!(opt_x >= deposit_x_min, ERR_INSIFFICIENT_INPUT);
 
                 (opt_x, input_y)
             }
@@ -574,7 +580,7 @@ module suiDouBashi::pool{
     ){
         let value_x = coin::value(&coin_x);
         let value_y = coin::value(&coin_y);
-        assert!(value_x > 0 && value_y > 0, err::zero_amount());
+        assert!(value_x > 0 && value_y > 0, ERR_EMPTY_INPUT);
 
         // quote the inputs
         let (reserve_x, reserve_y, lp_supply) = get_reserves(pool);
@@ -583,7 +589,7 @@ module suiDouBashi::pool{
         }else{
             let opt_y  = quote(reserve_x, reserve_y, value_x);
             if (opt_y <= value_y){
-                assert!(opt_y >= deposit_y_min, err::insufficient_input());
+                assert!(opt_y >= deposit_y_min, ERR_INSIFFICIENT_INPUT);
                 let take = if(coin::value(&coin_y) == opt_y){ // Optimized input
                     coin_y
                 }else{
@@ -594,8 +600,8 @@ module suiDouBashi::pool{
                 (coin_x, take)
             }else{
                 let opt_x = quote(reserve_y, reserve_x, value_y);
-                assert!(opt_x <= value_x, err::insufficient_input());
-                assert!(opt_x >= deposit_x_min, err::below_minimum());
+                assert!(opt_x <= value_x, ERR_INSIFFICIENT_INPUT);
+                assert!(opt_x >= deposit_x_min, ERR_INSIFFICIENT_INPUT);
                 let take = if(coin::value(&coin_x) == opt_y){ // Optimized input
                     coin_x
                 }else{
@@ -644,9 +650,9 @@ module suiDouBashi::pool{
         let withdrawl_x = quote(lp_s, res_x, lp_value);
         let withdrawl_y = quote(lp_s, res_y, lp_value);
 
-        assert!(withdrawl_x > 0 && withdrawl_y > 0, err::insufficient_liquidity());
-        assert!(withdrawl_x >= withdrawl_x_min, err::below_minimum());
-        assert!(withdrawl_y >= withdrawl_y_min, err::below_minimum());
+        assert!(withdrawl_x > 0 && withdrawl_y > 0, ERR_EMPTY_INPUT);
+        assert!(withdrawl_x >= withdrawl_x_min, ERR_INSIFFICIENT_INPUT);
+        assert!(withdrawl_y >= withdrawl_y_min, ERR_INSIFFICIENT_INPUT);
 
         (withdrawl_x, withdrawl_y)
     }
@@ -663,15 +669,15 @@ module suiDouBashi::pool{
         u64,
     ){
         let lp_value = coin::value(&lp_token);
-        assert!(lp_value > 0, err::zero_amount());
+        assert!(lp_value > 0, ERR_EMPTY_INPUT);
 
         let (res_x, res_y, lp_s) = get_reserves(pool);
         let withdrawl_x = quote(lp_s, res_x, lp_value);
         let withdrawl_y = quote(lp_s, res_y, lp_value);
 
-        assert!(withdrawl_x > 0 && withdrawl_y > 0, err::insufficient_liquidity());
-        assert!(withdrawl_x >= withdrawl_x_min, err::below_minimum());
-        assert!(withdrawl_y >= withdrawl_y_min, err::below_minimum());
+        assert!(withdrawl_x > 0 && withdrawl_y > 0, ERR_EMPTY_INPUT);
+        assert!(withdrawl_x >= withdrawl_x_min, ERR_INSIFFICIENT_INPUT);
+        assert!(withdrawl_y >= withdrawl_y_min, ERR_INSIFFICIENT_INPUT);
 
         update_timestamp_(pool, clock);
         let coin_x = coin::take<X>(&mut pool.reserve_x, withdrawl_x, ctx);
@@ -697,15 +703,15 @@ module suiDouBashi::pool{
     ){
         let value_x = coin::value(&coin_x);
         let (reserve_x, reserve_y, _) = get_reserves(self);
-        assert!(value_x >0, err::zero_amount());
-        assert!(reserve_x > 0 && reserve_y > 0, err::empty_reserve());
+        assert!(value_x > 0, ERR_EMPTY_INPUT);
+        assert!(reserve_x > 0 && reserve_y > 0, ERR_EMPTY_RESERVE);
 
         let fee_x = calculate_fee(value_x, self.fee.fee_percentage);
         let dx = value_x - fee_x;
 
         let output_y =  get_output_<X,Y,X>(self, dx);
 
-        assert!(output_y >= output_y_min, err::slippage());
+        assert!(output_y >= output_y_min, ERR_INSIFFICIENT_INPUT);
         let _res_x = balance::value(&self.reserve_x);
         let _res_y = balance::value(&self.reserve_y);
         update_timestamp_(self, clock);
@@ -717,13 +723,13 @@ module suiDouBashi::pool{
         coin::put(&mut self.fee.fee_x, coin_fee);
         update_fee_index_x(self, fee_x);
 
-        assert!(amm_math::mul_to_u128(_res_x + value_x, _res_y) >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
+        assert!(amm_math::mul_to_u128(_res_x + value_x, _res_y) >= amm_math::mul_to_u128(_res_x, _res_y), ERR_K);
 
         if(self.stable){
             let (scale_x, scale_y) = ( math::pow(10, self.decimal_x), math::pow(10, self.decimal_y) );
-            assert!(formula::k_(_res_x + value_x, _res_y, scale_x, scale_y) >= formula::k_(_res_x, _res_y, scale_x, scale_y), err::k_value());
+            assert!(formula::k_(_res_x + value_x, _res_y, scale_x, scale_y) >= formula::k_(_res_x, _res_y, scale_x, scale_y), ERR_K);
         }else{
-            assert!(amm_math::mul_to_u128(_res_x + value_x, _res_y) >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
+            assert!(amm_math::mul_to_u128(_res_x + value_x, _res_y) >= amm_math::mul_to_u128(_res_x, _res_y), ERR_K);
         };
 
         return(
@@ -746,14 +752,14 @@ module suiDouBashi::pool{
     ){
         let value_y = coin::value(&coin_y);
         let (reserve_x, reserve_y, _) = get_reserves(self);
-        assert!(reserve_x > 0 && reserve_y > 0, err::empty_reserve());
-        assert!(value_y > 0, err::zero_amount());
+        assert!(reserve_x > 0 && reserve_y > 0,ERR_EMPTY_RESERVE);
+        assert!(value_y > 0, ERR_EMPTY_INPUT);
 
         let fee_y = calculate_fee(value_y, self.fee.fee_percentage);
         let dy = value_y - fee_y;
         let output_x =  get_output_<X,Y,Y>(self, dy);
 
-        assert!(output_x >= output_x_min, err::slippage());
+        assert!(output_x >= output_x_min, ERR_INSIFFICIENT_INPUT);
         let _res_x = balance::value(&self.reserve_x);
         let _res_y = balance::value(&self.reserve_y);
         update_timestamp_(self, clock);
@@ -770,9 +776,9 @@ module suiDouBashi::pool{
 
         if(self.stable){
             let (scale_x, scale_y) = ( math::pow(10, self.decimal_x), math::pow(10, self.decimal_y) );
-            assert!(formula::k_(_res_x, _res_y + value_y, scale_x, scale_y) >= formula::k_(_res_x, _res_y, scale_x, scale_y), err::k_value());
+            assert!(formula::k_(_res_x, _res_y + value_y, scale_x, scale_y) >= formula::k_(_res_x, _res_y, scale_x, scale_y), ERR_K);
         }else{
-            assert!(amm_math::mul_to_u128(_res_x, _res_y + value_y) >= amm_math::mul_to_u128(_res_x, _res_y), err::k_value());
+            assert!(amm_math::mul_to_u128(_res_x, _res_y + value_y) >= amm_math::mul_to_u128(_res_x, _res_y), ERR_K);
         };
 
         return (

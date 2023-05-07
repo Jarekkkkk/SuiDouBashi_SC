@@ -2,8 +2,6 @@ module suiDouBashi::type{
     use std::string::{Self, String, sub_string};
     use std::ascii;
     use std::type_name;
-    use sui::bcs;
-    use std::vector;
 
     public fun get_package_module_type<T>(): (String, String, String) {
         let delimiter = string::utf8(b"::");
@@ -24,14 +22,5 @@ module suiDouBashi::type{
         let type_name = sub_string(&tail, module_delimiter_index + 2, string::length(&tail));
 
         (package_addr, module_name, type_name)
-    }
-
-    public fun pair_serialization<X,Y>():vector<u8>{
-        let foo = type_name::get<X>();
-        let bar = type_name::get<Y>();
-
-        let res = bcs::to_bytes(&foo);
-        vector::append(&mut res, bcs::to_bytes(&bar));
-        res
     }
 }
