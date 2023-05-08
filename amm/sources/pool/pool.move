@@ -9,6 +9,7 @@ module suiDouBashi::pool{
     use sui::clock::{Self, Clock};
     use std::option::{Self, Option};
     use std::type_name;
+    use std::vector as vec;
 
     use suiDouBashi::event;
     use suiDouBashi::amm_math;
@@ -80,7 +81,7 @@ module suiDouBashi::pool{
         table_vec::borrow(&self.observations, idx)
     }
 
-    fun get_latest_observation<X,Y>(self: &Pool<X,Y>):&Observation{
+    public fun get_latest_observation<X,Y>(self: &Pool<X,Y>):&Observation{
         get_observation(self, table_vec::length(&self.observations) - 1)
     }
 
@@ -174,7 +175,7 @@ module suiDouBashi::pool{
         value * (fee as u64) / FEE_SCALING
     }
 
-    /// b' (optimzied_) = (Y/X) * a, subjected to Y/X = b/a
+    /// b' (optimzied_) = (Y/X) * a, subject to Y/X = b/a
     public fun quote(res_x:u64, res_y:u64, input_x:u64): u64{
         assert!(res_x > 0 && res_y > 0, ERR_EMPTY_INPUT);
         assert!(input_x > 0, ERR_EMPTY_INPUT);
@@ -187,39 +188,43 @@ module suiDouBashi::pool{
         self: &Pool<X,Y>,
         input_x: u64,
     ):u64{
-        get_output_<X,Y,T>(self, input_x - calculate_fee(input_x, self.fee.fee_percentage))
+        let (res_x, res_y, _) = get_reserves(self);
+        get_output_<X,Y,T>(self.stable, input_x - calculate_fee(input_x, self.fee.fee_percentage), res_x, res_y, self.decimal_x, self.decimal_y)
     }
 
     fun get_output_<X,Y,T>(
-        self: &Pool<X,Y>,
+        stable: bool,
         dx: u64,
+        reserve_x: u64,
+        reserve_y: u64,
+        decimal_x: u8,
+        decimal_y: u8
     ):u64{
         let type_input = type_name::get<T>();
         let type_x = type_name::get<X>();
         let type_y = type_name::get<Y>();
         assert!( type_input == type_x || type_input == type_y, ERR_INVALID_TYPE);
 
-        let (reserve_x, reserve_y, _) = get_reserves(self);
         if(type_x == type_input){
-            if(self.stable){
+            if(stable){
             (formula::stable_swap_output(
                     dx,
                     reserve_x,
                     reserve_y,
-                    math::pow(10, self.decimal_x),
-                    math::pow(10, self.decimal_y)
+                    math::pow(10, decimal_x),
+                    math::pow(10, decimal_y)
                 ) as u64)
             }else{
                 (formula::variable_swap_output( dx, reserve_x, reserve_y) as u64)
             }
         }else{
-            if(self.stable){
+            if(stable){
             (formula::stable_swap_output(
                     dx,
                     reserve_y,
                     reserve_x,
-                    math::pow(10, self.decimal_y),
-                    math::pow(10, self.decimal_x)
+                    math::pow(10, decimal_y),
+                    math::pow(10, decimal_x)
                 ) as u64)
             }else{
                 (formula::variable_swap_output( dx, reserve_y, reserve_x) as u64)
@@ -654,7 +659,7 @@ module suiDouBashi::pool{
         let fee_x = calculate_fee(value_x, self.fee.fee_percentage);
         let dx = value_x - fee_x;
 
-        let output_y =  get_output_<X,Y,X>(self, dx);
+        let output_y =  get_output_<X,Y,X>(self.stable, dx, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
         assert!(output_y >= output_y_min, ERR_INSIFFICIENT_INPUT);
         let _res_x = balance::value(&self.reserve_x);
         let _res_y = balance::value(&self.reserve_y);
@@ -699,7 +704,7 @@ module suiDouBashi::pool{
 
         let fee_y = calculate_fee(value_y, self.fee.fee_percentage);
         let dy = value_y - fee_y;
-        let output_x =  get_output_<X,Y,Y>(self, dy);
+        let output_x =  get_output_<X,Y,Y>(self.stable, dy, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
 
         assert!(output_x >= output_x_min, ERR_INSIFFICIENT_INPUT);
         let _res_x = balance::value(&self.reserve_x);
@@ -736,6 +741,7 @@ module suiDouBashi::pool{
         let res_y = (balance::value<Y>(&self.reserve_y) as u256);
         let ts = clock::timestamp_ms(clock);
         let elapsed = ( ts - self.last_block_timestamp );
+
 
         if(elapsed > 0 && res_x != 0 && res_y != 0){
             self.last_price_x_cumulative = self.last_price_x_cumulative + (res_x * (elapsed as u256));
@@ -811,27 +817,6 @@ module suiDouBashi::pool{
         (reserve_x_cumulative, reserve_y_cumulative)
     }
 
-    public fun current_y<X,Y>(
-        self: &Pool<X,Y>,
-        dx: u64,
-        clock: &Clock
-    ):u64{
-        let ts = clock::timestamp_ms(clock);
-        let observation = get_latest_observation(self);
-        let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
-        let len = table_vec::length(&self.observations);
-        if(len == 1){
-            // only gensis observation exist
-            return 0
-        }else if(ts == observation.timestamp){
-            observation = table_vec::borrow(&self.observations, len -2 );
-        };
-
-        let elapsed = ts - observation.timestamp;
-        let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
-        let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
-        formula::get_output(self.stable, dx, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
-    }
     public fun current_x<X,Y>(
         self: &Pool<X,Y>,
         dy: u64,
@@ -845,13 +830,70 @@ module suiDouBashi::pool{
             // only gensis observation exist
             return 0
         }else if(ts == observation.timestamp){
-            observation = table_vec::borrow(&self.observations, len -2 );
+            observation = table_vec::borrow(&self.observations, len - 2 );
         };
 
         let elapsed = ts - observation.timestamp;
         let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
         let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
-        formula::get_output(self.stable, dy, (res_y as u64), (res_x as u64), self.decimal_y, self.decimal_x)
+        get_output_<X,Y,Y>(self.stable, dy, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
+    }
+    public fun current_y<X,Y>(
+        self: &Pool<X,Y>,
+        dx: u64,
+        clock: &Clock
+    ):u64{
+        let ts = clock::timestamp_ms(clock);
+        let observation = get_latest_observation(self);
+        let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
+        let len = table_vec::length(&self.observations);
+        if(len == 1){
+            // only gensis observation exist
+            return 0
+        }else if(ts == observation.timestamp){
+            observation = table_vec::borrow(&self.observations, len - 2 );
+        };
+
+        let elapsed = ts - observation.timestamp;
+        let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
+        let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
+        get_output_<X,Y,X>(self.stable, dx, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
+    }
+
+    public fun quote_TWAP<X,Y,T>(self: &Pool<X,Y>, input: u64, granularity: u64): u64{
+        let prices = prices<X,Y,T>(self, input, granularity);
+        let cumulative = 0;
+        let (i, len) = (0, vec::length(&prices));
+        while( i < len ){
+            cumulative = cumulative + *vec::borrow(&prices, i);
+            i = i + 1 ;
+        };
+
+        cumulative / granularity
+    }
+    public fun prices<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64): vector<u64> {
+        smaple<X,Y,T>(self, input, points, 1)
+    }
+    public fun smaple<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64, size: u64):vector<u64>{
+        let prices = vec::empty<u64>();
+        let len = table_vec::length(&self.observations) - 1;
+        let start_idx = len - ( points * size );
+        let _next_idx = 0;
+
+        while( start_idx < len ){
+            _next_idx = start_idx + size;
+
+            let next_observation = table_vec::borrow(&self.observations, _next_idx);
+            let start_observation = table_vec::borrow(&self.observations, start_idx);
+
+            let elapsed = next_observation.timestamp - start_observation.timestamp;
+            let res_x = (next_observation.reserve_x_cumulative - start_observation.reserve_x_cumulative) / (elapsed as u256);
+            let res_y = (next_observation.reserve_y_cumulative - start_observation.reserve_y_cumulative) / (elapsed as u256);
+            vec::push_back(&mut prices, get_output_<X,Y,T>(self.stable, input, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y));
+
+            start_idx = start_idx + size ;
+        };
+        prices
     }
 
     // TODO: remove public, currently for teseting usage

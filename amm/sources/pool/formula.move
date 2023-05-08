@@ -36,13 +36,12 @@ module suiDouBashi::formula{
         }
     }
 
-    //use suiDouBashi::amm_v1::swap_output as swap;
     /// Action: Swap: swap X for Y
     /// dy = (dx * y) / (dx + x), at dx' = dx(1 - fee)
-    public fun variable_swap_output( _dx:u64, _res_x: u64, _res_y: u64): u256{
-        let dx = ( _dx as u256 );
-        let n = dx * (_res_y as u256) ;
-        let d = dx + (_res_x as u256);
+    public fun variable_swap_output( _dx: u64, _res_x: u64, _res_y: u64): u128{
+        let dx = ( _dx as u128 );
+        let n = dx * (_res_y as u128) ;
+        let d = dx + (_res_x as u128);
          n / d
     }
 
