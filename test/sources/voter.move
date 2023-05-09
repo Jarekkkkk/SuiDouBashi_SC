@@ -89,7 +89,7 @@ module test::voter_test{
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >= 998630128940296005, 404);
             assert!(vsdb::locked_balance(&vsdb) == setup::sui_1B(),404);
-            assert!(vsdb::total_supply(&reg) == 120 * setup::sui_100M(), 404);
+            assert!(vsdb::total_supply(&reg, clock) == 11878082096488896050, 404);
             assert!(vsdb::total_minted(&reg) == 2, 404);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 404);
             test::return_to_sender(s, vsdb);
@@ -218,7 +218,7 @@ module test::voter_test{
 
         next_tx(s,a);{ // Action: VSDB holder A voting
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender_by_id<VSDB>(s, object::id_from_address(@0xf4b41e498b343b8426bc1af6cd5c9c03f492ed43dfe9faa814c873030055a879));
+            let vsdb = test::take_from_sender<VSDB>(s);
             {
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -258,7 +258,7 @@ module test::voter_test{
 
         next_tx(s,a);{ // Assertion: VSDB A holder voting successfully
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender_by_id<VSDB>(s, object::id_from_address(@0xf4b41e498b343b8426bc1af6cd5c9c03f492ed43dfe9faa814c873030055a879));
+            let vsdb = test::take_from_sender<VSDB>(s);
             let vsdb_voting = vsdb::latest_voting_weight(&vsdb, clock);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
@@ -322,7 +322,8 @@ module test::voter_test{
         };
         next_tx(s,a);{ // Action: VSDB holder B voting
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender_by_id<VSDB>(s, object::id_from_address(@0x84550b111b9b3595f7fc6263993e4f2d368d59e99531c2be9eb89dbc03b1524));
+            let _vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
             {
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -336,6 +337,7 @@ module test::voter_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
+                    assert!( vsdb::latest_voting_weight(&vsdb, clock) == 10773972515494232045, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));
@@ -358,10 +360,12 @@ module test::voter_test{
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
+            test::return_to_sender(s, _vsdb);
         };
         next_tx(s,a);{ // Assertion: VSDB B  holder voting successfully
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender_by_id<VSDB>(s, object::id_from_address(@0x84550b111b9b3595f7fc6263993e4f2d368d59e99531c2be9eb89dbc03b1524));
+            let _vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
 
             let vsdb_voting = vsdb::latest_voting_weight(&vsdb, clock);
             {// pool_a
@@ -423,6 +427,7 @@ module test::voter_test{
 
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
+            test::return_to_sender(s, _vsdb);
         };
     }
 }

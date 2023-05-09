@@ -9,7 +9,6 @@ module test::vsdb{
 
     use test::setup::{Self, people};
 
-
     #[test]
     fun test_create_lock(){
         let (a, _, _) = people();
@@ -18,6 +17,7 @@ module test::vsdb{
         add_time(&mut clock, 1672531200);
 
         test_create_lock_(&mut clock, &mut scenario);
+        test_whitelisted_module(&mut clock, &mut scenario);
 
         clock::destroy_for_testing(clock);
         test::end(scenario);
@@ -141,10 +141,72 @@ module test::vsdb{
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::unlock(&mut reg, vsdb, clock, ctx(s));
+            vsdb::global_checkpoint_(&mut reg, clock);
+            vsdb::global_checkpoint_(&mut reg, clock);
+            vsdb::global_checkpoint_(&mut reg, clock);
+            vsdb::global_checkpoint_(&mut reg, clock);
+            vsdb::global_checkpoint_(&mut reg, clock);
             test::return_shared(reg);
         };
         next_tx(s, a);{ // vsdb been burnt
             assert!(!test::has_most_recent_for_sender<VSDB>(s), 0);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let pt_history = vsdb::point_history(&reg);
+           std::debug::print(&sui::table_vec::length(pt_history));
+           std::debug::print(vsdb::get_latest_global_point_history(&reg));
+
+           test::return_shared(reg);
+        }
+    }
+
+    use test::test_whitelist::{Self as white, MOCK, Foo, VotingState};
+    use suiDouBashiVest::vsdb::{VSDBCap};
+    fun test_whitelisted_module(clock: &mut Clock, s: &mut Scenario){
+        let ( a, _, _ ) = setup::people();
+
+        next_tx(s, a);{
+            let reg = test::take_shared<VSDBRegistry>(s);
+            vsdb::lock(&mut reg, mint<SDB>(setup::sui_100M(), ctx(s)), setup::week(), clock, ctx(s));
+            test::return_shared(reg);
+        };
+
+        next_tx(s,a);{
+            let reg_cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+
+            vsdb::register_module<MOCK>(&reg_cap, &mut reg);
+            white::init_for_testing(ctx(s));
+
+            test::return_shared(reg);
+            test::return_to_sender(s, reg_cap);
+        };
+
+        next_tx(s,a);{
+            let foo = test::take_shared<Foo>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+            white::add_pool_votes(&foo, &reg, &mut vsdb);
+
+                        let voting_state:&VotingState = vsdb::df_borrow(&vsdb, sui::object::id_address(&foo));
+std::debug::print(voting_state);
+
+            test::return_shared(foo);
+            test::return_shared(reg);
+            test::return_to_sender(s, vsdb);
+        };
+
+        next_tx(s,a) ;{
+            let vsdb = test::take_from_sender<VSDB>(s);
+            let foo = test::take_shared<Foo>(s);
+            white::update_pool_votes(&foo, &mut vsdb);
+
+            let voting_state:&VotingState = vsdb::df_borrow(&vsdb, sui::object::id_address(&foo));
+std::debug::print(voting_state);
+
+std::debug::print(&vsdb::df_exists(&vsdb, sui::object::id_address(&foo)));
+
+            test::return_to_sender(s, vsdb);
+            test::return_shared(foo);
         }
     }
 }

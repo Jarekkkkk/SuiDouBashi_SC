@@ -3,6 +3,7 @@ module test::main{
     use suiDouBashi::pool::Pool;
 
     use suiDouBashiVest::sdb::SDB;
+    use suiDouBashiVest::minter::{mint_sdb, Minter};
     use suiDouBashi::usdc::USDC;
     use suiDouBashi::usdt::USDT;
 
@@ -23,8 +24,8 @@ module test::main{
 
         setup_(&mut clock, &mut s);
         vest_(&mut clock, &mut s);
+
         test::pool_test::pool_(&mut clock, &mut s);
-        setup::deploy_minter(&mut clock, &mut s);
         setup::deploy_voter(&mut s);
         setup::deploy_gauge(&mut s);
 
@@ -41,7 +42,8 @@ module test::main{
     }
 
     fun setup_(clock: &mut Clock, test: &mut Scenario){
-        let (a,_,_) = setup::people();
+        let (a, _, _ ) = setup::people();
+
         add_time(clock, setup::start_time());
         std::debug::print(&get_time(clock));
 
@@ -49,7 +51,14 @@ module test::main{
         setup::mint_stable(test);
 
         vsdb::init_for_testing(ctx(test));
-        transfer::public_transfer(mint<SDB>(18 * setup::sui_1B(), ctx(test)), a);
+
+        setup::deploy_minter(clock, test);
+
+        next_tx(test, a);{
+            let minter = test::take_shared<Minter>(test);
+            transfer::public_transfer(mint_sdb(&mut minter, 18 * setup::sui_1B(), ctx(test)), a);
+            test::return_shared(minter);
+        }
     }
 
     use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
@@ -70,7 +79,7 @@ module test::main{
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >=  4404404404910976000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
-            assert!(vsdb::total_supply(&reg) == 5 * setup::sui_1B(), 1);
+            assert!(vsdb::total_supply(&reg, clock) == 4999999999910976000, 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
 
@@ -96,9 +105,10 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >= 4044044049948096000, 1);
+            assert!(voting >= 9999999999948096000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
-            assert!(vsdb::total_supply(&reg) == 10 * setup::sui_1B(), 1);
+
+            assert!(vsdb::total_supply(&reg, clock) == 9999999999948096000, 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
             assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
 
@@ -121,7 +131,7 @@ module test::main{
 
             assert!(voting >= 440440499877568000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(),1);
-            assert!(vsdb::total_supply(&reg) == 110 * setup::sui_100M(), 1);
+            assert!(vsdb::total_supply(&reg, clock) == 10999999999703232000, 1);
             assert!(vsdb::total_minted(&reg) == 3, 1);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
 
@@ -154,7 +164,7 @@ module test::main{
             // check NFTs are removed from global storage
             assert!(!test::was_taken_from_address(a, id),1); // not exist
             assert!(!test::was_taken_from_address(a, id_1),1); // not exist
-            assert!(vsdb::total_supply(&reg) == 110 * setup::sui_100M(), 1);
+            assert!(vsdb::total_supply(&reg, clock) == 10999999999955520000, 1);
             assert!(vsdb::total_minted(&reg) == 1, 1);
 
             test::return_to_sender(s, vsdb);
@@ -166,7 +176,6 @@ module test::main{
     use suiDouBashiVest::gauge::{Self, Gauge};
     use suiDouBashiVest::voter::{Self, Voter};
     use suiDouBashiVest::reward_distributor::{Distributor};
-    use suiDouBashiVest::minter::{ Minter};
     use suiDouBashi::pool::{Self, LP};
     use sui::table;
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
@@ -253,7 +262,8 @@ module test::main{
             let _new_claiabe = 7425000000499992;
             assert!(gauge::get_reward_rate(reward) == _new_claiabe / (7 * 86400), 404);
 
-            assert!(coin::value(&sdb_team) == 459278350515463 , 404);
+
+            assert!(coin::value(&sdb_team) == 523154306979953 , 404);
             assert!(voter::get_balance(&voter) == 7425000000500008, 404);
             assert!(gauge::get_reward_balance(reward) == 7425000001413592, 404);
             assert!(gauge::get_claimable(&gauge) == 0, 404);
@@ -539,7 +549,8 @@ module test::main{
             let vsdb_1 = test::take_from_sender<VSDB>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             assert!(vsdb::latest_voting_weight(&vsdb, clock) == 0, 404);
-            assert!(vsdb::total_supply_(&vsdb_reg, clock) == 0, 404); //9589041094752000
+            vsdb::total_supply(&vsdb_reg, clock);
+            assert!(vsdb::total_supply(&vsdb_reg, clock) == 0, 404); //9589041094752000
             test::return_to_sender(s, vsdb);
             test::return_to_sender(s, vsdb_1);
             test::return_shared(vsdb_reg);

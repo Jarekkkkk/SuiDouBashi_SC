@@ -31,7 +31,6 @@ module suiDouBashiVest::voter{
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
-    /// OTW is not allowed to own drop attribution
     struct VOTER_SDB has store, drop {}
 
     struct Voter has key, store{
@@ -51,14 +50,7 @@ module suiDouBashiVest::voter{
     #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
-    // TODO: seperate Fields in VSDB
-    struct VotingState has store{
-        attachments: u64,
-        voted: bool,
-        pool_votes: VecMap<ID, u64>, // pool -> voting weight
-        used_weights: u64,
-        last_voted: u64 // ts
-    }
+
     /// HOT POTATO to realize the functionality of calling multiple tx at once
     struct Potato{
         reset: bool,
@@ -224,10 +216,8 @@ module suiDouBashiVest::voter{
 
             assert!(weights > 0, E_NOT_VOTE);
             let player_weight = vsdb::latest_voting_weight(vsdb, clock);
-
             let pool_weight = ((weights as u128) * (player_weight as u128) / (potato.total_weight as u128) as u64); // get the pro rata voting weight
             assert!(pool_weight > 0, err::invalid_weight());
-
             update_for_(self, gauge);
 
             // add vec_map entry

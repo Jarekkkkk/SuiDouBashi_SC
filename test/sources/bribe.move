@@ -8,9 +8,10 @@ module test::bribe_test{
     use suiDouBashi::usdc::USDC;
     use suiDouBashi::usdt::USDT;
     use suiDouBashiVest::checkpoints;
+    use suiDouBashiVest::minter::{mint_sdb, Minter};
     use sui::clock::{timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::table_vec;
-    use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
+    use sui::coin::{ Self, Coin, burn_for_testing as burn};
     use suiDouBashi::pool::{Self, Pool, LP};
     use sui::table;
 
@@ -18,6 +19,7 @@ module test::bribe_test{
         let (a,_,_) = setup::people();
 
         next_tx(s,a);{ // Action: distribute weekly emissions & deposit bribes
+            let minter = test::take_shared<Minter>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -28,11 +30,11 @@ module test::bribe_test{
             let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
             let ctx = ctx(s);
             // weekly emissions
-            gauge::distribute_emissions(&mut gauge_a, &mut i_bribe_a, &mut pool_a, mint<SDB>(setup::stake_1(), ctx), clock, ctx);
-            gauge::distribute_emissions(&mut gauge_b, &mut i_bribe_b, &mut pool_b, mint<SDB>(setup::stake_1(), ctx), clock, ctx);
+            gauge::distribute_emissions(&mut gauge_a, &mut i_bribe_a, &mut pool_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            gauge::distribute_emissions(&mut gauge_b, &mut i_bribe_b, &mut pool_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
             // bribe SDB
-            e_bribe::bribe(&mut e_bribe_a, mint<SDB>(setup::stake_1(), ctx), clock, ctx);
-            e_bribe::bribe(&mut e_bribe_b, mint<SDB>(setup::stake_1(), ctx), clock, ctx);
+            e_bribe::bribe(&mut e_bribe_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            e_bribe::bribe(&mut e_bribe_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
@@ -42,6 +44,7 @@ module test::bribe_test{
             test::return_shared(e_bribe_b);
             test::return_shared(pool_a);
             test::return_shared(pool_b);
+            test::return_shared(minter);
         };
         next_tx(s,a);{ // Assertion: successfully deposit weekly emissions, pool_fees, external_ bribes
                 let reward_index = setup::stake_1() / setup::week();

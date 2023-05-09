@@ -83,8 +83,8 @@ module suiDouBashiVest::minter{
     }
 
     // calculate circulating supply as total token supply - locked supply
-    public fun circulating_supply(self: &Minter, vsdb_reg: &VSDBRegistry): u64{
-        balance::supply_value(&self.supply) - vsdb::total_minted(vsdb_reg)
+    public fun circulating_supply(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock): u64{
+        balance::supply_value(&self.supply) - vsdb::total_supply(vsdb_reg, clock)
     }
 
     /// decay at 1% per week
@@ -92,18 +92,18 @@ module suiDouBashiVest::minter{
         ( self.weekly * EMISSION ) / PRECISION
     }
     /// ( VSDB_supply - sdb_supply ) * 0.2%
-    public fun circulating_emission(self: &Minter, vsdb_reg: &VSDBRegistry):u64{
-        (circulating_supply(self, vsdb_reg) * TAIL_EMISSION ) / PRECISION
+    public fun circulating_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
+        (circulating_supply(self, vsdb_reg, clock) * TAIL_EMISSION ) / PRECISION
     }
 
-    public fun weekly_emission(self: &Minter, vsdb_reg: &VSDBRegistry):u64{
-        math::max(calculate_emission(self), circulating_emission(self, vsdb_reg))
+    public fun weekly_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
+        math::max(calculate_emission(self), circulating_emission(self, vsdb_reg, clock))
     }
     /// (veVELO.totalSupply / VELO.totalsupply)^3 * 0.5 * Emissions
-    public fun calculate_growth(self: &Minter, vsdb_reg: &VSDBRegistry, minted: u64): u64{
-        let ve_total = vsdb::total_minted(vsdb_reg);
-        let sdb_total = balance::supply_value(&self.supply);
-        ((minted * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2
+    public fun calculate_growth(self: &Minter, vsdb_reg: &VSDBRegistry, minted: u64, clock: &Clock): u64{
+        let ve_total = (vsdb::total_supply(vsdb_reg, clock) as u128);
+        let sdb_total = (balance::supply_value(&self.supply) as u128);
+        (((((minted as u128) * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2) as u64 )
     }
 
      // TODO: add firned module
@@ -120,11 +120,11 @@ module suiDouBashiVest::minter{
         if(clock::timestamp_ms(clock) >= period + WEEK){
             period = ( clock::timestamp_ms(clock) / WEEK * WEEK);
             self.active_period = period;
-            self.weekly = weekly_emission(self, vsdb_reg);
+            self.weekly = weekly_emission(self, vsdb_reg, clock);
 
             let weekly = self.weekly;
             // rebase
-            let rebase = calculate_growth(self, vsdb_reg, weekly);
+            let rebase = calculate_growth(self, vsdb_reg, weekly, clock);
             let team_emission = (self.team_rate * (rebase + weekly)) / (PRECISION - self.team_rate);
             let required = rebase + weekly + team_emission;
             let balance = balance::value(&self.balance);
@@ -141,15 +141,18 @@ module suiDouBashiVest::minter{
             // rebase
             let rebase_coin = coin::take(&mut self.balance, rebase, ctx);
             reward_distributor::deposit_reward(distributor, rebase_coin);
-
             // checkpoint balance that was just distributed
             reward_distributor::checkpoint_token(distributor, clock);
             reward_distributor::checkpoint_total_supply(distributor, vsdb_reg, clock);
 
-            event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg), circulating_emission(self, vsdb_reg));
+            event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg, clock), circulating_emission(self, vsdb_reg, clock));
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))
         };
         option::none()
      }
 
+
+    #[test] public fun mint_sdb(self: &mut Minter, value: u64, ctx: &mut TxContext):Coin<SDB>{
+        coin::from_balance(balance::increase_supply(&mut self.supply, value), ctx)
+    }
 }

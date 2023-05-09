@@ -649,7 +649,7 @@ module suiDouBashiVest::gauge{
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp_position: &mut LP<X,Y>, // not taking the ownership, otherwise owner lose all of its previous shares
-        value: u64,
+        value: u64, // removed, we only allow stake all
         clock: &Clock,
         ctx: &mut TxContext
     ){

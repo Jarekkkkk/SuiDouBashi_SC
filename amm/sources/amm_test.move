@@ -14,7 +14,6 @@ module suiDouBashi::amm_test{
     use suiDouBashi::usdc::{Self, USDC};
 
     const MINIMUM_LIQUIDITY: u64 = 1000;
-
     const USDT_AMT:u64 = 9_000_000_000_000;
     const USDC_AMT: u64 = 10_000_000_000_000;
 

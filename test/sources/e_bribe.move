@@ -10,8 +10,8 @@ module test::e_bribe_test{
     use suiDouBashiVest::gauge::{Self, Gauge};
     use suiDouBashiVest::voter::{Self, Voter};
     use suiDouBashiVest::reward_distributor::{Distributor};
-    use suiDouBashiVest::vsdb::{VSDB, VSDBRegistry};
-    use suiDouBashiVest::minter::{ Minter};
+    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashiVest::minter::{ mint_sdb, Minter};
     use suiDouBashi::pool::{LP};
     use suiDouBashi::pool::Pool;
     use suiDouBashiVest::sdb::SDB;
@@ -38,7 +38,7 @@ module test::e_bribe_test{
             {// bribing 100K for gauge_a
                 e_bribe::bribe(&mut e_bribe, mint<USDC>(setup::usdc_100K(), ctx(s)), clock, ctx(s));
                 e_bribe::bribe(&mut e_bribe, mint<USDT>(setup::usdc_100K(), ctx(s)), clock, ctx(s));
-                e_bribe::bribe(&mut e_bribe, mint<SDB>(setup::sui_100K(), ctx(s)), clock, ctx(s));
+                e_bribe::bribe(&mut e_bribe, mint_sdb(&mut minter, setup::sui_100K(), ctx(s)), clock, ctx(s));
                 e_bribe::bribe(&mut e_bribe, mint<sui::sui::SUI>(setup::sui_100K(), ctx(s)), clock, ctx(s));
             };
 
@@ -55,7 +55,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // LP holder A Voting
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender_by_id<VSDB>(s, object::id_from_address(@0x84550b111b9b3595f7fc6263993e4f2d368d59e99531c2be9eb89dbc03b1524));
+            let vsdb = test::take_from_sender<VSDB>(s);
             {
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -69,6 +69,7 @@ module test::e_bribe_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
+                    assert!( vsdb::latest_voting_weight(&vsdb, clock) == 973972467857480085, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));
@@ -95,7 +96,7 @@ module test::e_bribe_test{
             test::return_to_sender(s, vsdb);
         };
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week() + 1);
 
         next_tx(s, a);{ // Withdraw weekly emissions after expiry
             let voter = test::take_shared<Voter>(s);
@@ -147,15 +148,42 @@ module test::e_bribe_test{
             let sui = test::take_from_sender<Coin<sui::sui::SUI>>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
 
-            assert!(coin::value(&usdc) == 91471768403, 404);
-            assert!(coin::value(&usdt) == 91471768403, 404);
-            assert!(coin::value(&sui) == 91471768403954, 404);
-            assert!(coin::value(&sdb) == 91471768403954, 404);
+            // unused voting powers are still be counted
+            assert!(coin::value(&usdc) == 8290_577_366, 404);
+            assert!(coin::value(&usdt) == 8290577366, 404);
+            assert!(coin::value(&sui) == 8290577366830, 404);
+            assert!(coin::value(&sdb) == 8290577366830, 404);
 
             burn(usdc);
             burn(usdt);
             burn(sui);
             burn(sdb);
         };
+
+        next_tx(s,a);
+        let prev_usdc = { // Action: unused VSDB can't withdraw
+            let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+            let _vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+
+            let usdc = test::take_from_sender<Coin<USDC>>(s);
+            let value = coin::value(&usdc);
+            test::return_to_sender(s, usdc);
+
+            voter::claim_bribes(&mut e_bribe, &vsdb, clock, ctx(s));
+
+            test::return_to_sender(s, vsdb);
+            test::return_to_sender(s, _vsdb);
+            test::return_shared(e_bribe);
+
+            value
+        };
+
+        next_tx(s,a);{
+            let usdc = test::take_from_sender<Coin<USDC>>(s);
+            let value = coin::value(&usdc);
+            assert!(value == prev_usdc, 404);
+            test::return_to_sender(s, usdc);
+        }
     }
 }

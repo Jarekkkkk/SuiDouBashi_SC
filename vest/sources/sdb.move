@@ -30,4 +30,7 @@ module suiDouBashiVest::sdb{
     #[test_only] public fun deploy_coin(ctx: &mut TxContext){
         init(SDB{}, ctx);
     }
+    #[test_only] public fun mint(value:u64, ctx: &mut TxContext):sui::coin::Coin<SDB>{
+        sui::coin::mint_for_testing(value, ctx)
+    }
 }

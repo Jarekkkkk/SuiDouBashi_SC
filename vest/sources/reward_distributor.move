@@ -159,7 +159,6 @@ module suiDouBashiVest::reward_distributor{
         let token_balance = balance::value(&self.balance);
         let to_distribute = token_balance - self.token_last_balance;
         self.token_last_balance = token_balance;
-
         let t = self.last_token_time;
         let since_last = ts - t;
 
@@ -178,14 +177,16 @@ module suiDouBashiVest::reward_distributor{
                         vec_map::insert(&mut self.tokens_per_week, this_week, to_distribute);
                     }
                 }else{
+                    let distribution = (to_distribute as u128) * (( ts - t ) as u128) / (since_last as u128);
                     if(vec_map::contains(&self.tokens_per_week, &this_week)){
-                        *vec_map::get_mut(&mut self.tokens_per_week, &this_week) = *vec_map::get(&self.tokens_per_week, &this_week) + to_distribute * ( ts - t ) / since_last;
+                        *vec_map::get_mut(&mut self.tokens_per_week, &this_week) = *vec_map::get(&self.tokens_per_week, &this_week) + ( distribution as u64 );
                     }else{
-                        vec_map::insert(&mut self.tokens_per_week, this_week,  to_distribute * ( ts - t ) / since_last);
+                        vec_map::insert(&mut self.tokens_per_week, this_week, ( distribution as u64 ));
                     }
                 };
                 break
             } else { // obsolete epoch
+                let distribution = (to_distribute as u128) * (( next_week - t ) as u128) / (since_last as u128);
                 if( since_last == 0 && next_week == t ){ // same block
                     if(vec_map::contains(&self.tokens_per_week, &this_week)){
                         *vec_map::get_mut(&mut self.tokens_per_week, &this_week) = *vec_map::get(&self.tokens_per_week, &this_week) + to_distribute;
@@ -194,9 +195,9 @@ module suiDouBashiVest::reward_distributor{
                     }
                 }else{
                     if(vec_map::contains(&self.tokens_per_week, &this_week)){
-                        *vec_map::get_mut(&mut self.tokens_per_week, &this_week) = *vec_map::get(&self.tokens_per_week, &this_week) + to_distribute * ( next_week - t ) / since_last;
+                        *vec_map::get_mut(&mut self.tokens_per_week, &this_week) = *vec_map::get(&self.tokens_per_week, &this_week) + (distribution as u64);
                     }else{
-                        vec_map::insert(&mut self.tokens_per_week, this_week, to_distribute * ( next_week - t ) / since_last);
+                        vec_map::insert(&mut self.tokens_per_week, this_week, (distribution as u64));
                     }
                 };
             };

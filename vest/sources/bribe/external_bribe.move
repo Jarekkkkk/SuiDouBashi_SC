@@ -299,7 +299,6 @@ module suiDouBashiVest::external_bribe{
         let id = object::id(vsdb);
 
         let _reward = earned<X,Y,T>(self, vsdb, clock);
-
         let reward = borrow_reward_mut<X,Y,T>(self);
         if(!table::contains(&reward.last_earn, id)){
             table::add(&mut reward.last_earn, id, 0);
@@ -341,7 +340,6 @@ module suiDouBashiVest::external_bribe{
         let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
         let end_idx = vec::length(bps_borrow) - 1;
         let earned_reward = 0;
-
         let pre_reward_bal = 0;
         let pre_reward_ts = bribe_start(start_timestamp);
         let _pre_supply = 1;
@@ -364,7 +362,8 @@ module suiDouBashiVest::external_bribe{
                 }else{
                     0
                 };
-                pre_reward_bal = (checkpoints::balance(cp_0) as u128) * (rewards as u128) / (_pre_supply as u128);
+
+                pre_reward_bal = (checkpoints::balance(cp_0) as u128) * (rewards as u128) / ((_pre_supply + 1 ) as u128);
 
                 i = i + 1;
             }
@@ -382,6 +381,7 @@ module suiDouBashiVest::external_bribe{
             }else{
                 0
             };
+
             earned_reward = earned_reward + (checkpoints::balance(cp) as u128) * (rewards as u128) / (supply as u128);
         };
 
@@ -416,7 +416,7 @@ module suiDouBashiVest::external_bribe{
     public (friend) fun withdraw<X,Y>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
-        amount: u64, // should be u256
+        amount: u64,
         clock: &Clock,
         _ctx: &mut TxContext
     ){
@@ -425,7 +425,6 @@ module suiDouBashiVest::external_bribe{
         assert!(self.total_supply >= amount, err::insufficient_voting());
         self.total_supply = self.total_supply - amount;
         *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(& self.balance_of, id) - amount;
-
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
@@ -467,7 +466,6 @@ module suiDouBashiVest::external_bribe{
             table::add(&mut reward.token_rewards_per_epoch, adjusted_ts, epoch_rewards + value);
         };
         reward.period_finish = adjusted_ts + DURATION;
-
 
         event::notify_reward<X>(tx_context::sender(ctx), value);
     }
