@@ -31,7 +31,9 @@ module suiDouBashiVest::voter{
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
-    struct VOTER_SDB has store, drop {}
+
+    /// Witness
+    struct VOTER_SDB has copy, store, drop {}
 
     struct Voter has key, store{
         id: UID,
@@ -47,11 +49,44 @@ module suiDouBashiVest::voter{
 
         index: u256 // distributed_sdb per voting weights ( 1e18 exntension )
     }
+
     #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
+    /// Voting state to be added into VSDB
+    struct VotingState has store{
+        pool_votes: VecMap<ID, u64>, // pool -> voting weight
+        voted: bool,
+        used_weights: u64,
+        last_voted: u64 // ts
+    }
 
-    /// HOT POTATO to realize the functionality of calling multiple tx at once
+    // VDSB Protocol
+    public entry fun initialize_voting(self: &Voter, reg: &VSDBRegistry, vsdb: &mut VSDB){
+        let value = VotingState{
+            pool_votes: vec_map::empty(),
+            voted: false,
+            used_weights: 0,
+            last_voted: 0
+        };
+        vsdb::df_add(&self.witness, reg, vsdb, value);
+    }
+    public fun voting_state_borrow(vsdb: &VSDB):&VotingState{
+        vsdb::df_borrow(vsdb, VOTER_SDB{})
+    }
+    fun voting_state_borrow_mut(vsdb: &mut VSDB):&mut VotingState{
+        vsdb::df_borrow_mut(vsdb, VOTER_SDB {})
+    }
+
+    public fun pool_votes(vsdb: &VSDB):&VecMap<ID, u64>{ &voting_state_borrow(vsdb).pool_votes }
+    public fun pool_votes_by_pool(vsdb: &VSDB, pool_id: &ID):u64 {
+        let pool_votes = &voting_state_borrow(vsdb).pool_votes;
+        *vec_map::get(pool_votes, pool_id)
+    }
+    public fun used_weights(vsdb: &VSDB):u64 { voting_state_borrow(vsdb).used_weights }
+    public fun voted(vsdb: &VSDB):bool { voting_state_borrow(vsdb).voted }
+
+    // POTATO to realize one-time action for each epoch
     struct Potato{
         reset: bool,
         weights: VecMap<ID, u64>,
@@ -61,9 +96,6 @@ module suiDouBashiVest::voter{
     }
 
     // assertion
-    fun assert_new_epoch(vsdb: &VSDB, clock: &Clock){
-        assert!((clock::timestamp_ms(clock) / DURATION) * DURATION > vsdb::last_voted(vsdb), err::already_voted());
-    }
     fun assert_governor(self: &Voter, ctx: &mut TxContext){
         assert!(self.governor == tx_context::sender(ctx), err::invalid_governor());
     }
@@ -93,7 +125,7 @@ module suiDouBashiVest::voter{
         let sender = tx_context::sender(ctx);
         let voter = Voter{
             id: object::new(ctx),
-            witness: VOTER_SDB{},
+            witness: VOTER_SDB {},
             balance: balance::zero<SDB>(),
             governor: sender,
             emergency: sender,
@@ -110,11 +142,16 @@ module suiDouBashiVest::voter{
         vsdb: &mut VSDB,
         clock: &Clock,
     ):Potato{
-        assert_new_epoch(vsdb, clock);
-        vsdb::update_last_voted(vsdb, clock::timestamp_ms(clock));
-        let weights = vsdb::clear_pool_votes(vsdb);
+        let voting_state = voting_state_borrow_mut(vsdb);
+        assert!((clock::timestamp_ms(clock) / DURATION) * DURATION > voting_state.last_voted, err::already_voted());
+        voting_state.last_voted = clock::timestamp_ms(clock);
+
+        // copy and clear pool_votes fields
+        let weights = voting_state.pool_votes;
+        voting_state.pool_votes = vec_map::empty<ID, u64>();
+
         // successfully clean the vec_map in vsdb
-        assert!(vec_map::size(vsdb::pool_votes_borrow(vsdb)) == 0, E_NOT_RESET);
+        assert!(vec_map::size(&voting_state.pool_votes) == 0, E_NOT_RESET);
 
         Potato{
             reset: false,
@@ -128,6 +165,7 @@ module suiDouBashiVest::voter{
         self: &mut Voter,
         vsdb: &mut VSDB,
     ){
+        let voting_state = voting_state_borrow_mut(vsdb);
         let Potato {
             reset,
             weights,
@@ -137,9 +175,10 @@ module suiDouBashiVest::voter{
 
         assert!(!reset && total_weight == 0 && vec_map::size(&weights) == 0 , E_NOT_RESET);
 
-        vsdb::update_used_weights(vsdb, 0);
+        voting_state.used_weights = 0;
+        voting_state.voted = false;
+
         self.total_weight = self.total_weight - used_weight;
-        vsdb::abstain(vsdb);
     }
 
     /// Be called in programmable tx
@@ -182,7 +221,7 @@ module suiDouBashiVest::voter{
         vsdb: &mut VSDB,
     ):Potato{
         assert!(!potato.reset && potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
-        let pool_votes_borrow = vsdb::pool_votes_borrow(vsdb);
+        let pool_votes_borrow = &voting_state_borrow(vsdb).pool_votes;
         let pool_ids = vec_map::keys(pool_votes_borrow);
 
         let weights = vec::empty<u64>();
@@ -190,7 +229,7 @@ module suiDouBashiVest::voter{
         let i = 0;
         while( i <  vec_map::size(pool_votes_borrow)){
             let pool_id = vec::borrow(&pool_ids, i);
-            vec::push_back( &mut weights, vsdb::pool_votes(vsdb, pool_id));
+            vec::push_back( &mut weights, *vec_map::get(pool_votes_borrow, pool_id));
             vec::push_back( &mut pools, object::id_to_address(pool_id));
         };
 
@@ -221,7 +260,8 @@ module suiDouBashiVest::voter{
             update_for_(self, gauge);
 
             // add vec_map entry
-            vsdb::add_pool_votes(vsdb, pool_id, pool_weight);
+            let voting_state_mut = voting_state_borrow_mut(vsdb);
+            vec_map::insert(&mut voting_state_mut.pool_votes, pool_id, pool_weight);
             *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) + pool_weight;
 
             // vote for voting power
@@ -275,12 +315,11 @@ module suiDouBashiVest::voter{
         } = potato;
         assert!(reset && vec_map::size(&weights) == 0 , E_NOT_VOTE);
 
-        vsdb::update_used_weights(vsdb, used_weight);
+        let voting_state_mut = voting_state_borrow_mut(vsdb);
+
+        voting_state_mut.used_weights = used_weight;
+        voting_state_mut.voted = true;
         self.total_weight = self.total_weight + used_weight;
-
-        vsdb::voting(vsdb);
-
-        vsdb::update_used_weights(vsdb, used_weight);
     }
 
     // - Gauge

@@ -3,19 +3,18 @@ module suiDouBashiVest::vsdb{
     use std::type_name::{Self, TypeName};
     use std::string::{Self};
     use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use std::vector as vec;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
-    use sui::vec_map::{Self, VecMap};
     use sui::table_vec::{Self, TableVec};
     use sui::coin::{Self, Coin};
     use std::option::{Self, Option};
     use sui::clock::{Self, Clock};
+    use std::ascii::{Self, String};
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
-
 
     use suiDouBashiVest::sdb::SDB;
     use suiDouBashiVest::point::{Self, Point};
@@ -35,6 +34,9 @@ module suiDouBashiVest::vsdb{
     const E_INVALID_UNLOCK_TIME: u64 =  001 ;
     const E_LOCK: u64 =  002 ;
 
+    // modules
+    const E_NOT_REGISTERED: u64 = 004;
+
     friend suiDouBashiVest::voter;
     friend suiDouBashiVest::reward_distributor;
 
@@ -49,19 +51,31 @@ module suiDouBashiVest::vsdb{
         user_epoch: u64,
         user_point_history: Table<u64, Point>, // epoch -> point_history
         locked_balance: LockedSDB,
+        modules: vector<String>,
 
-        // // voter voting
-        pool_votes: VecMap<ID, u64>, // pool -> voting weight
-        voted: bool,
-        used_weights: u64,
-        last_voted: u64 // ts
+        // // // // voter voting
+        // pool_votes: VecMap<ID, u64>, // pool -> voting weight
+        // voted: bool,
+        // used_weights: u64,
+        // last_voted: u64 // ts
     }
 
     struct LockedSDB has store{
-        /// ID of VSDB
-        id: ID,
         balance: Balance<SDB>,
         end: u64 // week-based
+    }
+
+    // - Reg
+    struct VSDBRegistry has key {
+        id: UID,
+        gov: address,
+        whitelist_modules: Table<TypeName, bool>,
+
+        minted_vsdb: u64,
+        locked_total: u64,
+        epoch: u64,
+        point_history: TableVec<Point>, // epoch -> Point
+        slope_changes: Table<u64, I128> // t_i (ms round down to week-based) -> d_slope
     }
 
     // - Whitelist module to add df/ dof
@@ -72,38 +86,39 @@ module suiDouBashiVest::vsdb{
         assert!(!table::contains(&reg.whitelist_modules, type), err::already_reigster());
         table::add(&mut reg.whitelist_modules, type, true);
     }
-
     public entry fun remove_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
         let type = type_name::get<T>();
         table::remove(&mut reg.whitelist_modules, type);
     }
-
-    // TODO: add back df
-    public fun df_add<T: drop, N: copy + drop + store,V: store>(
-        _witness: &T,
-        reg: & VSDBRegistry,
-        vsdb: &mut VSDB,
-        name: N,
-        value: V
-    ){
-        let type = type_name::get<T>();
-        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
-        df::add(&mut vsdb.id, name, value);
-    }
-
-    public fun dof_add<T: drop, N: copy + drop + store, V: key + store>(
-        _witness: &T,
-        reg: & VSDBRegistry,
-        vsdb: &mut VSDB,
-        name: N,
-        value: V
-    ){
-        let type = type_name::get<T>();
-        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
-        dof::add(&mut vsdb.id, name, value);
+    public fun module_exists(self: &VSDB, name: vector<u8>):bool{
+        let type = ascii::string(name);
+        vec::contains(&self.modules, &type)
     }
 
     // - df
+    public fun df_add<T: copy + store + drop, V: store>(
+        witness: &T, // Witness stands for Entry point
+        reg: & VSDBRegistry,
+        vsdb: &mut VSDB,
+        value: V
+    ){
+        // retrieve address from witness
+        let type = type_name::get<T>();
+        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
+
+        vec::push_back(&mut vsdb.modules, type_name::into_string(type));
+        df::add(&mut vsdb.id, *witness, value);
+    }
+    public fun df_remove<T: copy + store + drop, N: copy + drop + store, V: store>(
+        witness: &T,
+        vsdb: &mut VSDB,
+    ):V{
+        let name = type_name::into_string(type_name::get<T>());
+        let (success, idx) = vec::index_of(&vsdb.modules, &name);
+        assert!(success, E_NOT_REGISTERED);
+        vec::remove(&mut vsdb.modules, idx);
+        df::remove(&mut vsdb.id, *witness)
+    }
     public fun df_exists<N: copy + drop + store>(
         vsdb: &VSDB,
         name: N,
@@ -123,7 +138,26 @@ module suiDouBashiVest::vsdb{
     ): &mut V{
         df::borrow_mut(&mut vsdb.id, name)
     }
+
     // - dof
+    public fun dof_add<T: drop, N: copy + drop + store, V: key + store>(
+        _witness: &T,
+        reg: & VSDBRegistry,
+        vsdb: &mut VSDB,
+        name: N,
+        value: V
+    ){
+        let type = type_name::get<T>();
+        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
+        dof::add(&mut vsdb.id, name, value);
+    }
+    public fun dof_remove<T: drop, N: copy + drop + store, V: key + store>(
+        _witness: &T,
+        vsdb: &mut VSDB,
+        name: N
+    ):V{
+        dof::remove(&mut vsdb.id, name)
+    }
     public fun dof_exists<N: copy + drop + store>(
         vsdb: &VSDB,
         name: N,
@@ -142,18 +176,7 @@ module suiDouBashiVest::vsdb{
     ): &mut V{
         dof::borrow_mut(&mut vsdb.id, name)
     }
-    // - Reg
-    struct VSDBRegistry has key {
-        id: UID,
-        gov: address,
-        whitelist_modules: Table<TypeName, bool>,
 
-        minted_vsdb: u64,
-        locked_total: u64,
-        epoch: u64,
-        point_history: TableVec<Point>, // epoch -> Point
-        slope_changes: Table<u64, I128> // t_i (ms round down to week-based) -> d_slope
-    }
 
     // ===== assertion =====
     fun assert_gov(self: & VSDBRegistry, ctx: &mut TxContext){
@@ -279,7 +302,8 @@ module suiDouBashiVest::vsdb{
     ){
         assert_owner(self, ctx);
         assert_owner(&vsdb, ctx);
-        assert!(vsdb.voted == false, err::pure_vsdb());
+        // clear all modules
+        assert!(vec::length(&self.modules) == 0, err::pure_vsdb());
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let locked_bal_ = locked_balance(&vsdb);
@@ -384,12 +408,6 @@ module suiDouBashiVest::vsdb{
     public fun locked_end(self: &VSDB):u64{ self.locked_balance.end }
 
     public fun owner(self: &VSDB):address { self.logical_owner }
-
-    public fun last_voted(self: &VSDB): u64{ self.last_voted }
-
-    public fun pool_votes_borrow(self: &VSDB):&VecMap<ID, u64> { &self.pool_votes }
-    public fun pool_votes(self: &VSDB, pool: &ID): u64{ *vec_map::get(&self.pool_votes, pool) }
-    public fun pool_votes_length(self: &VSDB): u64 { vec_map::size(&self.pool_votes) }
 
     // - point
     public fun get_user_epoch(self: &VSDB): u64 { self.user_epoch }
@@ -519,20 +537,13 @@ module suiDouBashiVest::vsdb{
             id: uid,
             url: img_url_(object::id_to_bytes(&id),(voting_weight as u256) , (unlock_time as u256), (amount as u256)),
             logical_owner: tx_context::sender(ctx),
-
             user_epoch: 0,
             user_point_history,
             locked_balance: LockedSDB{
-                id,
                 balance: coin::into_balance(locked_sdb),
                 end: unlock_time
             },
-
-            voted: false,
-
-            pool_votes: vec_map::empty<ID, u64>(),
-            used_weights: 0,
-            last_voted: 0
+            modules: vec::empty<String>(),
         };
 
         update_user_point(&mut vsdb, clock);
@@ -575,21 +586,17 @@ module suiDouBashiVest::vsdb{
             user_epoch: _,
             user_point_history,
             locked_balance,
-            voted: _,
-            pool_votes,
-            used_weights: _,
-            last_voted: _
+            modules,
         } = self;
 
         let LockedSDB{
-            id: _,
             balance,
             end: _
         } = locked_balance;
 
         table::drop<u64, Point>(user_point_history);
         balance::destroy_zero(balance);
-        vec_map::destroy_empty(pool_votes);
+        vec::destroy_empty(modules);
         object::delete(id);
     }
 
@@ -856,42 +863,6 @@ module suiDouBashiVest::vsdb{
     }
 
     // ===== Gauge Voting =====
-    public (friend) fun voting(self: &mut VSDB){
-        self.voted = true;
-    }
-    public (friend) fun abstain(self: &mut VSDB){
-        self.voted = false;
-    }
-    #[test_only] public fun get_voted(self: &VSDB): bool { self.voted }
-
-    // ===== Voter =====
-    // TODO: move to VSDB, leverage on dynamic fields
-    public (friend) fun new_pool_votes(self: &mut VSDB, pool_id: ID){
-        vec_map::insert(&mut self.pool_votes, pool_id, 0);
-    }
-    public fun pool_votes_exist(self: &VSDB, pool_id: ID):bool{
-        vec_map::contains(&self.pool_votes, &pool_id)
-    }
-    public (friend) fun add_pool_votes(self: &mut VSDB, pool_id: ID, value: u64){
-        vec_map::insert(&mut self.pool_votes, pool_id, value);
-    }
-    /// Remove both entry & value
-    public (friend) fun clear_pool_votes(self: &mut VSDB): VecMap<ID, u64>{
-        let pool_votes = *&self.pool_votes;
-        self.pool_votes = vec_map::empty<ID, u64>();
-        // while( i < len){
-
-        // };
-        pool_votes
-    }
-    public (friend) fun update_used_weights(self: &mut VSDB, w: u64){
-        self.used_weights = w;
-    }
-    #[test_only] public fun get_used_weights(self: &VSDB): u64 { self.used_weights }
-
-    public (friend) fun update_last_voted(self: &mut VSDB, v: u64){
-        self.last_voted = v;
-    }
     fun img_url_(_id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): Url {
         let vesdb = SVG_PREFIX;
         let encoded_b = vec::empty<u8>();
