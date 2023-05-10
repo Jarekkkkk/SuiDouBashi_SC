@@ -101,7 +101,8 @@ module test::setup{
         };
     }
 
-    use suiDouBashiVest::voter::{Self, Voter};
+    use suiDouBashiVest::voter::{Self, Voter, VOTER_SDB};
+    use suiDouBashiVest::vsdb::{Self,VSDBCap};
     public fun deploy_voter(s: &mut Scenario){
         let ( a, _, _ ) = people();
 
@@ -116,6 +117,20 @@ module test::setup{
             assert!(voter::get_total_weight(&voter) == 0, 0);
 
             test::return_shared(voter);
+        };
+        next_tx(s,a);{ // Action: register module
+            let reg_cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+
+            vsdb::register_module<VOTER_SDB>(&reg_cap, &mut reg);
+
+            test::return_shared(reg);
+            test::return_to_sender(s, reg_cap);
+        };
+        next_tx(s, a);{
+            let reg = test::take_shared<VSDBRegistry>(s);
+            assert!(vsdb::whitelisted<VOTER_SDB>(&reg), 404);
+            test::return_shared(reg);
         }
     }
 

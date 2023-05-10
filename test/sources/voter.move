@@ -23,6 +23,24 @@ module test::voter_test{
     public fun vote_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
 
+        next_tx(s,a);{
+            let voter = test::take_shared<Voter>(s);
+            let vsdb = test::take_from_sender<VSDB>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+
+            assert!(!voter::initialized(&vsdb), 404);
+            voter::initialize_voting(&voter, &reg, &mut vsdb);
+
+            test::return_shared(voter);
+            test::return_shared(reg);
+            test::return_to_sender(s, vsdb);
+        };
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<VSDB>(s);
+            assert!(voter::initialized(&vsdb), 404);
+            test::return_to_sender(s, vsdb);
+        };
+
         next_tx(s,a);{ //Action: VeSDB holder reset the votes
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -47,7 +65,6 @@ module test::voter_test{
         };
 
         add_time(clock, setup::week());
-
         next_tx(s,a);{ // Action: poke
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -73,7 +90,6 @@ module test::voter_test{
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
         };
-
         next_tx(s,a);{ // Action: create new VSDB
             let reg = test::take_shared<VSDBRegistry>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
@@ -82,20 +98,22 @@ module test::voter_test{
             test::return_to_sender(s, sdb);
             test::return_shared(reg);
         };
-
         next_tx(s,a);{ // Assertion: new VSDB & total supply
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::latest_voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
+            let voter = test::take_shared<Voter>(s);
             assert!(voting >= 998630128940296005, 404);
             assert!(vsdb::locked_balance(&vsdb) == setup::sui_1B(),404);
             assert!(vsdb::total_supply(&reg, clock) == 11878082096488896050, 404);
             assert!(vsdb::total_minted(&reg) == 2, 404);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 404);
+            // intialize
+            voter::initialize_voting(&voter, &reg, &mut vsdb);
             test::return_to_sender(s, vsdb);
+            test::return_shared(voter);
             test::return_shared(reg);
         };
-
         next_tx(s,a);{ // Action: VSDB holder A voting
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -120,7 +138,6 @@ module test::voter_test{
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
         };
-
         next_tx(s,a);{ // Assertion: voting successfully
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -143,9 +160,9 @@ module test::voter_test{
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 998630128940296005, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 998630128940296005, 404);
                 // vsdb
-                assert!(vsdb::pool_votes(&vsdb, &pool_id) == 998630128940296005, 404);
-                assert!(vsdb::get_used_weights(&vsdb) == 998630128940296005, 404);
-                assert!(vsdb::get_voted(&vsdb), 404);
+                assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == 998630128940296005, 404);
+                assert!(voter::used_weights(&vsdb) == 998630128940296005, 404);
+                assert!(voter::voted(&vsdb), 404);
 
                 test::return_shared(gauge);
                 test::return_shared(i_bribe);
@@ -158,7 +175,6 @@ module test::voter_test{
 
         // // Unable reset until the epoch pass
         add_time(clock, setup::week());
-
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -200,10 +216,10 @@ module test::voter_test{
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 0, 404);
                 // vsdb
-                let pool_votes_borrow = vsdb::pool_votes_borrow(&vsdb);
+                let pool_votes_borrow = voter::pool_votes(&vsdb);
                 assert!(vec_map::try_get(pool_votes_borrow, &pool_id) == std::option::none<u64>(), 404);
-                assert!(vsdb::get_used_weights(&vsdb) == 0, 404);
-                assert!(!vsdb::get_voted(&vsdb), 404);
+                assert!(voter::used_weights(&vsdb) == 0, 404);
+                assert!(!voter::voted(&vsdb), 404);
 
                 test::return_shared(gauge);
                 test::return_shared(i_bribe);
@@ -215,7 +231,6 @@ module test::voter_test{
         };
 
         add_time(clock, setup::week());
-
         next_tx(s,a);{ // Action: VSDB holder A voting
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -279,7 +294,7 @@ module test::voter_test{
                 assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
-                assert!(vsdb::pool_votes(&vsdb, &pool_id) == vsdb_voting / 2, 404);
+                assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
                 test::return_shared(i_bribe);
@@ -304,7 +319,7 @@ module test::voter_test{
                 assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
-                assert!(vsdb::pool_votes(&vsdb, &pool_id) == vsdb_voting / 2, 404);
+                assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
                 test::return_shared(i_bribe);
@@ -314,8 +329,8 @@ module test::voter_test{
             //voter
             assert!(voter::get_total_weight(&voter) == vsdb_voting / 2 * 2, 404);
             // vsdb
-            assert!(vsdb::get_used_weights(&vsdb) == vsdb_voting / 2 * 2, 404);
-            assert!(vsdb::get_voted(&vsdb), 404);
+            assert!(voter::used_weights(&vsdb) == vsdb_voting / 2 * 2, 404);
+            assert!(voter::voted(&vsdb), 404);
 
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -387,7 +402,7 @@ module test::voter_test{
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 494520543922772002 + vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
-                assert!(vsdb::pool_votes(&vsdb, &pool_id) == vsdb_voting / 2, 404);
+                assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
                 test::return_shared(i_bribe);
@@ -412,7 +427,7 @@ module test::voter_test{
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 494520543922772002 + vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
-                assert!(vsdb::pool_votes(&vsdb, &pool_id) == vsdb_voting / 2, 404);
+                assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
                 test::return_shared(i_bribe);
@@ -422,8 +437,8 @@ module test::voter_test{
             // voter
             assert!(voter::get_total_weight(&voter) == 989041087845544004 + vsdb_voting / 2 * 2, 404);
             // vsdb
-            assert!(vsdb::get_used_weights(&vsdb) == vsdb_voting / 2 * 2, 404);
-            assert!(vsdb::get_voted(&vsdb), 404);
+            assert!(voter::used_weights(&vsdb) == vsdb_voting / 2 * 2, 404);
+            assert!(voter::voted(&vsdb), 404);
 
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);

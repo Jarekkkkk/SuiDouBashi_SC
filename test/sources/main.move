@@ -34,7 +34,7 @@ module test::main{
         test::voter_test::vote_(&mut clock, &mut s);
         distribute_fees_(&mut clock, &mut s);
         internal_bribe_(&mut clock, &mut s);
-        test::e_bribe_test::external_bribe_(&mut clock, &mut s);
+        test::e_bribe_test::external_bribe_(&mut clock, &mut s); // gas cost high
         vsdb_decay(&mut clock, &mut s);
 
         clock::destroy_for_testing(clock);

@@ -38,11 +38,11 @@ module test::test_whitelist{
             used_weights: 990,
             last_voted: 1230
         };
-        vsdb::df_add(&self.witness, reg, vsdb, object::id_address(self), value);
+        vsdb::df_add(&self.witness, reg, vsdb, value);
     }
 
     public fun update_pool_votes(self: &Foo, vsdb: &mut VSDB){
-        let voting_mut:&mut VotingState = vsdb::df_borrow_mut(vsdb, object::id_address(self));
+        let voting_mut:&mut VotingState = vsdb::df_borrow_mut(vsdb, self.witness);
 
         vec_map::insert(&mut voting_mut.pool_votes, object::id(self), 1321321);
 

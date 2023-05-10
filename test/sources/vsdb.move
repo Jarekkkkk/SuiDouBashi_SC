@@ -150,16 +150,10 @@ module test::vsdb{
         };
         next_tx(s, a);{ // vsdb been burnt
             assert!(!test::has_most_recent_for_sender<VSDB>(s), 0);
-            let reg = test::take_shared<VSDBRegistry>(s);
-            let pt_history = vsdb::point_history(&reg);
-           std::debug::print(&sui::table_vec::length(pt_history));
-           std::debug::print(vsdb::get_latest_global_point_history(&reg));
-
-           test::return_shared(reg);
         }
     }
 
-    use test::test_whitelist::{Self as white, MOCK, Foo, VotingState};
+    use test::test_whitelist::{Self as white, MOCK, Foo};
     use suiDouBashiVest::vsdb::{VSDBCap};
     fun test_whitelisted_module(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
@@ -183,12 +177,12 @@ module test::vsdb{
 
         next_tx(s,a);{
             let foo = test::take_shared<Foo>(s);
+            let type = std::type_name::into_string(std::type_name::get<MOCK>());
             let reg = test::take_shared<VSDBRegistry>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
-            white::add_pool_votes(&foo, &reg, &mut vsdb);
 
-                        let voting_state:&VotingState = vsdb::df_borrow(&vsdb, sui::object::id_address(&foo));
-std::debug::print(voting_state);
+            white::add_pool_votes(&foo, &reg, &mut vsdb);
+            let _registered = vsdb::module_exists(&vsdb, std::ascii::into_bytes(type));
 
             test::return_shared(foo);
             test::return_shared(reg);
@@ -198,12 +192,8 @@ std::debug::print(voting_state);
         next_tx(s,a) ;{
             let vsdb = test::take_from_sender<VSDB>(s);
             let foo = test::take_shared<Foo>(s);
+
             white::update_pool_votes(&foo, &mut vsdb);
-
-            let voting_state:&VotingState = vsdb::df_borrow(&vsdb, sui::object::id_address(&foo));
-std::debug::print(voting_state);
-
-std::debug::print(&vsdb::df_exists(&vsdb, sui::object::id_address(&foo)));
 
             test::return_to_sender(s, vsdb);
             test::return_shared(foo);
