@@ -62,6 +62,9 @@ module suiDouBashiVest::voter{
     }
 
     // VDSB Protocol
+    public fun initialized(vsdb: &VSDB):bool{
+        vsdb::df_exists(vsdb, VOTER_SDB {})
+    }
     public entry fun initialize_voting(self: &Voter, reg: &VSDBRegistry, vsdb: &mut VSDB){
         let value = VotingState{
             pool_votes: vec_map::empty(),
@@ -71,8 +74,18 @@ module suiDouBashiVest::voter{
         };
         vsdb::df_add(&self.witness, reg, vsdb, value);
     }
+    public fun drop_voting_state(vsdb: &mut VSDB){
+        let voting_state:VotingState = vsdb::df_remove( &VOTER_SDB{}, vsdb );
+        let VotingState{
+            pool_votes,
+            voted: _,
+            used_weights: _,
+            last_voted: _
+        } = voting_state;
+        vec_map::destroy_empty(pool_votes);
+    }
     public fun voting_state_borrow(vsdb: &VSDB):&VotingState{
-        vsdb::df_borrow(vsdb, VOTER_SDB{})
+        vsdb::df_borrow(vsdb, VOTER_SDB {})
     }
     fun voting_state_borrow_mut(vsdb: &mut VSDB):&mut VotingState{
         vsdb::df_borrow_mut(vsdb, VOTER_SDB {})

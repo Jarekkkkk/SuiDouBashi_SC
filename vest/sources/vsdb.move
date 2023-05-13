@@ -37,9 +37,6 @@ module suiDouBashiVest::vsdb{
     // modules
     const E_NOT_REGISTERED: u64 = 004;
 
-    friend suiDouBashiVest::voter;
-    friend suiDouBashiVest::reward_distributor;
-
     // TODO: display pkg format rule
     struct VSDB has key, store {
         id: UID,
@@ -47,17 +44,10 @@ module suiDouBashiVest::vsdb{
         // useful for preventing high-level transfer function & traceability of the owner
         logical_owner: address,
         // TODO: last updated
-
         user_epoch: u64,
         user_point_history: Table<u64, Point>, // epoch -> point_history
         locked_balance: LockedSDB,
         modules: vector<String>,
-
-        // // // // voter voting
-        // pool_votes: VecMap<ID, u64>, // pool -> voting weight
-        // voted: bool,
-        // used_weights: u64,
-        // last_voted: u64 // ts
     }
 
     struct LockedSDB has store{
@@ -76,6 +66,9 @@ module suiDouBashiVest::vsdb{
         epoch: u64,
         point_history: TableVec<Point>, // epoch -> Point
         slope_changes: Table<u64, I128> // t_i (ms round down to week-based) -> d_slope
+    }
+    public fun whitelisted<T: copy + store + drop>(reg: &VSDBRegistry):bool {
+        table::contains(&reg.whitelist_modules, type_name::get<T>())
     }
 
     // - Whitelist module to add df/ dof
@@ -109,7 +102,7 @@ module suiDouBashiVest::vsdb{
         vec::push_back(&mut vsdb.modules, type_name::into_string(type));
         df::add(&mut vsdb.id, *witness, value);
     }
-    public fun df_remove<T: copy + store + drop, N: copy + drop + store, V: store>(
+    public fun df_remove<T: copy + store + drop, V: store>(
         witness: &T,
         vsdb: &mut VSDB,
     ):V{
@@ -358,7 +351,6 @@ module suiDouBashiVest::vsdb{
         event::withdraw(id, withdrawl, ts);
     }
 
-
     // ===== Display & Transfer =====
 
     /// As sui's high level transfer is too strong, we preent vsdb wrongly transfer
@@ -525,7 +517,6 @@ module suiDouBashiVest::vsdb{
     public fun max_time(): u64 { MAX_TIME }
 
     // ===== Main =====
-    //https://github.com/velodrome-finance/contracts/blob/afed728d26f693c4e05785d3dbb1b7772f231a76/contracts/VotingEscrow.sol#L766
     fun new(locked_sdb: Coin<SDB>, unlock_time: u64, clock: &Clock, ctx: &mut TxContext): VSDB {
         let uid = object::new(ctx);
         let id = object::uid_to_inner(&uid);
@@ -731,7 +722,7 @@ module suiDouBashiVest::vsdb{
         };
 
         // prevent infinitely creating checkpoints
-        // // Record the changed point into history
+        // Record the changed point into history
         let latest_point = get_latest_global_point_history(self);
         if(point::ts(latest_point) != last_point_ts || !i128::is_zero(&last_point_slope) || !i128::is_zero(&last_point_bias)){
             self.epoch = epoch;
@@ -777,89 +768,11 @@ module suiDouBashiVest::vsdb{
         };
     }
 
-    // DOS attack
-    // TODO: refactor, merge with checkpoint
-    public fun global_checkpoint_(
+    public fun global_checkpoint(
         self: &mut VSDBRegistry,
         clock: &Clock
     ){
-        let time_stamp = clock::timestamp_ms(clock);
-        let epoch = self.epoch;
-         // get the latest point
-        let last_point = if(self.epoch > 0){
-            // copy the value in table
-            *table_vec::borrow(&self.point_history, self.epoch)
-        }else{
-            point::new( i128::zero(), i128::zero(), time_stamp )
-        };
-
-        let last_point_bias = point::bias(&last_point);
-        let last_point_slope = point::slope(&last_point);
-        let last_point_ts = point::ts(&last_point);
-
-        // incremntal period by week
-        let t_i = (last_point_ts / WEEK) * WEEK;
-        // update the weekly checkpoint
-        let i = 0;
-        while( i < 255 ){
-            // Hopefully it won't happen that this won't get used in 5 years!
-            // If it does, users will be able to withdraw but vote weight will be broken
-            t_i = t_i + WEEK; // jump to endpoint of interval where checkpoint at
-            let d_slope = i128::zero();
-
-            if( t_i > time_stamp ){
-                //latest, all histroy has been filled, no need of recording point_history
-                t_i = time_stamp;
-            }else{
-                // get the d_slope of this interval, only update when the period is passed
-                if(table::contains(&self.slope_changes, t_i)){
-                    d_slope = *table::borrow(&self.slope_changes, t_i);
-                };
-            };
-
-            let time_left = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
-
-            // update ned bias & slope as we insert new checkpoint
-            last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left));
-            last_point_slope = i128::add(&last_point_slope, &d_slope);
-
-            let compare_bias = i128::compare(&last_point_bias, &i128::zero());
-            // if last_point_bais <= 0
-            if(compare_bias == 1 || compare_bias == 0){
-                // this could be negative as current interval of 2 checkpoint is larger than previous interval
-                last_point_bias = i128::zero();
-            };
-            let compare_slope = i128::compare(&last_point_slope, &i128::zero());
-            // if last_point_slope <= 0
-            if(compare_slope == 1 || compare_slope == 0){
-                // this won't happen, just make sure
-                last_point_slope = i128::zero();
-            };
-
-            last_point_ts = t_i;
-
-            epoch = epoch + 1;
-            if(t_i == time_stamp){
-                break
-            }else{
-                // update if checkpoint is in obsolete weekly interval
-                let point = point::new(last_point_bias, last_point_slope, last_point_ts);
-                table_vec::push_back(&mut self.point_history, point);
-            };
-
-            i = i + 1;
-        };
-
-        // prevent infinitely creating checkpoints
-        let latest_point = get_latest_global_point_history(self);
-        if(point::ts(latest_point) != last_point_ts || !i128::is_zero(&last_point_slope) || !i128::is_zero(&last_point_bias)){
-            self.epoch = epoch;
-            // Record the changed point into history
-            let last_point = point::new(last_point_bias, last_point_slope, last_point_ts);
-            // update latest epoch
-            table_vec::push_back(&mut self.point_history, last_point);
-        }
-
+        checkpoint_(false, self, 0, 0, 0, 0, clock);
     }
 
     // ===== Gauge Voting =====

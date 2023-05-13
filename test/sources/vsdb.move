@@ -141,11 +141,11 @@ module test::vsdb{
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::unlock(&mut reg, vsdb, clock, ctx(s));
-            vsdb::global_checkpoint_(&mut reg, clock);
-            vsdb::global_checkpoint_(&mut reg, clock);
-            vsdb::global_checkpoint_(&mut reg, clock);
-            vsdb::global_checkpoint_(&mut reg, clock);
-            vsdb::global_checkpoint_(&mut reg, clock);
+            vsdb::global_checkpoint(&mut reg, clock);
+            vsdb::global_checkpoint(&mut reg, clock);
+            vsdb::global_checkpoint(&mut reg, clock);
+            vsdb::global_checkpoint(&mut reg, clock);
+            vsdb::global_checkpoint(&mut reg, clock);
             test::return_shared(reg);
         };
         next_tx(s, a);{ // vsdb been burnt

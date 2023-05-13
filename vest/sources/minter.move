@@ -54,7 +54,7 @@ module suiDouBashiVest::minter{
             team: tx_context::sender(ctx),
             team_rate: 30,
             active_period: tx_context::epoch_timestamp_ms(ctx) / WEEK * WEEK,
-            weekly: 15_000_000 * (math::pow(10, 9)) // 9 decimals
+            weekly: 15_000_000 * (math::pow(10, 9)) // 15M
         };
         let sdb_balance = balance::increase_supply(&mut minter.supply, initial_amount);
 
@@ -91,7 +91,7 @@ module suiDouBashiVest::minter{
     public fun calculate_emission(self: &Minter):u64{
         ( self.weekly * EMISSION ) / PRECISION
     }
-    /// ( VSDB_supply - sdb_supply ) * 0.2%
+    /// ( SDB_supply - VSDB_supply ) * 0.2%
     public fun circulating_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
         (circulating_supply(self, vsdb_reg, clock) * TAIL_EMISSION ) / PRECISION
     }

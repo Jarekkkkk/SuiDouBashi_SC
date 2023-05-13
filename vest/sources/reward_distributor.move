@@ -286,7 +286,7 @@ module suiDouBashiVest::reward_distributor{
 
         let t = self.time_cursor;
         let rounded_timestamp = ts / WEEK * WEEK;
-        vsdb::global_checkpoint_(vsdb_reg, clock);
+        vsdb::global_checkpoint(vsdb_reg, clock);
 
         let i = 0;
         while( i < 20 ){
