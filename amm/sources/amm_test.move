@@ -23,6 +23,7 @@ module suiDouBashi::amm_test{
         let clock = clock::create_for_testing(ctx(&mut scenario));
         usdt::deploy_coin(ctx(&mut scenario));
         usdc::deploy_coin(ctx(&mut scenario));
+        test_init_reg_(&mut clock, &mut scenario);
         test_init_pool_<USDC, USDT>(&mut clock, &mut scenario);
 
         clock::destroy_for_testing(clock);
@@ -108,12 +109,16 @@ module suiDouBashi::amm_test{
         clock::destroy_for_testing(clock);
         test::end(scenario);
     }
-    fun test_init_pool_<X, Y>(_clock: &mut Clock, test:&mut Scenario) {
-        let ( creator, _) = people();
 
+    public fun test_init_reg_(_: &mut Clock, test: &mut Scenario){
+        let ( creator, _, _) = people();
         next_tx(test, creator);{
             pool_reg::init_for_testing(ctx(test));
         };
+
+    }
+    public fun test_init_pool_<X, Y>(_: &mut Clock, test:&mut Scenario) {
+        let ( creator, _, _) = people();
 
         next_tx(test, creator); {//create pool
             let meta_x = test::take_immutable<CoinMetadata<X>>(test);
@@ -146,10 +151,13 @@ module suiDouBashi::amm_test{
             ;
         };
      }
-    fun add_liquidity_<X, Y>(deposit_x: u64, deposit_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (creator, _) = people();
+    public fun add_liquidity_<X, Y>(deposit_x: u64, deposit_y:u64, clock: &mut Clock, test: &mut Scenario){
+        let (creator, _, _) = people();
+
+        test_init_reg_(clock, test);
+
         next_tx(test, creator);{
-            test_init_pool_< X, Y>(clock, test);
+            test_init_pool_<X, Y>(clock, test);
         };
 
         add_time(clock, 1800 + 1);
@@ -187,7 +195,7 @@ module suiDouBashi::amm_test{
         }
     }
     fun test_swap_for_y_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (_, trader) = people();
+        let (_, trader, _) = people();
         let input_x = 500000;
 
         add_liquidity_< X, Y>(amt_x, amt_y, clock, test);
@@ -220,7 +228,7 @@ module suiDouBashi::amm_test{
         }
     }
     fun test_swap_for_x_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (_, trader) = people();
+        let (_, trader, _) = people();
         let input_y = 5000;
 
         add_liquidity_< X, Y>(amt_x, amt_y, clock, test);
@@ -255,7 +263,7 @@ module suiDouBashi::amm_test{
         }
     }
     fun remove_liquidity_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (creator, trader) = people();
+        let (creator, trader, _) = people();
 
         next_tx(test, creator);{
             add_liquidity_< X, Y>(amt_x, amt_y, clock, test);
@@ -295,7 +303,7 @@ module suiDouBashi::amm_test{
         };
     }
     fun zap_x_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (creator, trader) = people();
+        let (creator, trader, _) = people();
         let deposit_x = 30_000;
 
         next_tx(test, trader);{
@@ -332,7 +340,7 @@ module suiDouBashi::amm_test{
     }
 
     fun zap_y_<X, Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (creator, trader) = people();
+        let (creator, trader, _) = people();
         let deposit_x = 30_000;
 
         next_tx(test, creator);{
@@ -358,7 +366,7 @@ module suiDouBashi::amm_test{
     }
 
     fun oracle_<X,Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
-        let (_, trader) = people();
+        let (_, trader, _) = people();
 
         let amount = 1_000_000_000;
 
@@ -392,5 +400,5 @@ module suiDouBashi::amm_test{
         }
     }
 
-    fun people(): (address, address) { (@0xABCD, @0x1234 ) }
+    public fun people(): (address, address, address) { (@0x000A, @0x000B, @0x000C ) }
 }

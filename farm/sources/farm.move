@@ -1,5 +1,6 @@
 module farm::farm{
     use suiDouBashi::pool::{Self, Pool, LP};
+    use suiDouBashi::pool_reg;
     use suiDouBashiVest::vsdb::{Self, VSDBRegistry};
     use suiDouBashiVest::sdb::SDB;
     use sui::event::emit;
@@ -8,10 +9,10 @@ module farm::farm{
     use sui::object::{Self, ID, UID};
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
-    use std::ascii::String;
+    use std::string::String;
     use sui::vec_map::{Self, VecMap};
     use sui::transfer;
-    use sui::coin;
+    use sui::coin::{Self, Coin};
     use sui::clock::{Self, Clock};
 
     const TOTAL_ALLOC_POINT: u64 = 100;
@@ -21,6 +22,7 @@ module farm::farm{
     const SCALE_FACTOR: u128 = 1_000_000_000_000;
 
     // ERROR
+    const ERR_INITIALIZED: u64 = 000;
     const ERR_NOT_GOV: u64 = 001;
     const ERR_INVALID_TIME: u64 = 002;
     const ERR_NOT_PLAYER: u64 = 003;
@@ -55,6 +57,7 @@ module farm::farm{
     // TODO: move start_time & end_time to const, which relieve the usage of reg object in every function
     struct Reg has key{
         id: UID,
+        initialized: bool,
         governor: address,
         sdb_balance: Balance<SDB>,
         start_time: u64,
@@ -65,6 +68,10 @@ module farm::farm{
         total_pending: Table<address, u64>
     }
 
+    public fun get_sdb_balance(reg: &Reg):u64{ balance::value(&reg.sdb_balance)}
+    public fun get_start_time(reg: &Reg):u64 {reg.start_time }
+    public fun get_end_time(reg: &Reg):u64 {reg.end_time }
+    public fun sdb_per_second(reg: &Reg): u64 { reg.sdb_per_second }
 
     struct PlayerInfo has copy, store{
         amount: u64,
@@ -82,10 +89,12 @@ module farm::farm{
         player_infos: Table<address, PlayerInfo>,
     }
 
+    public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::get_lp_balance(&self.lp_balance)}
 
     fun init(ctx: &mut TxContext){
         let reg = Reg{
             id: object::new(ctx),
+            initialized: false,
             governor: tx_context::sender(ctx),
             sdb_balance: balance::zero<SDB>(),
             start_time: 0,
@@ -99,7 +108,35 @@ module farm::farm{
         transfer::share_object(reg);
     }
 
-    public fun add_farm<X,Y>(reg: &Reg, pool: &Pool<X,Y>, alloc_point: u64, clock: &Clock, ctx: &mut TxContext){
+    public fun initialize(
+        reg: &mut Reg,
+        start_time: u64,
+        duration: u64,
+        sdb: Coin<SDB>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert_governor(reg, ctx);
+        assert!(!reg.initialized, ERR_INITIALIZED);
+        assert!(start_time > clock::timestamp_ms(clock) || duration != 0, ERR_INVALID_TIME);
+
+        let end_time = start_time + duration;
+        let sdb_per_second = coin::value(&sdb) / duration;
+
+        reg.initialized = true;
+        coin::put(&mut reg.sdb_balance, sdb);
+        reg.start_time = start_time;
+        reg.end_time = end_time;
+        reg.sdb_per_second = sdb_per_second;
+    }
+
+    public fun add_farm<X,Y>(
+        reg: &mut Reg,
+        pool: &Pool<X,Y>,
+        alloc_point: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
         assert_governor(reg, ctx);
 
         let ts = clock::timestamp_ms(clock);
@@ -118,22 +155,11 @@ module farm::farm{
             player_infos: table::new<address, PlayerInfo>(ctx),
         };
 
+        let pool_name = pool_reg::get_pool_name<X,Y>();
+        vec_map::insert(&mut reg.farms, pool_name, object::id(&farm));
+
         transfer::share_object(farm);
     }
-
-    public entry fun set_time(reg: &mut Reg, start_time: u64, duration: u64, clock: &Clock, ctx: &mut TxContext){
-        assert_governor(reg, ctx);
-        assert!(start_time >  clock::timestamp_ms(clock) ,ERR_INVALID_TIME);
-
-        reg.start_time = start_time;
-        reg.end_time = start_time + duration * 86400;
-    }
-
-    public entry fun set_sdb_per_second(reg: &mut Reg, sdb_per_second: u64, ctx: &mut TxContext){
-        assert_governor(reg, ctx);
-        reg.sdb_per_second = sdb_per_second;
-    }
-
 
     public fun get_multiplier(reg:&Reg, from: u64, to: u64):u64{
         let from = if(from > reg.start_time){
@@ -161,7 +187,7 @@ module farm::farm{
 
         if(ts > self.last_reward_time && lp_balance != 0){
             let multiplier = get_multiplier(reg, self.last_reward_time, ts);
-            let sdb_reward = multiplier * SDB_PER_SECOND * self.alloc_point / TOTAL_ALLOC_POINT;
+            let sdb_reward = multiplier * reg.sdb_per_second * self.alloc_point / TOTAL_ALLOC_POINT;
             acc_sdb_per_share = acc_sdb_per_share + ((sdb_reward as u128) * SCALE_FACTOR / (lp_balance as u128))
         };
 
@@ -176,6 +202,7 @@ module farm::farm{
         let lp_balance = pool::get_lp_balance(&self.lp_balance);
         if(lp_balance == 0){
             self.last_reward_time = ts;
+            return
         };
 
         let multiplier = get_multiplier(reg, self.last_reward_time, ts);
@@ -305,4 +332,6 @@ module farm::farm{
 
         table::remove(&mut reg.total_pending, player);
     }
+
+    #[test_only] public fun init_for_testing(ctx: &mut TxContext) { init(ctx) }
 }

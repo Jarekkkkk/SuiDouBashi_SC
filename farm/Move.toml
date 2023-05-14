@@ -9,6 +9,7 @@ SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-
 
 suiDouBashi = {local = "../amm"}
 suiDouBashiVest = { local = "../vest" }
+test = { local = "../test" }
 
 [addresses]
 farm = "0x0"
