@@ -8,7 +8,8 @@ module farm::farm_test{
     use suiDouBashi::amm_test;
     use suiDouBashi::usdt::{USDT};
     use suiDouBashi::usdc::{USDC};
-    use suiDouBashiVest::sdb::SDB;
+    use suiDouBashiVest::sdb::{SDB};
+    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
     use suiDouBashi::pool::{Pool,LP};
 
 
@@ -22,7 +23,10 @@ module farm::farm_test{
         let clock = clock::create_for_testing(ctx(&mut s));
 
         setup::deploy_coins(&mut s);
+        // pool
         pool_setup(&mut clock, &mut s);
+        // vsdb
+        vsdb::init_for_testing(ctx(&mut s));
 
         // farm
         create_reg(&mut s);
@@ -277,11 +281,8 @@ module farm::farm_test{
 
         next_tx(s,a);{
             let reg = test::take_shared<Reg>(s);
-            std::debug::print(&farm::total_pending(&reg, a));
-           std::debug::print(&harvest);
             assert!(farm::total_pending(&reg, a) == harvest, 404);
-
-             {
+            {
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
                 assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
                 test::return_shared(farm);
@@ -296,8 +297,64 @@ module farm::farm_test{
                 assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
                 test::return_shared(farm);
             };
+
             test::return_shared(reg);
         };
+
+        add_time(clock, 2 * setup::week());
+
+        next_tx(s,a);{
+            let reg = test::take_shared<Reg>(s);
+            assert!(farm::total_pending(&reg, a) == harvest, 404);
+            let duration = 2 * setup::week();
+            {
+                let farm = test::take_shared<Farm<USDC, USDT>>(s);
+                let rewards = duration * 258349867 * 2 / 10;
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                farm::harvest(&mut reg, &mut farm, clock, ctx(s));
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
+                test::return_shared(farm);
+            };
+            {
+                let farm = test::take_shared<Farm<SDB, USDC>>(s);
+                let rewards = duration * 258349867 * 3 / 10;
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                farm::harvest(&mut reg, &mut farm, clock, ctx(s));
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
+                test::return_shared(farm);
+            };
+            {
+                let farm = test::take_shared<Farm<SDB, USDT>>(s);
+                let rewards = duration * 258349867 * 5 / 10;
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                farm::harvest(&mut reg, &mut farm, clock, ctx(s));
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
+                test::return_shared(farm);
+            };
+            test::return_shared(reg);
+        };
+
+        next_tx(s,a);{
+            let reg = test::take_shared<Reg>(s);
+            let vsdb_reg = test::take_shared<VSDBRegistry>(s);
+            farm::claim_vsdb(&mut reg, &mut vsdb_reg, clock, ctx(s));
+            // removed from table
+            test::return_shared(vsdb_reg);
+            test::return_shared(reg);
+        };
+
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<VSDB>(s);
+
+            let reward_a = ( 28 - 3 ) * 86400 * 258349867 * 2 / 10;
+            let reward_b = ( 28 - 0 ) * 86400 * 258349867 * 3 / 10;
+            let reward_c = ( 28 - 0 ) * 86400 * 258349867 * 5 / 10;
+            assert!(vsdb::locked_balance(&vsdb) == reward_a + reward_b + reward_c, 404);
+            let time = vsdb::round_down_week(get_time(clock) + 36 * 7 * 86400);
+            assert!(vsdb::locked_end(&vsdb) == time, 404);
+
+            test::return_to_sender(s, vsdb);
+        }
 
     }
 

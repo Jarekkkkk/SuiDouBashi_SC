@@ -28,6 +28,7 @@ module farm::farm{
     const ERR_NOT_PLAYER: u64 = 003;
     const ERR_INSUFFICIENT_LP: u64 = 004;
     const ERR_NO_REWARD: u64 = 005;
+    const ERR_NOT_FINISH: u64 = 006;
 
     // EVENT
     struct Stake<phantom X, phantom Y> has copy, drop{
@@ -90,7 +91,6 @@ module farm::farm{
     }
 
     public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::get_lp_balance(&self.lp_balance)}
-    public fun get_player_info<X,Y>(self: &Farm<X,Y>, player: address): &PlayerInfo { table::borrow(&self.player_infos, player)}
 
 
     fun init(ctx: &mut TxContext){
@@ -239,10 +239,7 @@ module farm::farm{
         clock:&Clock,
         ctx:&mut TxContext
     ){
-        update_farm(reg, self, clock);
-
         let player = tx_context::sender(ctx);
-
         if(!table::contains(&self.player_infos, player)){
             let player_info = PlayerInfo{
                 amount: 0,
@@ -251,7 +248,7 @@ module farm::farm{
             };
             table::add(&mut self.player_infos, player, player_info);
         };
-
+        update_farm(reg, self, clock);
         update_player(self, player);
 
         let player_info = table::borrow_mut(&mut self.player_infos, player);
@@ -333,14 +330,13 @@ module farm::farm{
     ){
         let player = tx_context::sender(ctx);
         assert!(table::contains(&reg.total_pending, player) && *table::borrow(&reg.total_pending, player) > 0, ERR_NO_REWARD);
-
-        let reward = table::borrow_mut(&mut reg.total_pending, player);
-
+        assert!(clock::timestamp_ms(clock) >= reg.end_time, ERR_NOT_FINISH);
+        let reward = table::borrow(&reg.total_pending, player);
         let sdb = coin::take(&mut reg.sdb_balance, *reward, ctx);
-        vsdb::lock_for(vsdb_reg, sdb, LOCK, player, clock, ctx);
+        vsdb::lock(vsdb_reg, sdb, LOCK, clock, ctx);
 
         table::remove(&mut reg.total_pending, player);
     }
 
-    #[test_only] public fun init_for_testing(ctx: &mut TxContext) { init(ctx) }
+    #[test_only] public fun init_for_testing( ctx: &mut TxContext) { init(ctx) }
 }
