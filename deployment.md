@@ -9,6 +9,7 @@
 2. VSDB:
 
    - mint VSDB for reward from first mint
+   - register Voter whitelist module
 
 3. Farm:
 

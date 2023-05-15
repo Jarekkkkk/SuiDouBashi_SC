@@ -25,6 +25,27 @@ tags:
   - name: LP
     description: Liqudiity Provider Position
 paths:
+  /pool_reg/{poolReg_id}:
+    get:
+      tags:
+        - pool_reg
+      summary: Get Pool Registry Object
+      description: Get Pool Registry Object
+      parameters:
+        - name: PoolReg id
+          in: query
+          description: Liqudity Provider Position
+          required: true
+          explode: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoolReg"
   /pool_reg/create_pool:
     post:
       tags:
@@ -344,12 +365,12 @@ paths:
     get:
       tags:
         - pool
-      summary: Get optimized output by input X & type X
-      description: Get LP's reward X
+      summary: Get Pool Object
+      description: Get Pool Object
       parameters:
         - name: Pool
           in: query
-          description: Optimized output Y by given inupt X
+          description: Get Pool Object
           required: true
           explode: true
           schema:
@@ -550,10 +571,10 @@ components:
         pools:
           type: array
           items:
-            type: object
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
             additionalProperties:
               type: string
-              $ref: "#/components/schemas/Pool"
         guardian:
           type: string
           example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"

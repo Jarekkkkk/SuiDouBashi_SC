@@ -267,7 +267,7 @@ module suiDouBashiVest::voter{
             let (_, weights) = vec_map::remove(&mut potato.weights, &gauge::pool_id(gauge));
 
             assert!(weights > 0, E_NOT_VOTE);
-            let player_weight = vsdb::latest_voting_weight(vsdb, clock);
+            let player_weight = vsdb::voting_weight(vsdb, clock);
             let pool_weight = ((weights as u128) * (player_weight as u128) / (potato.total_weight as u128) as u64); // get the pro rata voting weight
             assert!(pool_weight > 0, err::invalid_weight());
             update_for_(self, gauge);

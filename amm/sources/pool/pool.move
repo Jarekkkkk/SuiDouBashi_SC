@@ -85,15 +85,7 @@ module suiDouBashi::pool{
         get_observation(self, table_vec::length(&self.observations) - 1)
     }
 
-    fun add_reserve_x_cumulative(o: &mut Observation, increment: u256){
-        o.reserve_x_cumulative = o.reserve_x_cumulative + increment;
-    }
-
-    fun add_reserve_y_cumulative(o: &mut Observation, increment: u256){
-        o.reserve_y_cumulative = o.reserve_y_cumulative + increment;
-    }
-
-    /// - LP's position
+    /// - LP Position
     struct LP_TOKEN<phantom X, phantom Y> has drop {}
     struct LP<phantom X, phantom Y> has key, store{
         id: UID,
@@ -769,8 +761,6 @@ module suiDouBashi::pool{
             // record down the percentage diffreence
             let delta_x = self.fee.index_x - lp_position.index_x;
             let delta_y = self.fee.index_y - lp_position.index_y;
-            lp_position.index_x = self.fee.index_x;
-            lp_position.index_y = self.fee.index_y;
 
             if(delta_x > 0){
                 let share = (lp_balance as u256) * delta_x / SCALE_FACTOR;
@@ -780,10 +770,10 @@ module suiDouBashi::pool{
                 let share = (lp_balance as u256) * delta_y / SCALE_FACTOR;
                 lp_position.claimable_y = lp_position.claimable_y + (share as u64);
             };
-        }else{
-            lp_position.index_x = self.fee.index_x;
-            lp_position.index_y = self.fee.index_y;
         };
+        lp_position.index_x = self.fee.index_x;
+        lp_position.index_y = self.fee.index_y;
+
     }
     /// Update global fee distribution when swapping
     fun update_fee_index_x_<X,Y>(self: &mut Pool<X,Y>, fee_x: u64 ){

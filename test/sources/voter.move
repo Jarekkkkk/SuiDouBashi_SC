@@ -100,13 +100,13 @@ module test::voter_test{
         };
         next_tx(s,a);{ // Assertion: new VSDB & total supply
             let vsdb = test::take_from_sender<VSDB>(s);
-            let voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             let voter = test::take_shared<Voter>(s);
             assert!(voting >= 998630128940296005, 404);
             assert!(vsdb::locked_balance(&vsdb) == setup::sui_1B(),404);
-            assert!(vsdb::total_supply(&reg, clock) == 11878082096488896050, 404);
-            assert!(vsdb::total_minted(&reg) == 2, 404);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 11878082096488896050, 404);
+            assert!(vsdb::get_minted(&reg) == 2, 404);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 404);
             // intialize
             voter::initialize_voting(&voter, &reg, &mut vsdb);
@@ -274,7 +274,7 @@ module test::voter_test{
         next_tx(s,a);{ // Assertion: VSDB A holder voting successfully
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
-            let vsdb_voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let vsdb_voting = vsdb::voting_weight(&vsdb, clock);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
@@ -352,7 +352,7 @@ module test::voter_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
-                    assert!( vsdb::latest_voting_weight(&vsdb, clock) == 10773972515494232045, 404);
+                    assert!( vsdb::voting_weight(&vsdb, clock) == 10773972515494232045, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));
@@ -382,7 +382,7 @@ module test::voter_test{
             let _vsdb = test::take_from_sender<VSDB>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
 
-            let vsdb_voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let vsdb_voting = vsdb::voting_weight(&vsdb, clock);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);

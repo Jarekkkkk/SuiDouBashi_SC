@@ -352,6 +352,7 @@ module farm::farm_test{
             assert!(vsdb::locked_balance(&vsdb) == reward_a + reward_b + reward_c, 404);
             let time = vsdb::round_down_week(get_time(clock) + 36 * 7 * 86400);
             assert!(vsdb::locked_end(&vsdb) == time, 404);
+           std::debug::print(&vsdb);
 
             test::return_to_sender(s, vsdb);
         }

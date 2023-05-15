@@ -41,7 +41,7 @@ module test::vsdb{
         next_tx(s, a);{ // extend 2 weeks duration
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::increase_unlock_time(&mut reg, &mut vsdb, setup::four_years() + vsdb::week(), &clock, ctx(s));
+            vsdb::increase_unlock_time(&mut reg, &mut vsdb, setup::four_years() + setup::week(), &clock);
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
@@ -102,14 +102,14 @@ module test::vsdb{
         next_tx(s, a);{ // extend 2 weeks duration
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::increase_unlock_time(&mut reg, &mut vsdb, 2 * vsdb::week(), clock, ctx(s));
+            vsdb::increase_unlock_time(&mut reg, &mut vsdb, 2 * setup::week(), clock);
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
             let slope = vsdb::calculate_slope(setup::sui_100M()); // slope is unchanged
-            let end = vsdb::round_down_week(get_time(clock) + 2 * vsdb::week());
+            let end = vsdb::round_down_week(get_time(clock) + 2 * setup::week());
             let bias = vsdb::calculate_bias(setup::sui_100M(), end, get_time(clock));
             assert!( vsdb::locked_end(&vsdb) == end, 0);
             assert!( vsdb::get_user_epoch(&vsdb) == 2, 0);
@@ -120,14 +120,14 @@ module test::vsdb{
          next_tx(s, a);{ // extend amount
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::increase_unlock_amount(&mut reg, &mut vsdb, mint<SDB>(setup::sui_1B(), ctx(s)), clock, ctx(s));
+            vsdb::increase_unlock_amount(&mut reg, &mut vsdb, mint<SDB>(setup::sui_1B(), ctx(s)), clock);
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
             let value = setup::sui_1B() + setup::sui_100M();
-            let end = vsdb::round_down_week(get_time(clock) + 2 * vsdb::week());
+            let end = vsdb::round_down_week(get_time(clock) + 2 * setup::week());
             let slope = vsdb::calculate_slope(value);
             let bias = vsdb::calculate_bias(value, end, get_time(clock));
             assert!( vsdb::locked_end(&vsdb) == end, 0);

@@ -69,7 +69,7 @@ module test::e_bribe_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
-                    assert!( vsdb::latest_voting_weight(&vsdb, clock) == 973972467857480085, 404);
+                    assert!( vsdb::voting_weight(&vsdb, clock) == 973972467857480085, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));

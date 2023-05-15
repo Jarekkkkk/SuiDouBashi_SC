@@ -33,33 +33,6 @@ module suiDouBashiVest::event{
         )
     }
 
-    struct Attach<phantom X, phantom Y> has copy, drop{
-        id: ID,
-        from: address,
-    }
-    public fun attach<X,Y>(id: ID, from: address){
-        emit(
-            Attach<X,Y>{
-                id,
-                from
-            }
-        )
-    }
-
-    struct Detach<phantom X, phantom Y> has copy, drop{
-        id: ID,
-        from: address,
-    }
-    public fun detach<X,Y>(id: ID, from: address){
-        emit(
-            Detach<X,Y>{
-                id,
-                from
-            }
-        )
-    }
-
-
     // - Bribe
     struct ClaimRewards has copy, drop{
         claimer: address,

@@ -7,7 +7,7 @@ module test::main{
     use suiDouBashi::usdc::USDC;
     use suiDouBashi::usdt::USDT;
 
-    use test::setup;
+use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
     use sui::object;
 
@@ -75,12 +75,12 @@ module test::main{
         };
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
-            let voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >=  4404404404910976000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
-            assert!(vsdb::total_supply(&reg, clock) == 4999999999910976000, 1);
-            assert!(vsdb::total_minted(&reg) == 1, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 4999999999910976000, 1);
+            assert!(vsdb::get_minted(&reg) == 1, 1);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
@@ -94,8 +94,8 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            vsdb::increase_unlock_amount(&mut reg, &mut vsdb, coin::split(&mut sdb, 5 * setup::sui_1B(), ctx(s)), clock, ctx(s));
-              vsdb::increase_unlock_time(&mut reg, &mut vsdb, setup::four_years(), clock, ctx(s));
+            vsdb::increase_unlock_amount(&mut reg, &mut vsdb, coin::split(&mut sdb, 5 * setup::sui_1B(), ctx(s)), clock);
+              vsdb::increase_unlock_time(&mut reg, &mut vsdb, setup::four_years(), clock);
 
             test::return_to_sender(s, sdb);
             test::return_to_sender(s, vsdb);
@@ -103,13 +103,13 @@ module test::main{
         };
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
-            let voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >= 9999999999948096000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
 
-            assert!(vsdb::total_supply(&reg, clock) == 9999999999948096000, 1);
-            assert!(vsdb::total_minted(&reg) == 1, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 9999999999948096000, 1);
+            assert!(vsdb::get_minted(&reg) == 1, 1);
             assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
 
             test::return_to_sender(s, vsdb);
@@ -126,13 +126,13 @@ module test::main{
         };
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
-            let voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
             assert!(voting >= 440440499877568000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(),1);
-            assert!(vsdb::total_supply(&reg, clock) == 10999999999703232000, 1);
-            assert!(vsdb::total_minted(&reg) == 3, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 10999999999703232000, 1);
+            assert!(vsdb::get_minted(&reg) == 3, 1);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
@@ -155,7 +155,7 @@ module test::main{
         };
         next_tx(s,a);{
             let vsdb = test::take_from_sender<VSDB>(s);
-            let voting = vsdb::latest_voting_weight(&vsdb, clock);
+            let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
             assert!(voting >= 10404404404955520000, 1);
@@ -164,8 +164,8 @@ module test::main{
             // check NFTs are removed from global storage
             assert!(!test::was_taken_from_address(a, id),1); // not exist
             assert!(!test::was_taken_from_address(a, id_1),1); // not exist
-            assert!(vsdb::total_supply(&reg, clock) == 10999999999955520000, 1);
-            assert!(vsdb::total_minted(&reg) == 1, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 10999999999955520000, 1);
+            assert!(vsdb::get_minted(&reg) == 1, 1);
 
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
@@ -548,9 +548,9 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let vsdb_1 = test::take_from_sender<VSDB>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
-            assert!(vsdb::latest_voting_weight(&vsdb, clock) == 0, 404);
-            vsdb::total_supply(&vsdb_reg, clock);
-            assert!(vsdb::total_supply(&vsdb_reg, clock) == 0, 404); //9589041094752000
+            assert!(vsdb::voting_weight(&vsdb, clock) == 0, 404);
+            vsdb::total_VeSDB(&vsdb_reg, clock);
+            assert!(vsdb::total_VeSDB(&vsdb_reg, clock) == 0, 404); //9589041094752000
             test::return_to_sender(s, vsdb);
             test::return_to_sender(s, vsdb_1);
             test::return_shared(vsdb_reg);

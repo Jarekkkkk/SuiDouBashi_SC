@@ -84,7 +84,7 @@ module suiDouBashiVest::minter{
 
     // calculate circulating supply as total token supply - locked supply
     public fun circulating_supply(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock): u64{
-        balance::supply_value(&self.supply) - vsdb::total_supply(vsdb_reg, clock)
+        balance::supply_value(&self.supply) - vsdb::total_VeSDB(vsdb_reg, clock)
     }
 
     /// decay at 1% per week
@@ -101,7 +101,7 @@ module suiDouBashiVest::minter{
     }
     /// (veVELO.totalSupply / VELO.totalsupply)^3 * 0.5 * Emissions
     public fun calculate_growth(self: &Minter, vsdb_reg: &VSDBRegistry, minted: u64, clock: &Clock): u64{
-        let ve_total = (vsdb::total_supply(vsdb_reg, clock) as u128);
+        let ve_total = (vsdb::total_VeSDB(vsdb_reg, clock) as u128);
         let sdb_total = (balance::supply_value(&self.supply) as u128);
         (((((minted as u128) * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2) as u64 )
     }

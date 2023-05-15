@@ -103,7 +103,7 @@ module suiDouBashiVest::reward_distributor{
         if(amount != 0){
              // extend the rebased amount for VeSDB holders
             let coin_sdb = coin::take(&mut self.balance, amount, ctx);
-            vsdb::increase_unlock_amount(vsdb_reg, vsdb, coin_sdb, clock, ctx);
+            vsdb::increase_unlock_amount(vsdb_reg, vsdb, coin_sdb, clock);
             self.token_last_balance = self.token_last_balance - amount;
         };
     }
@@ -137,7 +137,7 @@ module suiDouBashiVest::reward_distributor{
             let amount = claim_(self, &vsdb, last_token_time_);
             if(amount != 0){
                 let coin_sdb = coin::take(&mut self.balance, amount, ctx);
-                vsdb::increase_unlock_amount(vsdb_reg, &mut vsdb, coin_sdb, clock, ctx);
+                vsdb::increase_unlock_amount(vsdb_reg, &mut vsdb, coin_sdb, clock);
                 self.token_last_balance = self.token_last_balance - amount;
                 total = total + amount;
             };
@@ -248,7 +248,7 @@ module suiDouBashiVest::reward_distributor{
             if( min_ > max_ ) break;
 
             let mid_ = ( min_ + max_  + 2) / 2;
-            let point = *vsdb::user_point_history(vsdb, mid_);
+            let point = *vsdb::player_point_history(vsdb, mid_);
 
             if(point::ts(&point) <= timestamp){
                 min_ = mid_;
@@ -266,9 +266,9 @@ module suiDouBashiVest::reward_distributor{
         vsdb: &VSDB,
         timestamp: u64,
     ):u64{
-        let max_user_epoch = vsdb::user_epoch(vsdb);
+        let max_user_epoch = vsdb::player_epoch(vsdb);
         let epoch = find_timestamp_user_epoch_(vsdb, timestamp, max_user_epoch);
-        let pt = *vsdb::user_point_history(vsdb, epoch);
+        let pt = *vsdb::player_point_history(vsdb, epoch);
 
         let time_left_unlock = i128::sub(&i128::from(((timestamp as u128))), &i128::from((point::ts(&pt) as u128)));
         let ts = i128::sub(&point::bias(&pt), &i128::mul(&point::slope(&pt), &time_left_unlock));
@@ -326,7 +326,7 @@ module suiDouBashiVest::reward_distributor{
 
         let to_distribute = 0;
 
-        let max_user_epoch = vsdb::user_epoch(vsdb);
+        let max_user_epoch = vsdb::player_epoch(vsdb);
         if (max_user_epoch == 0) return 0;
 
         let start_time_ = self.start_time;
@@ -337,7 +337,7 @@ module suiDouBashiVest::reward_distributor{
             0
         };
 
-        let user_epoch = if(week_cursor == 0){
+        let player_epoch = if(week_cursor == 0){
             find_timestamp_user_epoch_(vsdb, start_time_, max_user_epoch)
         }else{
             if(table::contains(&self.user_epoch_of, id)){
@@ -347,9 +347,9 @@ module suiDouBashiVest::reward_distributor{
             }
         };
 
-        if(user_epoch == 0) user_epoch = 1;
+        if(player_epoch == 0) player_epoch = 1;
 
-        let user_point = *vsdb::user_point_history(vsdb, user_epoch);
+        let user_point = *vsdb::player_point_history(vsdb, player_epoch);
 
         if(week_cursor == 0){
             week_cursor = ( point::ts(&user_point) + WEEK - 1 ) / WEEK * WEEK;
@@ -365,20 +365,20 @@ module suiDouBashiVest::reward_distributor{
         while( i < 50 ){
             if(week_cursor >= last_token_time) break;
 
-            if( week_cursor >= point::ts(&user_point) && user_epoch <= max_user_epoch){
-                user_epoch = user_epoch + 1;
+            if( week_cursor >= point::ts(&user_point) && player_epoch <= max_user_epoch){
+                player_epoch = player_epoch + 1;
                 old_user_point = user_point;
 
-                if(user_epoch > max_user_epoch){
+                if(player_epoch > max_user_epoch){
                     user_point = point::new(i128::zero(), i128::zero(), 0);
                 }else{
-                    user_point = *vsdb::user_point_history(vsdb, user_epoch);
+                    user_point = *vsdb::player_point_history(vsdb, player_epoch);
                 }
             }else{
                 let dt = i128::sub(&i128::from(((week_cursor as u128))), &i128::from((point::ts(&old_user_point) as u128)));
                 let ts = i128::sub(&point::bias(&old_user_point), &i128::mul(&point::slope(&old_user_point), &dt));
                 let balance_of = math::max((i128::as_u128(&ts) as u64), 0);
-                if( balance_of == 0 && user_epoch > max_user_epoch) break;
+                if( balance_of == 0 && player_epoch > max_user_epoch) break;
                 if(balance_of != 0){
                     to_distribute = to_distribute + balance_of * *vec_map::get(&self.tokens_per_week, &week_cursor) / *vec_map::get(&self.ve_supply, &week_cursor);
                 };
@@ -389,12 +389,12 @@ module suiDouBashiVest::reward_distributor{
             i = i + 1;
         };
 
-        user_epoch = math::min(max_user_epoch, user_epoch - 1);
+        player_epoch = math::min(max_user_epoch, player_epoch - 1);
 
         if(table::contains(&self.user_epoch_of, id)){
-            *table::borrow_mut(&mut self.user_epoch_of, id) = user_epoch;
+            *table::borrow_mut(&mut self.user_epoch_of, id) = player_epoch;
         }else{
-            table::add(&mut self.user_epoch_of, id, user_epoch);
+            table::add(&mut self.user_epoch_of, id, player_epoch);
         };
 
         if(table::contains(&self.time_cursor_of, id)){
@@ -403,7 +403,7 @@ module suiDouBashiVest::reward_distributor{
             table::add(&mut self.time_cursor_of, id, week_cursor);
         };
 
-        event::reward_claimed(id, to_distribute, user_epoch, max_user_epoch);
+        event::reward_claimed(id, to_distribute, player_epoch, max_user_epoch);
 
         to_distribute
     }
@@ -416,7 +416,7 @@ module suiDouBashiVest::reward_distributor{
         let id = object::id(vsdb);
         let to_distribute = 0;
 
-        let max_user_epoch = vsdb::user_epoch(vsdb);
+        let max_user_epoch = vsdb::player_epoch(vsdb);
         let start_time_ = self.start_time;
 
         if (max_user_epoch == 0) return 0;
@@ -427,7 +427,7 @@ module suiDouBashiVest::reward_distributor{
             0
         };
 
-        let user_epoch = if(week_cursor == 0){
+        let player_epoch = if(week_cursor == 0){
             find_timestamp_user_epoch_(vsdb, start_time_, max_user_epoch)
         }else{
             if(table::contains(&self.user_epoch_of, id)){
@@ -437,9 +437,9 @@ module suiDouBashiVest::reward_distributor{
             }
         };
 
-        if(user_epoch == 0) user_epoch = 1;
+        if(player_epoch == 0) player_epoch = 1;
 
-        let user_point = *vsdb::user_point_history(vsdb, user_epoch);
+        let user_point = *vsdb::player_point_history(vsdb, player_epoch);
 
         if(week_cursor == 0){
             week_cursor = ( point::ts(&user_point) + WEEK - 1 ) / WEEK * WEEK;
@@ -455,20 +455,20 @@ module suiDouBashiVest::reward_distributor{
         while( i < 50 ){
             if(week_cursor >= last_token_time) break;
 
-            if( week_cursor >= point::ts(&user_point) && user_epoch <= max_user_epoch){
-                user_epoch = user_epoch + 1;
+            if( week_cursor >= point::ts(&user_point) && player_epoch <= max_user_epoch){
+                player_epoch = player_epoch + 1;
                 old_user_point = user_point;
 
-                if(user_epoch > max_user_epoch){
+                if(player_epoch > max_user_epoch){
                     user_point = point::new(i128::zero(), i128::zero(), 0);
                 }else{
-                    user_point = *vsdb::user_point_history(vsdb, user_epoch);
+                    user_point = *vsdb::player_point_history(vsdb, player_epoch);
                 }
             }else{
                 let dt = i128::sub(&i128::from(((week_cursor as u128))), &i128::from((point::ts(&old_user_point) as u128)));
                 let ts = i128::sub(&point::bias(&old_user_point), &i128::mul(&point::slope(&old_user_point), &dt));
                 let balance_of = math::max((i128::as_u128(&ts) as u64), 0);
-                if( balance_of == 0 && user_epoch > max_user_epoch) break;
+                if( balance_of == 0 && player_epoch > max_user_epoch) break;
                 if(balance_of != 0){
                     to_distribute = to_distribute + balance_of * *vec_map::get(&self.tokens_per_week, &week_cursor) / *vec_map::get(&self.ve_supply, &week_cursor);
                 };
