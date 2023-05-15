@@ -98,7 +98,6 @@ module farm::farm_test{
 
         next_tx(s,a);{
             let reg = test::take_shared<Reg>(s);
-
            { // pool_a
                 let lp = test::take_from_sender<LP<USDC, USDT>>(s);
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
@@ -110,7 +109,6 @@ module farm::farm_test{
                 test::return_shared(pool);
                 test::return_shared(farm);
            };
-
            { // pool_b
                 let lp = test::take_from_sender<LP<SDB, USDC>>(s);
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
@@ -122,7 +120,6 @@ module farm::farm_test{
                 test::return_shared(pool);
                 test::return_shared(farm);
            };
-
            { // pool_c
                 let lp = test::take_from_sender<LP<SDB, USDT>>(s);
                 let pool = test::take_shared<Pool<SDB, USDT>>(s);
@@ -192,31 +189,117 @@ module farm::farm_test{
         next_tx(s,a);{ // accumulating rewards when staking, 4 days after start_time
              let reg = test::take_shared<Reg>(s);
              let duration = 4 * setup::day();
-            {
+            { // Unstake pool A
                 let rewards = duration * 258349867 * 2 / 10;
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
-                // rounding error
-                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards - 40, 404);
+                let pool = test::take_shared<Pool<USDC, USDT>>(s);
+                let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                farm::unstake(&reg, &mut farm, &pool, &mut lp, 50 * setup::usdc_1M(), clock, ctx(s));
+
                 test::return_shared(farm);
+                test::return_shared(pool);
+                test::return_to_sender(s, lp);
             };
             {
                 let rewards = duration * 258349867 * 3 /10;
                 let farm = test::take_shared<Farm<SDB, USDC>>(s);
-                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards - 10, 404);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
                 test::return_shared(farm);
             };
             {
                 let rewards = duration * 258349867 * 5 /10;
                 let farm = test::take_shared<Farm<SDB, USDT>>(s);
-                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards - 0, 404);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                test::return_shared(farm);
+            };
+            test::return_shared(reg);
+        };
+
+        add_time(clock, 3 * setup::day());
+
+        next_tx(s,a);{
+            let reg = test::take_shared<Reg>(s);
+            {   // stake for specific duration
+                let rewards = 4 * setup::day() * 258349867 * 2 / 10;
+                let farm = test::take_shared<Farm<USDC, USDT>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                let pool = test::take_shared<Pool<USDC, USDT>>(s);
+                let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+                farm::stake(&reg, &mut farm, &pool, &mut lp, 50 * setup::usdc_1M(), clock, ctx(s));
+                test::return_shared(farm);
+                test::return_shared(pool);
+                test::return_to_sender(s, lp);
+            };
+            {   // still staking
+                let rewards = setup::week() * 258349867 * 3 /10;
+                let farm = test::take_shared<Farm<SDB, USDC>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                test::return_shared(farm);
+            };
+            {   // still staking
+                let rewards = setup::week() * 258349867 * 5 /10;
+                let farm = test::take_shared<Farm<SDB, USDT>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == rewards, 404);
+                test::return_shared(farm);
+            };
+            test::return_shared(reg);
+        };
+
+        add_time(clock, setup::week());
+
+        next_tx(s,a);
+        let harvest = {
+            let reg = test::take_shared<Reg>(s);
+            let acc = 0;
+            {   // stake for specific duration
+                let farm = test::take_shared<Farm<USDC, USDT>>(s);
+                acc = acc + farm::pending_rewards(&farm, &reg, a, clock);
+                farm::harvest(&mut reg, &mut farm, clock, ctx(s));
+                test::return_shared(farm);
+            };
+            {
+                let farm = test::take_shared<Farm<SDB, USDC>>(s);
+                acc = acc + farm::pending_rewards(&farm, &reg, a, clock);
+                farm::harvest(&mut reg, &mut farm, clock, ctx(s));
+                test::return_shared(farm);
+            };
+            {
+                let farm = test::take_shared<Farm<SDB, USDT>>(s);
+                acc = acc + farm::pending_rewards(&farm, &reg, a, clock);
+                farm::harvest(&mut reg, &mut farm, clock, ctx(s));
                 test::return_shared(farm);
             };
 
             test::return_shared(reg);
-        }
+            acc
+        };
 
+        next_tx(s,a);{
+            let reg = test::take_shared<Reg>(s);
+            std::debug::print(&farm::total_pending(&reg, a));
+           std::debug::print(&harvest);
+            assert!(farm::total_pending(&reg, a) == harvest, 404);
+
+             {
+                let farm = test::take_shared<Farm<USDC, USDT>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
+                test::return_shared(farm);
+            };
+            {
+                let farm = test::take_shared<Farm<SDB, USDC>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
+                test::return_shared(farm);
+            };
+            {
+                let farm = test::take_shared<Farm<SDB, USDT>>(s);
+                assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
+                test::return_shared(farm);
+            };
+            test::return_shared(reg);
+        };
 
     }
 
-    public fun people(): (address, address, address) { (@0x000A, @0x000B, @0x000C ) }
+    public fun people(): (address, address, address) { (@0x000A, @0x000B, @0x000C) }
 }

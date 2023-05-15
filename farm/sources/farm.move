@@ -19,7 +19,7 @@ module farm::farm{
     /// 625K SDB distribution for duration 4 weeks
     const SDB_PER_SECOND: u64 = 258349867;
     const LOCK: u64 = { 36 * 7 * 86400 };
-    const SCALE_FACTOR: u128 = 1_000_000_000_000;
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     // ERROR
     const ERR_INITIALIZED: u64 = 000;
@@ -62,7 +62,6 @@ module farm::farm{
         sdb_balance: Balance<SDB>,
         start_time: u64,
         end_time: u64,
-        /// 1e12 scaling
         sdb_per_second: u64,
         farms: VecMap<String, ID>,
         total_pending: Table<address, u64>
@@ -72,10 +71,11 @@ module farm::farm{
     public fun get_start_time(reg: &Reg):u64 {reg.start_time }
     public fun get_end_time(reg: &Reg):u64 {reg.end_time }
     public fun sdb_per_second(reg: &Reg): u64 { reg.sdb_per_second }
+    public fun total_pending(reg: &Reg, player: address): u64 { *table::borrow(&reg.total_pending, player )}
 
     struct PlayerInfo has copy, store{
         amount: u64,
-        reward_debt: u64,
+        index: u256,
         pending_reward: u64
     }
 
@@ -84,12 +84,14 @@ module farm::farm{
         lp_balance: LP<X,Y>,
         alloc_point: u64,
         last_reward_time: u64,
-        acc_sdb_per_share: u128,
+        index: u256,
 
         player_infos: Table<address, PlayerInfo>,
     }
 
     public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::get_lp_balance(&self.lp_balance)}
+    public fun get_player_info<X,Y>(self: &Farm<X,Y>, player: address): &PlayerInfo { table::borrow(&self.player_infos, player)}
+
 
     fun init(ctx: &mut TxContext){
         let reg = Reg{
@@ -151,7 +153,7 @@ module farm::farm{
             lp_balance: pool::create_lp(pool, ctx),
             alloc_point,
             last_reward_time,
-            acc_sdb_per_share:0,
+            index:0,
             player_infos: table::new<address, PlayerInfo>(ctx),
         };
 
@@ -182,19 +184,19 @@ module farm::farm{
 
         let ts = clock::timestamp_ms(clock);
         let player_info = table::borrow(&self.player_infos, player);
-        let acc_sdb_per_share = self.acc_sdb_per_share;
+        let index = self.index;
         let lp_balance = pool::get_lp_balance(&self.lp_balance);
 
         if(ts > self.last_reward_time && lp_balance != 0){
             let multiplier = get_multiplier(reg, self.last_reward_time, ts);
             let sdb_reward = multiplier * reg.sdb_per_second * self.alloc_point / TOTAL_ALLOC_POINT;
-            acc_sdb_per_share = acc_sdb_per_share + ((sdb_reward as u128) * SCALE_FACTOR / (lp_balance as u128))
+            index = index + ((sdb_reward as u256) * SCALE_FACTOR / (lp_balance as u256))
         };
 
-        return (((player_info.amount as u128) * acc_sdb_per_share / SCALE_FACTOR ) as u64 ) - player_info.reward_debt + player_info.pending_reward
+        return (((player_info.amount as u256) * ( index - player_info.index ) / SCALE_FACTOR ) as u64 ) + player_info.pending_reward
     }
 
-    public fun update_farm<X,Y>(reg: &Reg, self: &mut Farm<X,Y>, clock: &Clock){
+    fun update_farm<X,Y>(reg: &Reg, self: &mut Farm<X,Y>, clock: &Clock){
         let ts = clock::timestamp_ms(clock);
 
         if(ts <= self.last_reward_time) return;
@@ -208,8 +210,24 @@ module farm::farm{
         let multiplier = get_multiplier(reg, self.last_reward_time, ts);
         let sdb_reward = multiplier * reg.sdb_per_second * self.alloc_point / TOTAL_ALLOC_POINT;
 
-        self.acc_sdb_per_share  = self.acc_sdb_per_share + ( (sdb_reward as u128) * SCALE_FACTOR / (lp_balance as u128) );
+        self.index = self.index + ((sdb_reward as u256) * SCALE_FACTOR / (lp_balance as u256));
         self.last_reward_time = ts;
+    }
+
+    fun update_player<X,Y>(self: &mut Farm<X,Y>, player: address){
+        let player_info = table::borrow_mut(&mut self.player_infos, player);
+        let staked = player_info.amount;
+        if(staked > 0){
+            let delta = self.index - player_info.index;
+            player_info.index = self.index;
+
+            if(delta > 0){
+                let share = (staked as u256) * delta / SCALE_FACTOR;
+                player_info.pending_reward = player_info.pending_reward + (share as u64);
+            };
+        }else{
+            player_info.index = self.index;
+        };
     }
 
     public fun stake<X,Y>(
@@ -228,19 +246,17 @@ module farm::farm{
         if(!table::contains(&self.player_infos, player)){
             let player_info = PlayerInfo{
                 amount: 0,
-                reward_debt: 0,
+                index: 0,
                 pending_reward: 0
             };
             table::add(&mut self.player_infos, player, player_info);
         };
 
-        let player_info = table::borrow_mut(&mut self.player_infos, player);
-        let pending = (player_info.amount as u128) * (self.acc_sdb_per_share as u128) / SCALE_FACTOR - (player_info.reward_debt as u128);
+        update_player(self, player);
 
+        let player_info = table::borrow_mut(&mut self.player_infos, player);
         pool::join_lp(pool, &mut self.lp_balance, lp, value);
         player_info.amount = player_info.amount + value;
-        player_info.reward_debt = (((player_info.amount as u128) * self.acc_sdb_per_share / SCALE_FACTOR) as u64);
-        player_info.pending_reward = player_info.pending_reward + (pending as u64);
 
         emit(
             Stake<X,Y>{
@@ -253,27 +269,21 @@ module farm::farm{
     public fun unstake<X,Y>(
         reg: &Reg,
         self: &mut Farm<X,Y>,
-        lp: &mut LP<X,Y>,
         pool: &Pool<X,Y>,
+        lp: &mut LP<X,Y>,
         value: u64,
         clock:&Clock,
         ctx:&mut TxContext
     ){
         let player = tx_context::sender(ctx);
         assert!(table::contains(&self.player_infos, player), ERR_NOT_PLAYER);
-        update_farm(reg, self, clock);
 
+        update_farm(reg, self, clock);
+        update_player(self, player);
 
         let player_info = table::borrow_mut(&mut self.player_infos, player);
         assert!(player_info.amount >= value, ERR_INSUFFICIENT_LP);
-
-        let pending = (player_info.amount as u128) * (self.acc_sdb_per_share as u128) / SCALE_FACTOR - (player_info.reward_debt as u128);
-
         player_info.amount = player_info.amount - value;
-        player_info.reward_debt = (((player_info.amount as u128) * self.acc_sdb_per_share / SCALE_FACTOR) as u64);
-
-        player_info.pending_reward = player_info.pending_reward + (pending as u64);
-
         pool::join_lp(pool, lp, &mut self.lp_balance, value);
 
         emit(
@@ -294,12 +304,10 @@ module farm::farm{
         assert!(table::contains(&self.player_infos, player), ERR_NOT_PLAYER);
 
         update_farm(reg, self, clock);
+        update_player(self, player);
+
         let player_info = table::borrow_mut(&mut self.player_infos, player);
-
-        let calc = (((player_info.amount as u128) * (self.acc_sdb_per_share as u128) / SCALE_FACTOR) as u64);
-        let pending = calc - player_info.reward_debt + player_info.pending_reward;
-        player_info.reward_debt = calc;
-
+        let pending = player_info.pending_reward;
         if(pending > 0){
             if(!table::contains(&reg.total_pending, player)){
                 table::add(&mut reg.total_pending, player, pending);
@@ -307,6 +315,7 @@ module farm::farm{
                 *table::borrow_mut(&mut reg.total_pending, player) = *table::borrow(&reg.total_pending, player) + pending;
             };
         };
+        player_info.pending_reward = 0;
 
         emit(
             Harvest<X,Y>{
