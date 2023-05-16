@@ -29,7 +29,7 @@ module test::voter_test{
             let reg = test::take_shared<VSDBRegistry>(s);
 
             assert!(!voter::initialized(&vsdb), 404);
-            voter::initialize_voting(&voter, &reg, &mut vsdb);
+            voter::initialize_voting(&reg, &mut vsdb);
 
             test::return_shared(voter);
             test::return_shared(reg);
@@ -109,7 +109,7 @@ module test::voter_test{
             assert!(vsdb::get_minted(&reg) == 2, 404);
             assert!( vsdb::get_user_epoch(&vsdb) == 1, 404);
             // intialize
-            voter::initialize_voting(&voter, &reg, &mut vsdb);
+            voter::initialize_voting(&reg, &mut vsdb);
             test::return_to_sender(s, vsdb);
             test::return_shared(voter);
             test::return_shared(reg);

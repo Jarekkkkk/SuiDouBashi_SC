@@ -37,13 +37,12 @@ module suiDouBashiVest::voter{
 
     struct Voter has key, store{
         id: UID,
-        witness: VOTER_SDB, // stand for witness & capability
         balance: Balance<SDB>,
 
         governor: address,
         emergency: address,
 
-        total_weight: u64, // always <= total_minted
+        total_weight: u64,
         weights: Table<ID, u64>, // gauge -> distributed weights
         registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]: for front_end fetching
 
@@ -65,23 +64,26 @@ module suiDouBashiVest::voter{
     public fun initialized(vsdb: &VSDB):bool{
         vsdb::df_exists(vsdb, VOTER_SDB {})
     }
-    public entry fun initialize_voting(self: &Voter, reg: &VSDBRegistry, vsdb: &mut VSDB){
+    public entry fun initialize_voting(reg: &VSDBRegistry, vsdb: &mut VSDB){
         let value = VotingState{
             pool_votes: vec_map::empty(),
             voted: false,
             used_weights: 0,
             last_voted: 0
         };
-        vsdb::df_add(&self.witness, reg, vsdb, value);
+        vsdb::df_add(&VOTER_SDB{}, reg, vsdb, value);
     }
     public fun drop_voting_state(vsdb: &mut VSDB){
         let voting_state:VotingState = vsdb::df_remove( &VOTER_SDB{}, vsdb );
+
         let VotingState{
             pool_votes,
-            voted: _,
+            voted,
             used_weights: _,
             last_voted: _
         } = voting_state;
+
+        assert!(!voted, E_NOT_RESET);
         vec_map::destroy_empty(pool_votes);
     }
     public fun voting_state_borrow(vsdb: &VSDB):&VotingState{
@@ -92,6 +94,7 @@ module suiDouBashiVest::voter{
     }
 
     public fun pool_votes(vsdb: &VSDB):&VecMap<ID, u64>{ &voting_state_borrow(vsdb).pool_votes }
+
     public fun pool_votes_by_pool(vsdb: &VSDB, pool_id: &ID):u64 {
         let pool_votes = &voting_state_borrow(vsdb).pool_votes;
         *vec_map::get(pool_votes, pool_id)
@@ -125,10 +128,13 @@ module suiDouBashiVest::voter{
     }
 
     // TODO: remove
-    public fun get_gauge_and_bribes_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>):VecSet<ID>{
-        *table::borrow(&self.registry, object::id(pool))
+    public fun get_gauge_and_bribes_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>):vector<ID>{
+        let vec_set = *table::borrow(&self.registry, object::id(pool));
+        vec_set::into_keys(vec_set)
     }
+
     public fun get_registry_length(self:&Voter): u64 { table::length(&self.registry) }
+
     public fun get_pool_exists<X,Y>(self: &Voter, pool: &Pool<X,Y>):bool {
         table::contains(&self.registry, object::id(pool))
     }
@@ -138,7 +144,6 @@ module suiDouBashiVest::voter{
         let sender = tx_context::sender(ctx);
         let voter = Voter{
             id: object::new(ctx),
-            witness: VOTER_SDB {},
             balance: balance::zero<SDB>(),
             governor: sender,
             emergency: sender,
@@ -424,7 +429,6 @@ module suiDouBashiVest::voter{
     ){
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
-
 
     /// distribute weekly emission, have to be called each week, otherwise all the stakers of the gauge lose its shares
     public fun distribute_<X,Y>(

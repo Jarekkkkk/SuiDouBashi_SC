@@ -35,7 +35,7 @@ module suiDouBashiVest::internal_bribe{
         total_supply: u64,
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
-        checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> balance checkpoint
+        checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> voting balance checkpoint
     }
 
     // - Self

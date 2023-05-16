@@ -11,8 +11,8 @@ module suiDouBashiVest::external_bribe{
     use sui::sui::SUI;
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
-    use sui::object_bag::{Self as ob, ObjectBag};
     use std::vector as vec;
+    use sui::dynamic_object_field as dof;
 
     use suiDouBashiVest::vsdb::VSDB;
     use suiDouBashiVest::sdb::SDB;
@@ -36,8 +36,6 @@ module suiDouBashiVest::external_bribe{
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
         checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> balance checkpoint
-
-        rewards: ObjectBag //TypeName<T> -> Reward<T>,
     }
 
     public fun total_voting_weight<X,Y>(self: &ExternalBribe<X,Y>):u64{ self.total_supply }
@@ -63,19 +61,18 @@ module suiDouBashiVest::external_bribe{
             period_finish: 0,
             last_earn: table::new<ID, u64>(ctx)
         };
-        ob::add(&mut self.rewards, type_name::get<T>(), reward);
+        dof::add(&mut self.id, type_name::get<T>(), reward);
     }
     public fun borrow_reward<X,Y,T>(self: &ExternalBribe<X,Y>):&Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
-        ob::borrow(&self.rewards, type_name)
+        dof::borrow(&self.id, type_name)
     }
     fun borrow_reward_mut<X,Y,T>(self: &mut ExternalBribe<X,Y>):&mut Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
-        ob::borrow_mut(&mut self.rewards, type_name)
+        dof::borrow_mut(&mut self.id, type_name)
     }
-    public fun total_rewwards_length<X,Y>(self: &ExternalBribe<X,Y>): u64 { ob::length(&self.rewards) }
 
     #[test_only]
     public fun get_reward_balance<X,Y,T>(reward: &Reward<X,Y,T>):u64 { balance::value(&reward.balance) }
@@ -90,7 +87,7 @@ module suiDouBashiVest::external_bribe{
         assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>() || type_t == type_name::get<SUI>() || type_t == type_name::get<SDB>(), err::invalid_type_argument());
     }
     public fun assert_reward_created<X,Y,T>(self: &ExternalBribe<X,Y>, type_name: TypeName){
-        assert!(ob::contains(&self.rewards, type_name), err::reward_not_exist());
+        assert!(dof::exists_(&self.id, type_name), err::reward_not_exist());
     }
     // called in gauge constructor
     public (friend )fun create_bribe<X,Y>(
@@ -103,7 +100,6 @@ module suiDouBashiVest::external_bribe{
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
             checkpoints: table::new<ID, vector<Checkpoint>>(ctx), // voting weights for each voter,
-            rewards: ob::new(ctx)
         };
         let id = object::id(&bribe);
 

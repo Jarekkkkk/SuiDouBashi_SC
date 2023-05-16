@@ -196,6 +196,7 @@ module farm::farm{
         return (((player_info.amount as u256) * ( index - player_info.index ) / SCALE_FACTOR ) as u64 ) + player_info.pending_reward
     }
 
+    /// settle accumulated rewards
     fun update_farm<X,Y>(reg: &Reg, self: &mut Farm<X,Y>, clock: &Clock){
         let ts = clock::timestamp_ms(clock);
 

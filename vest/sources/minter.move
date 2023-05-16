@@ -16,7 +16,7 @@ module suiDouBashiVest::minter{
 
     use sui::math;
 
-    const WEEK: u64 = {7 * 86400};
+    const WEEK: u64 = { 7 * 86400 };
     const EMISSION: u64 = 990; // linearly decrease 1 %
     const PRECISION: u64 = 1000;
     const TAIL_EMISSION: u64 = 2; // minium 0.2%
@@ -27,6 +27,8 @@ module suiDouBashiVest::minter{
 
     friend suiDouBashiVest::voter;
 
+    struct MinterCap has key { id: UID }
+
     struct Minter has key{
         id: UID,
         supply: Supply<SDB>,
@@ -36,7 +38,17 @@ module suiDouBashiVest::minter{
         active_period: u64,
         weekly: u64
     }
+
     public fun balance(self: &Minter): u64 { balance::value(&self.balance) }
+
+
+    fun init(ctx: &mut TxContext){
+        transfer::transfer(
+            MinterCap { id: object::new(ctx)},
+            tx_context::sender(ctx)
+        );
+    }
+
     // consume treasury to trigger one time initialize
     public fun initialize(
         treasury: TreasuryCap<SDB>,
@@ -149,6 +161,11 @@ module suiDouBashiVest::minter{
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))
         };
         option::none()
+     }
+
+
+     public fun buyback(_cap: &MinterCap, self: &mut Minter, sdb: Coin<SDB>){
+        balance::decrease_supply(&mut self.supply, coin::into_balance(sdb));
      }
 
 

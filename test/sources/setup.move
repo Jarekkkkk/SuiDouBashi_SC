@@ -165,7 +165,6 @@ module test::setup{
                 assert!(gauge::is_alive(&gauge), 0);
                 assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
-                assert!(e_bribe::total_rewwards_length(&e_bribe) == 4, 0);
                 assert!(voter::get_weights_by_pool(&voter, &pool_a) == 0, 0);
                 assert!(voter::get_pool_exists(&voter, &pool_a), 0);
                 test::return_shared(gauge);
@@ -183,7 +182,6 @@ module test::setup{
                 assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 0);
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
                 // amount of external bribe is at most 4, including pair of coins + SDB + SUI
-                assert!(e_bribe::total_rewwards_length(&e_bribe) == 3, 0);
                 assert!(voter::get_weights_by_pool(&voter, &pool_b) == 0, 0);
                 assert!(voter::get_pool_exists(&voter, &pool_b), 0);
                 test::return_shared(gauge);
