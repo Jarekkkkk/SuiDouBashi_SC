@@ -1,4 +1,4 @@
-module suiDouBashiVest::vsdb{
+module suiDouBashi_vsdb::vsdb{
     use sui::url::{Self, Url};
     use std::type_name::{Self, TypeName};
     use std::string::{Self};
@@ -16,14 +16,12 @@ module suiDouBashiVest::vsdb{
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
 
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::point::{Self, Point};
-    use suiDouBashiVest::err;
-    use suiDouBashiVest::event;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vsdb::point::{Self, Point};
+    use suiDouBashi_vsdb::event;
 
-    use suiDouBashi::string::to_string;
-    use suiDouBashi::encode::base64_encode as encode;
-    use suiDouBashi::i128::{Self, I128};
+    use suiDouBashi_vsdb::encode::base64_encode as encode;
+    use suiDouBashi_vsdb::i128::{Self, I128};
 
     const MAX_TIME: u64 = { 4 * 365 * 86400 };
     const WEEK: u64 = { 7 * 86400 };
@@ -33,13 +31,13 @@ module suiDouBashiVest::vsdb{
     // Error
     const E_INVALID_UNLOCK_TIME: u64 =  001 ;
     const E_LOCK: u64 =  002 ;
+    const E_ALREADY_REGISTERED: u64 = 003;
+    const E_ZERO_INPUT: u64 = 004;
+    const E_EMPTY_BALANCE: u64 = 005;
 
     // modules
     const E_NOT_REGISTERED: u64 = 004;
-
-
-    // ===== assertion =====
-
+    const E_NOT_PURE: u64 = 005;
 
     // TODO: display pkg format rule
     struct VSDB has key, store {
@@ -122,7 +120,7 @@ module suiDouBashiVest::vsdb{
     /// register whitelisted module
     public entry fun register_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
         let type = type_name::get<T>();
-        assert!(!table::contains(&reg.whitelist_modules, type), err::already_reigster());
+        assert!(!table::contains(&reg.whitelist_modules, type), E_ALREADY_REGISTERED);
         table::add(&mut reg.whitelist_modules, type, true);
     }
     public fun whitelisted<T: copy + store + drop>(reg: &VSDBRegistry):bool {
@@ -174,7 +172,7 @@ module suiDouBashiVest::vsdb{
         let ts = clock::timestamp_ms(clock);
         let unlock_time = round_down_week(duration + ts);
 
-        assert!(coin::value(&sdb) > 0 ,err::zero_input());
+        assert!(coin::value(&sdb) > 0 , E_ZERO_INPUT);
         assert!(unlock_time > ts && unlock_time <= ts + MAX_TIME, E_INVALID_UNLOCK_TIME);
         let amount = coin::value(&sdb);
         let vsdb = new( sdb,unlock_time, clock, ctx);
@@ -199,7 +197,7 @@ module suiDouBashiVest::vsdb{
         let unlock_time = round_down_week(ts + extended_duration );
 
         assert!(locked_end > ts, E_LOCK);
-        assert!(locked_bal > 0, err::empty_locked_balance());
+        assert!(locked_bal > 0, E_EMPTY_BALANCE);
         assert!(unlock_time > locked_end, E_INVALID_UNLOCK_TIME);
         assert!(unlock_time > ts && unlock_time <= ts + MAX_TIME, E_INVALID_UNLOCK_TIME);
 
@@ -221,8 +219,8 @@ module suiDouBashiVest::vsdb{
         let value = coin::value(&sdb);
 
         assert!(locked_end > clock::timestamp_ms(clock), E_LOCK);
-        assert!(locked_bal > 0, err::empty_locked_balance());
-        assert!(value > 0 , err::empty_coin());
+        assert!(locked_bal > 0, E_EMPTY_BALANCE);
+        assert!(value > 0 , E_ZERO_INPUT);
 
         extend(self, option::some(sdb), 0, clock);
 
@@ -239,7 +237,7 @@ module suiDouBashiVest::vsdb{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert!(vec::length(&self.modules) == 0, err::pure_vsdb());
+        assert!(vec::length(&self.modules) == 0, E_NOT_PURE);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let locked_bal_ = locked_balance(&vsdb);
@@ -247,9 +245,9 @@ module suiDouBashiVest::vsdb{
         let ts = clock::timestamp_ms(clock);
 
         assert!(locked_end_ >= ts , E_LOCK);
-        assert!(locked_bal_ > 0, err::empty_locked_balance());
+        assert!(locked_bal_ > 0, E_EMPTY_BALANCE);
         assert!(locked_end_ >= ts , E_LOCK);
-        assert!(locked_bal_ > 0, err::empty_locked_balance());
+        assert!(locked_bal_ > 0, E_EMPTY_BALANCE);
 
         // empty the old vsdb
         let coin = withdraw(&mut vsdb, ctx);
@@ -277,7 +275,7 @@ module suiDouBashiVest::vsdb{
         let ts = clock::timestamp_ms(clock);
 
         assert!(ts >= locked_end , E_LOCK);
-        assert!(locked_bal > 0, err::empty_locked_balance());
+        assert!(locked_bal > 0, E_EMPTY_BALANCE);
 
         let coin = withdraw(&mut self, ctx);
         self.locked_balance.end = 0;
@@ -648,7 +646,7 @@ module suiDouBashiVest::vsdb{
     ){
         // retrieve address from witness
         let type = type_name::get<T>();
-        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
+        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), E_NOT_REGISTERED);
 
         vec::push_back(&mut vsdb.modules, type_name::into_string(type));
         df::add(&mut vsdb.id, *witness, value);
@@ -706,7 +704,7 @@ module suiDouBashiVest::vsdb{
     ){
         // retrieve address from witness
         let type = type_name::get<T>();
-        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), err::invalid_module());
+        assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), E_NOT_REGISTERED);
 
         vec::push_back(&mut vsdb.modules, type_name::into_string(type));
         dof::add(&mut vsdb.id, *witness, value);
@@ -759,8 +757,34 @@ module suiDouBashiVest::vsdb{
         vec::append(&mut encoded_b,b"</text><text x='10' y='80' class='base'>Locked_amount: ");
         vec::append(&mut encoded_b,*string::bytes(&to_string(locked_amount)));
         vec::append(&mut encoded_b,b"</text></svg>");
-        vec::append(&mut vesdb,encode(encoded_b));
+        vec::append(&mut vesdb, encode(encoded_b));
         url::new_unsafe_from_bytes(vesdb)
+    }
+    public fun to_string(value: u256): std::string::String {
+        if(value == 0) {
+            return string::utf8(b"0")
+         };
+        let temp = value;
+        let digits = 0;
+        while (temp != 0) {
+            digits = digits + 1;
+            temp = temp / 10;
+        };
+        let retval = vec::empty<u8>();
+        while (value != 0) {
+            digits = digits - 1;
+
+            vec::push_back(&mut retval, ((value % 10+ 48) as u8));
+            value = value / 10;
+
+        };
+        vec::reverse(&mut retval);
+        return string::utf8(retval)
+    }
+
+        #[test] fun test_toString(){
+        let str = to_string(123123124312);
+        assert!(string::bytes(&str) == &b"123123124312",1);
     }
 
     #[test_only]

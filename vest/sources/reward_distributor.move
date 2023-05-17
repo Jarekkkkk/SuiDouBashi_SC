@@ -1,4 +1,4 @@
-module suiDouBashiVest::reward_distributor{
+module suiDouBashi_vest::reward_distributor{
     use sui::vec_map::{Self, VecMap};
     use std::vector as vec;
     use sui::clock::{Self, Clock};
@@ -11,13 +11,13 @@ module suiDouBashiVest::reward_distributor{
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
-    use suiDouBashiVest::event;
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
-    use suiDouBashiVest::point;
-    use suiDouBashi::i128;
+    use suiDouBashi_vest::event;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::point;
+    use suiDouBashi_vsdb::i128;
 
-    friend suiDouBashiVest::minter;
+    friend suiDouBashi_vest::minter;
 
     const WEEK: u64 = {7 * 86400};
 

@@ -1,4 +1,4 @@
-module suiDouBashi::usdc{
+module suiDouBashi_amm::usdc{
     use std::option;
     use sui::coin;
     use sui::transfer;

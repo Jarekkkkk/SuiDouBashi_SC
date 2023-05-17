@@ -1,4 +1,4 @@
-module suiDouBashiVest::minter{
+module suiDouBashi_vest::minter{
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Supply, Balance};
     use sui::clock::{Self, Clock};
@@ -8,11 +8,11 @@ module suiDouBashiVest::minter{
     use std::option::{Self, Option};
     use std::vector as vec;
 
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::err;
-    use suiDouBashiVest::event;
-    use suiDouBashiVest::vsdb::{Self, VSDBRegistry};
-    use suiDouBashiVest::reward_distributor::{Self, Distributor};
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vest::err;
+    use suiDouBashi_vest::event;
+    use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
+    use suiDouBashi_vest::reward_distributor::{Self, Distributor};
 
     use sui::math;
 
@@ -25,7 +25,7 @@ module suiDouBashiVest::minter{
 
     const MAX_TEAM_RATE: u64 = 50; // 50 bps = 5%
 
-    friend suiDouBashiVest::voter;
+    friend suiDouBashi_vest::voter;
 
     struct MinterCap has key { id: UID }
 
@@ -169,7 +169,7 @@ module suiDouBashiVest::minter{
      }
 
 
-    #[test] public fun mint_sdb(self: &mut Minter, value: u64, ctx: &mut TxContext):Coin<SDB>{
+    #[test_only] public fun mint_sdb(self: &mut Minter, value: u64, ctx: &mut TxContext):Coin<SDB>{
         coin::from_balance(balance::increase_supply(&mut self.supply, value), ctx)
     }
 }

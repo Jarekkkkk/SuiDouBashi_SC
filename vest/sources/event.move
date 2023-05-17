@@ -1,4 +1,4 @@
-module suiDouBashiVest::event{
+module suiDouBashi_vest::event{
     use sui::event::emit;
     use sui::object::{ID};
 

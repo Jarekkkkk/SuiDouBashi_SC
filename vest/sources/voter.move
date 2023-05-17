@@ -1,5 +1,5 @@
 /// Admin to govern all the contracts
-module suiDouBashiVest::voter{
+module suiDouBashi_vest::voter{
     use std::option;
     use std::vector as vec;
     use sui::balance::{Self, Balance};
@@ -12,17 +12,17 @@ module suiDouBashiVest::voter{
     use sui::vec_map::{Self, VecMap};
     use sui::table::{Self, Table};
 
-    use suiDouBashi::pool::Pool;
+    use suiDouBashi_amm::pool::Pool;
 
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
-    use suiDouBashiVest::sdb::{SDB};
-    use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::event;
-    use suiDouBashiVest::err;
-    use suiDouBashiVest::minter::{Self, Minter};
-    use suiDouBashiVest::reward_distributor::Distributor;
-    use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self, ExternalBribe};
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::sdb::{SDB};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::event;
+    use suiDouBashi_vest::err;
+    use suiDouBashi_vest::minter::{Self, Minter};
+    use suiDouBashi_vest::reward_distributor::Distributor;
+    use suiDouBashi_vest::internal_bribe::{Self, InternalBribe};
+    use suiDouBashi_vest::external_bribe::{Self, ExternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18

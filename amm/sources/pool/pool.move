@@ -1,4 +1,4 @@
-module suiDouBashi::pool{
+module suiDouBashi_amm::pool{
     use sui::object::{Self,UID, ID};
     use sui::balance::{Self,Supply, Balance};
     use sui::coin::{Self,Coin, CoinMetadata};
@@ -11,11 +11,11 @@ module suiDouBashi::pool{
     use std::type_name;
     use std::vector as vec;
 
-    use suiDouBashi::event;
-    use suiDouBashi::amm_math;
-    use suiDouBashi::formula;
+    use suiDouBashi_amm::event;
+    use suiDouBashi_amm::amm_math;
+    use suiDouBashi_amm::formula;
 
-    friend suiDouBashi::pool_reg;
+    friend suiDouBashi_amm::pool_reg;
 
     const FEE_SCALING:u64 = 10000; //fee percentage: [0.01%, 0.050%]
 

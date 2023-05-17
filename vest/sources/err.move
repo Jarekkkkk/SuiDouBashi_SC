@@ -1,4 +1,4 @@
-module suiDouBashiVest::err{
+module suiDouBashi_vest::err{
     const Prefix: u64 = 000000;
 
     // - Reg

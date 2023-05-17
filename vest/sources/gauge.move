@@ -1,5 +1,5 @@
 // Gauges are used to incentivize pools, they emit reward tokens over 7 days for staked LP tokens
-module suiDouBashiVest::gauge{
+module suiDouBashi_vest::gauge{
     use std::type_name;
     use std::option;
     use sui::balance::{Self, Balance};
@@ -13,22 +13,22 @@ module suiDouBashiVest::gauge{
     use sui::table_vec::{Self, TableVec};
     use sui::table::{Self, Table};
 
-    use suiDouBashi::math_u128;
+    use suiDouBashi_amm::math_u128;
 
-    use suiDouBashiVest::event;
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::err;
-    use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
-    use suiDouBashiVest::internal_bribe::{Self, InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self};
+    use suiDouBashi_vest::event;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vest::err;
+    use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
+    use suiDouBashi_vest::internal_bribe::{Self, InternalBribe};
+    use suiDouBashi_vest::external_bribe::{Self};
 
-    use suiDouBashi::pool::{Self, Pool, LP};
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u128 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
-    friend suiDouBashiVest::voter;
+    friend suiDouBashi_vest::voter;
 
     struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,

@@ -1,18 +1,18 @@
 module test::bribe_test{
-    use suiDouBashiVest::internal_bribe::{InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashiVest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::internal_bribe::{InternalBribe};
+    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use test::setup;
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashi::usdc::USDC;
-    use suiDouBashi::usdt::USDT;
-    use suiDouBashiVest::checkpoints;
-    use suiDouBashiVest::minter::{mint_sdb, Minter};
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_amm::usdc::USDC;
+    use suiDouBashi_amm::usdt::USDT;
+    use suiDouBashi_vest::checkpoints;
+    use suiDouBashi_vest::minter::{mint_sdb, Minter};
     use sui::clock::{timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::table_vec;
     use sui::coin::{ Self, Coin, burn_for_testing as burn};
-    use suiDouBashi::pool::{Self, Pool, LP};
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
     use sui::table;
 
     public fun bribe_(clock: &mut Clock, s: &mut Scenario){

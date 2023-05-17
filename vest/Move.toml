@@ -1,17 +1,18 @@
 [package]
 name = "suiDouBashiVest"
 version = "0.0.1"
-published-at = "0x1234"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
 MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
-suiDouBashi = {local = "../amm"}
+suiDouBashiAmm = {local = "../amm"}
+suiDouBashiVSDB = {local = "../vsdb"}
+
 
 [addresses]
-suiDouBashiVest =  "0x1234"
+suiDouBashi_vest =  "0x1234"
 
 std = "0x1"
 sui =  "0x2"

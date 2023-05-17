@@ -1,5 +1,5 @@
 // Internal Bribes represent pool fee distributed to LP holders
-module suiDouBashiVest::external_bribe{
+module suiDouBashi_vest::external_bribe{
     use std::type_name::{Self, TypeName};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
@@ -14,14 +14,14 @@ module suiDouBashiVest::external_bribe{
     use std::vector as vec;
     use sui::dynamic_object_field as dof;
 
-    use suiDouBashiVest::vsdb::VSDB;
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::event;
-    use suiDouBashiVest::err;
-    use suiDouBashiVest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
+    use suiDouBashi_vsdb::vsdb::VSDB;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vest::event;
+    use suiDouBashi_vest::err;
+    use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
 
-    friend suiDouBashiVest::gauge;
-    friend suiDouBashiVest::voter;
+    friend suiDouBashi_vest::gauge;
+    friend suiDouBashi_vest::voter;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u256 = 1_000_000_000_000_000_000;

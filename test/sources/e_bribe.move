@@ -5,18 +5,18 @@ module test::e_bribe_test{
     use sui::object;
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use std::vector as vec;
-    use suiDouBashiVest::internal_bribe::{InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::voter::{Self, Voter};
-    use suiDouBashiVest::reward_distributor::{Distributor};
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
-    use suiDouBashiVest::minter::{ mint_sdb, Minter};
-    use suiDouBashi::pool::{LP};
-    use suiDouBashi::pool::Pool;
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashi::usdc::USDC;
-    use suiDouBashi::usdt::USDT;
+    use suiDouBashi_vest::internal_bribe::{InternalBribe};
+    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::voter::{Self, Voter};
+    use suiDouBashi_vest::reward_distributor::{Distributor};
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vest::minter::{ mint_sdb, Minter};
+    use suiDouBashi_amm::pool::{LP};
+    use suiDouBashi_amm::pool::Pool;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_amm::usdc::USDC;
+    use suiDouBashi_amm::usdt::USDT;
 
     public fun external_bribe_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();

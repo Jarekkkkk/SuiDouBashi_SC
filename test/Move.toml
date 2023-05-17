@@ -8,7 +8,8 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framew
 MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
-suiDouBashi = {local = "../amm"}
+suiDouBashiAmm = {local = "../amm"}
+suiDouBashiVSDB = {local = "../vsdb"}
 suiDouBashiVest = {local = "../vest"}
 
 [addresses]

@@ -1,10 +1,12 @@
-module test::test_whitelist{
+#[test_only]
+module suiDouBashi_vsdb::test_whitelist{
     use sui::vec_map::{VecMap};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::TxContext;
     use sui::vec_map;
     use sui::transfer;
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
+
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
 
     struct VotingState has store{
         attachments: u64,
@@ -52,5 +54,5 @@ module test::test_whitelist{
         voting_mut.last_voted = 131312;
     }
 
-    #[test_only] public fun init_for_testing(ctx: &mut TxContext) { init(ctx) }
+    #[test_only] public fun init_for_testing(ctx: &mut TxContext){ init(ctx) }
 }

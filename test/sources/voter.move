@@ -1,10 +1,10 @@
 module test::voter_test{
     use std::vector as vec;
-    use suiDouBashi::pool::Pool;
+    use suiDouBashi_amm::pool::Pool;
 
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashi::usdc::USDC;
-    use suiDouBashi::usdt::USDT;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_amm::usdc::USDC;
+    use suiDouBashi_amm::usdt::USDT;
 
     use test::setup;
     use sui::coin::{ Self, Coin};
@@ -14,11 +14,11 @@ module test::voter_test{
     use sui::clock::{increment_for_testing as add_time, Clock};
 
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
-    use suiDouBashiVest::internal_bribe::{Self as i_bribe, InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::voter::{Self, Voter};
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vest::internal_bribe::{Self as i_bribe, InternalBribe};
+    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::voter::{Self, Voter};
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
 
     public fun vote_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();

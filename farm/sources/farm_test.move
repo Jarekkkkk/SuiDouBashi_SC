@@ -1,20 +1,20 @@
 #[test_only]
-module farm::farm_test{
+module suiDouBashi_farm::farm_test{
     use sui::clock::{Self, Clock, timestamp_ms as get_time,set_for_testing as set_time, increment_for_testing as add_time};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use sui::coin::mint_for_testing as mint;
     use sui::math;
 
-    use suiDouBashi::amm_test;
-    use suiDouBashi::usdt::{USDT};
-    use suiDouBashi::usdc::{USDC};
-    use suiDouBashiVest::sdb::{SDB};
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
-    use suiDouBashi::pool::{Pool,LP};
+    use suiDouBashi_amm::amm_test;
+    use suiDouBashi_amm::usdt::{USDT};
+    use suiDouBashi_amm::usdc::{USDC};
+    use suiDouBashi_vsdb::sdb::{SDB};
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_amm::pool::{Pool,LP};
 
 
     use test::setup;
-    use farm::farm::{Self, FarmReg, Farm};
+    use suiDouBashi_farm::farm::{Self, FarmReg, Farm};
 
     #[test]
     fun main(){

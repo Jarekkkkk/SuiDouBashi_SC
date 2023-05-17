@@ -1,13 +1,13 @@
 #[test_only]
 module test::main{
-    use suiDouBashi::pool::Pool;
+    use suiDouBashi_amm::pool::Pool;
 
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashiVest::minter::{mint_sdb, Minter};
-    use suiDouBashi::usdc::USDC;
-    use suiDouBashi::usdt::USDT;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vest::minter::{mint_sdb, Minter};
+    use suiDouBashi_amm::usdc::USDC;
+    use suiDouBashi_amm::usdt::USDT;
 
-use test::setup;
+    use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
     use sui::object;
 
@@ -61,7 +61,7 @@ use test::setup;
         }
     }
 
-    use suiDouBashiVest::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
     fun vest_(clock: &mut Clock, s: &mut Scenario){
         let (a,_,_) = setup::people();
 
@@ -172,11 +172,11 @@ use test::setup;
         }
     }
 
-    use suiDouBashiVest::internal_bribe::{InternalBribe};
-    use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::voter::{Self, Voter};
-    use suiDouBashiVest::reward_distributor::{Distributor};
-    use suiDouBashi::pool::{Self, LP};
+    use suiDouBashi_vest::internal_bribe::{InternalBribe};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::voter::{Self, Voter};
+    use suiDouBashi_vest::reward_distributor::{Distributor};
+    use suiDouBashi_amm::pool::{Self, LP};
     use sui::table;
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
 
@@ -314,7 +314,7 @@ use test::setup;
             burn(sdb);
         };
     }
-    use suiDouBashiVest::internal_bribe::{Self as i_bribe};
+    use suiDouBashi_vest::internal_bribe::{Self as i_bribe};
     public fun internal_bribe_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
 

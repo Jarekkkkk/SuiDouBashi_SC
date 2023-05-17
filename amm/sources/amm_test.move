@@ -1,17 +1,17 @@
 #[test_only]
-module suiDouBashi::amm_test{
+module suiDouBashi_amm::amm_test{
     use sui::coin::{Self, Coin, mint_for_testing as mint, burn_for_testing as burn,  CoinMetadata};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use sui::clock::{Self, Clock, increment_for_testing as add_time};
-    use suiDouBashi::amm_math;
+    use suiDouBashi_amm::amm_math;
     use sui::math;
-    use suiDouBashi::formula;
+    use suiDouBashi_amm::formula;
     use sui::transfer;
 
-    use suiDouBashi::pool::{Self, Pool, LP};
-    use suiDouBashi::pool_reg::{Self, PoolReg};
-    use suiDouBashi::usdt::{Self, USDT};
-    use suiDouBashi::usdc::{Self, USDC};
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
+    use suiDouBashi_amm::pool_reg::{Self, PoolReg};
+    use suiDouBashi_amm::usdt::{Self, USDT};
+    use suiDouBashi_amm::usdc::{Self, USDC};
 
     const MINIMUM_LIQUIDITY: u64 = 1000;
     const USDT_AMT:u64 = 9_000_000_000_000;

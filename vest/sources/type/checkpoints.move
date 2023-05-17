@@ -1,4 +1,4 @@
-module suiDouBashiVest::checkpoints{
+module suiDouBashi_vest::checkpoints{
 
         ///checkpoint for marking reward rate
     struct RewardPerTokenCheckpoint has store {

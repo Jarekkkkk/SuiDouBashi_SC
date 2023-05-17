@@ -1,5 +1,5 @@
 [package]
-name = "suiDouBashi"
+name = "suiDouBashiAmm"
 version = "0.0.1"
 
 [dependencies]
@@ -8,7 +8,7 @@ MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
 [addresses]
-suiDouBashi =  "0x0"
+suiDouBashi_amm =  "0x0"
 std = "0x1"
 sui =  "0x2"
 sui_system = "0x3"

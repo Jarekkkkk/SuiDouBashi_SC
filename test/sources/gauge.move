@@ -1,14 +1,14 @@
 module test::gauge_test{
-    use suiDouBashiVest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use test::setup;
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashi::usdc::USDC;
-    use suiDouBashi::usdt::USDT;
-    use suiDouBashiVest::checkpoints;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_amm::usdc::USDC;
+    use suiDouBashi_amm::usdt::USDT;
+    use suiDouBashi_vest::checkpoints;
     use sui::clock::{timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::table_vec;
-    use suiDouBashi::pool::{Self, Pool, LP};
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
 
     public fun gauge_(clock: &mut Clock, s: &mut Scenario){
         let ( a, b, _ ) = setup::people();

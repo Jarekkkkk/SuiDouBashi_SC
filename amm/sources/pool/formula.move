@@ -1,5 +1,4 @@
-//stable curve: X^3Y + X*Y^3 = k
-module suiDouBashi::formula{
+module suiDouBashi_amm::formula{
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     use sui::math;

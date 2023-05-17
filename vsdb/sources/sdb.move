@@ -1,4 +1,4 @@
-module suiDouBashiVest::sdb{
+module suiDouBashi_vsdb::sdb{
     use std::option;
     use sui::coin::{Self};
     use sui::transfer;

@@ -1,4 +1,4 @@
-module suiDouBashi::type{
+module suiDouBashi_amm::type{
     use std::string::{Self, String, sub_string};
     use std::ascii;
     use std::type_name;

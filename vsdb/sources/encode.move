@@ -1,4 +1,4 @@
-module suiDouBashi::encode{
+module suiDouBashi_vsdb::encode{
      use std::vector;
 
     const ELAYERZERO_INVALID_LENGTH: u64 = 0;
@@ -181,9 +181,9 @@ module suiDouBashi::encode{
 }
 
 #[test_only]
-module suiDouBashi::base64_test{
+module suiDouBashi_vsdb::base64_test{
     use std::vector;
-    use suiDouBashi::encode::{hex_encode,hex_decode, base64_encode, base64_decode};
+    use suiDouBashi_vsdb::encode::{hex_encode,hex_decode, base64_encode, base64_decode};
     const ELAYERZERO_INVALID_LENGTH: u64 = 0;
     const ELAYERZERO_INVALID_CHARACTER: u64 = 1;
 

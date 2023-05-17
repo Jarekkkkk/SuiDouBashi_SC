@@ -1,11 +1,11 @@
 module test::pool_test{
-    use suiDouBashi::pool::{Self, Pool, LP};
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
 
-    use suiDouBashiVest::sdb::SDB;
-    use suiDouBashi::usdc::USDC;
-    use suiDouBashi::usdt::USDT;
+    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_amm::usdc::USDC;
+    use suiDouBashi_amm::usdt::USDT;
     use sui::clock::{Clock};
     use sui::transfer;
 
@@ -225,9 +225,9 @@ module test::pool_test{
         };
     }
 
-        use suiDouBashi::pool_reg::{Self, PoolReg};
+        use suiDouBashi_amm::pool_reg::{Self, PoolReg};
         use sui::coin::CoinMetadata;
-        use suiDouBashiVest::minter::{mint_sdb, Minter};
+        use suiDouBashi_vest::minter::{mint_sdb, Minter};
         public fun deploy_pools(s: &mut Scenario, clock: &mut Clock){
         let (a,_,_) = setup::people();
 

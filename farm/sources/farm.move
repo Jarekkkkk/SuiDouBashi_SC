@@ -1,8 +1,8 @@
-module farm::farm{
-    use suiDouBashi::pool::{Self, Pool, LP};
-    use suiDouBashi::pool_reg;
-    use suiDouBashiVest::vsdb::{Self, VSDBRegistry};
-    use suiDouBashiVest::sdb::SDB;
+module suiDouBashi_farm::farm{
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
+    use suiDouBashi_amm::pool_reg;
+    use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
+    use suiDouBashi_vsdb::sdb::SDB;
     use sui::event::emit;
 
     use sui::tx_context::{Self, TxContext};

@@ -1,4 +1,4 @@
-module suiDouBashi::amm_math{
+module suiDouBashi_amm::amm_math{
     /// Maximum of u128 number.
     const MAX_U128: u128 = 340282366920938463463374607431768211455_u128;
 

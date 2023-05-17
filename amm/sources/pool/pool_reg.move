@@ -1,4 +1,4 @@
-module suiDouBashi::pool_reg{
+module suiDouBashi_amm::pool_reg{
     use sui::object::{UID, ID};
     use sui::table::{Self, Table};
     use std::string::{Self, String};
@@ -8,9 +8,9 @@ module suiDouBashi::pool_reg{
     use sui::transfer;
     use std::vector;
 
-    use suiDouBashi::type;
-    use suiDouBashi::event;
-    use suiDouBashi::pool::{Self, Pool};
+    use suiDouBashi_amm::type;
+    use suiDouBashi_amm::event;
+    use suiDouBashi_amm::pool::{Self, Pool};
 
     const ERR_INVALD_GUARDIAN: u64 = 0;
     const ERR_INVALD_FEE: u64 = 0;

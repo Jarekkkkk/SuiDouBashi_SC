@@ -1,4 +1,4 @@
-module suiDouBashi::math_u128{
+module suiDouBashi_amm::math_u128{
     // SPDX-License-Identifier: MIT
 
 /// @title math_u128

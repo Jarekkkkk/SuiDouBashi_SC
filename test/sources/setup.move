@@ -1,9 +1,9 @@
 #[test_only]
 module test::setup{
-    use suiDouBashi::usdc::{Self, USDC};
-    use suiDouBashi::usdt::{Self, USDT};
-    use suiDouBashi::pool::{Pool};
-    use suiDouBashiVest::sdb::{Self, SDB};
+    use suiDouBashi_amm::usdc::{Self, USDC};
+    use suiDouBashi_amm::usdt::{Self, USDT};
+    use suiDouBashi_amm::pool::{Pool};
+    use suiDouBashi_vsdb::sdb::{Self, SDB};
 
     use sui::math;
     use sui::clock::{Self, Clock};
@@ -78,9 +78,9 @@ module test::setup{
     }
 
 
-    use suiDouBashiVest::minter::{Self, Minter};
-    use suiDouBashiVest::reward_distributor;
-    use suiDouBashiVest::vsdb::VSDBRegistry;
+    use suiDouBashi_vest::minter::{Self, Minter};
+    use suiDouBashi_vest::reward_distributor;
+    use suiDouBashi_vsdb::vsdb::VSDBRegistry;
 
     public fun deploy_minter(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, c) = people();
@@ -101,8 +101,8 @@ module test::setup{
         };
     }
 
-    use suiDouBashiVest::voter::{Self, Voter, VOTER_SDB};
-    use suiDouBashiVest::vsdb::{Self,VSDBCap};
+    use suiDouBashi_vest::voter::{Self, Voter, VOTER_SDB};
+    use suiDouBashi_vsdb::vsdb::{Self,VSDBCap};
     public fun deploy_voter(s: &mut Scenario){
         let ( a, _, _ ) = people();
 
@@ -134,9 +134,9 @@ module test::setup{
         }
     }
 
-    use suiDouBashiVest::gauge::{Self, Gauge};
-    use suiDouBashiVest::internal_bribe::{Self as i_bribe, InternalBribe};
-    use suiDouBashiVest::external_bribe::{Self as e_bribe, ExternalBribe};
+    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vest::internal_bribe::{Self as i_bribe, InternalBribe};
+    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
     public fun deploy_gauge(s: &mut Scenario){
         let ( a, _, _ ) = people();
 
