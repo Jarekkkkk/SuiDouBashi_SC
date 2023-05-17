@@ -29,6 +29,8 @@ module farm::farm{
     const ERR_INSUFFICIENT_LP: u64 = 004;
     const ERR_NO_REWARD: u64 = 005;
     const ERR_NOT_FINISH: u64 = 006;
+    const ERR_INVALID_POINT: u64 = 007;
+    const ERR_NOT_SETUP: u64 = 008;
 
     // EVENT
     struct Stake<phantom X, phantom Y> has copy, drop{
@@ -39,28 +41,25 @@ module farm::farm{
         player: address,
         amount: u64
     }
-    struct EmergencyWithdraw<phantom X, phantom Y> has copy, drop{
-        player: address,
-        amount: u64
-    }
     struct Harvest<phantom X, phantom Y> has copy, drop{
         player: address,
         reward: u64
     }
 
     // assert
-    fun assert_governor(reg: &Reg, ctx: &mut TxContext){
+    fun assert_governor(reg: &FarmReg, ctx: &mut TxContext){
         assert!(tx_context::sender(ctx) == reg.governor, ERR_NOT_GOV);
     }
+    fun assert_setup(reg: &FarmReg){
+        assert!(reg.total_acc_points == TOTAL_ALLOC_POINT, ERR_NOT_SETUP);
+    }
 
-    // ERROR
-
-    // TODO: move start_time & end_time to const, which relieve the usage of reg object in every function
-    struct Reg has key{
+    struct FarmReg has key{
         id: UID,
         initialized: bool,
         governor: address,
         sdb_balance: Balance<SDB>,
+        total_acc_points: u64,
         start_time: u64,
         end_time: u64,
         sdb_per_second: u64,
@@ -68,17 +67,11 @@ module farm::farm{
         total_pending: Table<address, u64>
     }
 
-    public fun get_sdb_balance(reg: &Reg):u64{ balance::value(&reg.sdb_balance)}
-    public fun get_start_time(reg: &Reg):u64 {reg.start_time }
-    public fun get_end_time(reg: &Reg):u64 {reg.end_time }
-    public fun sdb_per_second(reg: &Reg): u64 { reg.sdb_per_second }
-    public fun total_pending(reg: &Reg, player: address): u64 { *table::borrow(&reg.total_pending, player )}
-
-    struct PlayerInfo has copy, store{
-        amount: u64,
-        index: u256,
-        pending_reward: u64
-    }
+    public fun get_sdb_balance(reg: &FarmReg):u64{ balance::value(&reg.sdb_balance)}
+    public fun get_start_time(reg: &FarmReg):u64 {reg.start_time }
+    public fun get_end_time(reg: &FarmReg):u64 {reg.end_time }
+    public fun sdb_per_second(reg: &FarmReg): u64 { reg.sdb_per_second }
+    public fun total_pending(reg: &FarmReg, player: address): u64 { *table::borrow(&reg.total_pending, player )}
 
     struct Farm<phantom X, phantom Y> has key{
         id: UID,
@@ -86,22 +79,27 @@ module farm::farm{
         alloc_point: u64,
         last_reward_time: u64,
         index: u256,
-
         player_infos: Table<address, PlayerInfo>,
+    }
+
+    struct PlayerInfo has copy, store{
+        amount: u64,
+        index: u256,
+        pending_reward: u64
     }
 
     public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::get_lp_balance(&self.lp_balance)}
 
 
     fun init(ctx: &mut TxContext){
-        let reg = Reg{
+        let reg = FarmReg{
             id: object::new(ctx),
             initialized: false,
             governor: tx_context::sender(ctx),
             sdb_balance: balance::zero<SDB>(),
+            total_acc_points: 0,
             start_time: 0,
             end_time: 0,
-
             sdb_per_second: 0,
             farms: vec_map::empty<String, ID>(),
             total_pending: table::new<address, u64>(ctx)
@@ -111,7 +109,7 @@ module farm::farm{
     }
 
     public fun initialize(
-        reg: &mut Reg,
+        reg: &mut FarmReg,
         start_time: u64,
         duration: u64,
         sdb: Coin<SDB>,
@@ -132,14 +130,17 @@ module farm::farm{
         reg.sdb_per_second = sdb_per_second;
     }
 
+    /// Here's some moderations from orignal MasterChef smart contract,
+    /// remove dynamic alloc_points setting requiring update all the pool's index when adding single farm, which is a bit tedious. Therefore, it's publisher's reponsiblity to make sure sum of pools allocated pointes shoud match total_alloc_points and all total points have be well distributed before farming start
     public fun add_farm<X,Y>(
-        reg: &mut Reg,
+        reg: &mut FarmReg,
         pool: &Pool<X,Y>,
         alloc_point: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert_governor(reg, ctx);
+        assert!(alloc_point <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);
 
         let ts = clock::timestamp_ms(clock);
 
@@ -159,11 +160,13 @@ module farm::farm{
 
         let pool_name = pool_reg::get_pool_name<X,Y>();
         vec_map::insert(&mut reg.farms, pool_name, object::id(&farm));
+        reg.total_acc_points = reg.total_acc_points + alloc_point;
+        assert!(reg.total_acc_points <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);
 
         transfer::share_object(farm);
     }
 
-    public fun get_multiplier(reg:&Reg, from: u64, to: u64):u64{
+    public fun get_multiplier(reg:&FarmReg, from: u64, to: u64):u64{
         let from = if(from > reg.start_time){
             from
         }else{
@@ -179,7 +182,7 @@ module farm::farm{
         }
     }
 
-    public fun pending_rewards<X,Y>(self: &Farm<X,Y>, reg: &Reg, player: address, clock: &Clock): u64{
+    public fun pending_rewards<X,Y>(self: &Farm<X,Y>, reg: &FarmReg, player: address, clock: &Clock): u64{
         if(!table::contains(&self.player_infos, player)) return 0;
 
         let ts = clock::timestamp_ms(clock);
@@ -197,7 +200,7 @@ module farm::farm{
     }
 
     /// settle accumulated rewards
-    fun update_farm<X,Y>(reg: &Reg, self: &mut Farm<X,Y>, clock: &Clock){
+    fun update_farm<X,Y>(reg: &FarmReg, self: &mut Farm<X,Y>, clock: &Clock){
         let ts = clock::timestamp_ms(clock);
 
         if(ts <= self.last_reward_time) return;
@@ -232,7 +235,7 @@ module farm::farm{
     }
 
     public fun stake<X,Y>(
-        reg: &Reg,
+        reg: &FarmReg,
         self: &mut Farm<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
@@ -240,6 +243,7 @@ module farm::farm{
         clock:&Clock,
         ctx:&mut TxContext
     ){
+        assert_setup(reg);
         let player = tx_context::sender(ctx);
         if(!table::contains(&self.player_infos, player)){
             let player_info = PlayerInfo{
@@ -265,7 +269,7 @@ module farm::farm{
     }
 
     public fun unstake<X,Y>(
-        reg: &Reg,
+        reg: &FarmReg,
         self: &mut Farm<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
@@ -273,6 +277,7 @@ module farm::farm{
         clock:&Clock,
         ctx:&mut TxContext
     ){
+        assert_setup(reg);
         let player = tx_context::sender(ctx);
         assert!(table::contains(&self.player_infos, player), ERR_NOT_PLAYER);
 
@@ -293,11 +298,12 @@ module farm::farm{
     }
 
     public fun harvest<X,Y>(
-        reg: &mut Reg,
+        reg: &mut FarmReg,
         self: &mut Farm<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert_setup(reg);
         let player = tx_context::sender(ctx);
         assert!(table::contains(&self.player_infos, player), ERR_NOT_PLAYER);
 
@@ -324,11 +330,12 @@ module farm::farm{
     }
 
     public fun claim_vsdb(
-        reg: &mut Reg,
+        reg: &mut FarmReg,
         vsdb_reg: &mut VSDBRegistry,
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert_setup(reg);
         let player = tx_context::sender(ctx);
         assert!(table::contains(&reg.total_pending, player) && *table::borrow(&reg.total_pending, player) > 0, ERR_NO_REWARD);
         assert!(clock::timestamp_ms(clock) >= reg.end_time, ERR_NOT_FINISH);

@@ -14,7 +14,7 @@ module farm::farm_test{
 
 
     use test::setup;
-    use farm::farm::{Self, Reg, Farm};
+    use farm::farm::{Self, FarmReg, Farm};
 
     #[test]
     fun main(){
@@ -63,7 +63,7 @@ module farm::farm_test{
         std::debug::print(&get_time(clock));
 
         next_tx(s,a);{ // Action: initialize reg
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             let start_time = get_time(clock) + setup::week();
             let duration = 4 * 7 * 86400;
             let sdb = mint<SDB>(625_000 * math::pow(10, 9), ctx(s)); // 625K SDB with 9 decimals
@@ -74,7 +74,7 @@ module farm::farm_test{
         };
 
         next_tx(s,a);{ // Assertion: validate reg state
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
 
             assert!(farm::get_sdb_balance(&reg) == 625_000 * math::pow(10, 9), 404);
             assert!(farm::get_start_time(&reg) == 1684645092, 404);
@@ -84,7 +84,7 @@ module farm::farm_test{
         };
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let pool_c = test::take_shared<Pool<SDB, USDT>>(s);
@@ -101,7 +101,7 @@ module farm::farm_test{
         };
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
            { // pool_a
                 let lp = test::take_from_sender<LP<USDC, USDT>>(s);
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
@@ -140,7 +140,7 @@ module farm::farm_test{
         };
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
 
             {
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
@@ -167,7 +167,7 @@ module farm::farm_test{
         add_time(clock, 4 * setup::day());
 
         next_tx(s,a);{ // still zero rewards when stake before start time
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
 
             {
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
@@ -191,7 +191,7 @@ module farm::farm_test{
         add_time(clock, setup::week());
 
         next_tx(s,a);{ // accumulating rewards when staking, 4 days after start_time
-             let reg = test::take_shared<Reg>(s);
+             let reg = test::take_shared<FarmReg>(s);
              let duration = 4 * setup::day();
             { // Unstake pool A
                 let rewards = duration * 258349867 * 2 / 10;
@@ -223,7 +223,7 @@ module farm::farm_test{
         add_time(clock, 3 * setup::day());
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             {   // stake for specific duration
                 let rewards = 4 * setup::day() * 258349867 * 2 / 10;
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
@@ -254,7 +254,7 @@ module farm::farm_test{
 
         next_tx(s,a);
         let harvest = {
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             let acc = 0;
             {   // stake for specific duration
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
@@ -280,7 +280,7 @@ module farm::farm_test{
         };
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             assert!(farm::total_pending(&reg, a) == harvest, 404);
             {
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
@@ -304,7 +304,7 @@ module farm::farm_test{
         add_time(clock, 2 * setup::week());
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             assert!(farm::total_pending(&reg, a) == harvest, 404);
             let duration = 2 * setup::week();
             {
@@ -335,7 +335,7 @@ module farm::farm_test{
         };
 
         next_tx(s,a);{
-            let reg = test::take_shared<Reg>(s);
+            let reg = test::take_shared<FarmReg>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             farm::claim_vsdb(&mut reg, &mut vsdb_reg, clock, ctx(s));
             // removed from table

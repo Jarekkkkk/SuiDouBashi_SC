@@ -374,10 +374,8 @@ use test::setup;
         };
         next_tx(s, a);{ // I_bribe receive the rewards
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            let reward_x = i_bribe::borrow_reward<USDC, USDT, USDC>(&i_bribe);
-            let reward_y = i_bribe::borrow_reward<USDC, USDT, USDT>(&i_bribe);
-            assert!(i_bribe::get_reward_balance(reward_x) == 10_000_000_000, 404);
-            assert!(i_bribe::get_reward_balance(reward_y) == 10_000_000_000, 404);
+            assert!(i_bribe::get_reward_balance<USDC,USDT,USDC>(&i_bribe) == 10_000_000_000, 404);
+            assert!(i_bribe::get_reward_balance<USDC,USDT,USDT>(&i_bribe) == 10_000_000_000, 404);
 
             test::return_shared(i_bribe);
         };

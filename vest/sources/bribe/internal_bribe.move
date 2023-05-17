@@ -72,7 +72,11 @@ module suiDouBashiVest::internal_bribe{
     public fun get_reward_rate<X,Y,T>(reward: &Reward<X,Y,T>):u64 { reward.reward_rate }
     #[test_only]
     public fun get_period_finish<X,Y,T>(reward: &Reward<X,Y,T>): u64{ reward.period_finish }
-    public fun get_reward_balance<X,Y,T>(reward: &Reward<X,Y,T>): u64{ balance::value(&reward.balance) }
+
+    public fun get_reward_balance<X,Y,T>(self: &InternalBribe<X,Y>): u64 {
+        let reward = borrow_reward<X,Y,T>(self);
+        balance::value(&reward.balance)
+    }
 
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
@@ -653,7 +657,6 @@ module suiDouBashiVest::internal_bribe{
         return _remaining * reward_rate
     }
 
-    // TODO: friend module signature
     /// collect fees from pool
     public fun deposit_pool_fees<X,Y,T>(
         self: &mut InternalBribe<X,Y>,

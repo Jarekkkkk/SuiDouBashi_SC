@@ -31,7 +31,6 @@ module suiDouBashiVest::voter{
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
-
     /// Witness
     struct VOTER_SDB has copy, store, drop {}
 
@@ -290,6 +289,7 @@ module suiDouBashiVest::voter{
 
             event::voted<X,Y>(object::id(vsdb), pool_weight);
         };
+
         potato
     }
 
@@ -448,6 +448,7 @@ module suiDouBashiVest::voter{
         };
         option::destroy_none(coin_option);
 
+    // should the below only be executed when weekly emissions distributed
         update_for_(self, gauge);
 
         let claimable = gauge::get_claimable(gauge);

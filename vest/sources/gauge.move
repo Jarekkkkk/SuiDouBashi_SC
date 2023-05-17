@@ -32,7 +32,6 @@ module suiDouBashiVest::gauge{
 
     struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,
-        // TODO: add is_alive assertion
         is_alive:bool,
         pool: ID,
 
@@ -75,7 +74,7 @@ module suiDouBashiVest::gauge{
         reward_rate: u64, // reward_amount / 7 days
         period_finish: u64,
 
-        last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
+        last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4.deposite bribe
         reward_per_token_stored: u128,
         user_reward_per_token_stored: Table<address, u128>, // record latest withdrawl of staker
         last_earn: Table<address, u64>, // last time staker claim rewards
@@ -112,11 +111,6 @@ module suiDouBashiVest::gauge{
         &reward.reward_per_token_checkpoints
     }
 
-    // Assertion
-    public fun assert_alive<X,Y>(self: &Gauge<X,Y>){
-        assert!(self.is_alive, err::dead_gauge());
-    }
-
     public (friend) fun new<X,Y>(
         pool: &Pool<X,Y>,
         ctx: &mut TxContext
@@ -145,7 +139,6 @@ module suiDouBashiVest::gauge{
             supply_index: 0,
             claimable: 0
         };
-
         // SDB emission
         let reward =  Reward<X,Y>{
             id: object::new(ctx),
@@ -454,17 +447,6 @@ module suiDouBashiVest::gauge{
         return reward_per_token_stored + (reward_rate as u128) * PRECISION / (total_supply as u128) * elapsed
     }
 
-    fun derived_balance<X, Y>(
-        self: &Gauge<X,Y>,
-        staker: address
-    ): u64{
-        if(table::contains(&self.balance_of, staker)){
-            *table::borrow(&self.balance_of, staker)
-        }else{
-            0
-        }
-    }
-
     // calculate reward between 2 supply checkpoints
     fun calc_reward_per_token<X, Y>(
         reward: &Reward<X, Y>,
@@ -685,15 +667,16 @@ module suiDouBashiVest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        let staker = tx_context::sender(ctx);
+        assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
+        let bal = get_balance_of(self, staker);
+        assert!(value <= bal, err::insufficient_lp());
+
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
 
         borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
         borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
 
-        let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
-        let bal = get_balance_of(self, staker);
-        assert!(value <= bal, err::insufficient_lp());
         // unstake the LP from pool
         pool::join_lp(pool, lp_position, &mut self.total_supply, value);
 
@@ -722,8 +705,6 @@ module suiDouBashiVest::gauge{
     public (friend) fun kill_gauge_<X,Y>(self: &mut Gauge<X,Y> ){ self.is_alive = false }
     public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
 
-
-    // TODO: add friend module
     /// distribute the weekly rebase amonut
     public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,

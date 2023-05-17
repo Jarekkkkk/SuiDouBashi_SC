@@ -77,7 +77,7 @@ module test::bribe_test{
                 assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
                 assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
                 assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
-                assert!( e_bribe::get_reward_balance(reward) == setup::stake_1(), 0);
+                assert!( e_bribe::get_reward_balance<USDC, USDT, SDB>(&e_bribe) == setup::stake_1(), 0);
                 test::return_shared(e_bribe);
             };
             {// e_bribe_a
@@ -87,7 +87,7 @@ module test::bribe_test{
                 assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
                 assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
                 assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
-                assert!( e_bribe::get_reward_balance(reward) == setup::stake_1(), 0);
+                assert!( e_bribe::get_reward_balance<SDB, USDC, SDB>(&e_bribe) == setup::stake_1(), 0);
                 test::return_shared(e_bribe);
             };
         };
@@ -110,6 +110,9 @@ module test::bribe_test{
 
             gauge::get_reward(&mut gauge_a, clock, ctx(s));
             gauge::get_reward(&mut gauge_b, clock, ctx(s));
+
+            assert!(gauge::earned(&gauge_a, a, clock) == 0 , 404);
+            assert!(gauge::earned(&gauge_b, a, clock) == 0 , 404);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
@@ -139,6 +142,7 @@ module test::bribe_test{
                 assert!(coin::value(&sdb_reward) == 86400, 404);
                 assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000000000000, 404);
                 assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
+
 
                 test::return_shared(gauge);
                 burn(sdb_reward);

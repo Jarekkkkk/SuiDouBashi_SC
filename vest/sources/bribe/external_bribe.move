@@ -74,8 +74,10 @@ module suiDouBashiVest::external_bribe{
         dof::borrow_mut(&mut self.id, type_name)
     }
 
-    #[test_only]
-    public fun get_reward_balance<X,Y,T>(reward: &Reward<X,Y,T>):u64 { balance::value(&reward.balance) }
+    public fun get_reward_balance<X,Y,T>(self: &ExternalBribe<X,Y>):u64 {
+        let reward = borrow_reward<X,Y,T>(self);
+        balance::value(&reward.balance)
+    }
     #[test_only]
     public fun get_reward_per_token_stored<X,Y,T>(reward: &Reward<X,Y,T>): &Table<u64, u64>{ &reward.token_rewards_per_epoch }
     #[test_only]

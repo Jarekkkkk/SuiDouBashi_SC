@@ -78,10 +78,10 @@ paths:
     post:
       tags:
         - "Voter"
-      summary: Create Gauge mechanism for Pool
-      description: Create Gauge mechanism for Pool
+      summary: Create Gauge for Pool
+      description: Create Gauge for Pool
       requestBody:
-        description: Create Gauge mechanism for Pool
+        description: Create Gauge for Pool
         content:
           application/json:
             schema:
@@ -162,6 +162,38 @@ paths:
               schema:
                 type: integer
                 format: int64
+  /voter/get_gauge_and_bribes_by_pool:
+    get:
+      tags:
+        - Voter
+      summary: Get Pool's gauge, internal_bribe and external_bribes' ID
+      description: Get Pool's gauge, internal_bribe and external_bribes' ID
+      parameters:
+        - name: Voter
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: Pool
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
   /voter/vsdb/initialize_voting:
     post:
       tags:
@@ -320,148 +352,208 @@ paths:
                     type: string
                   external_bribe:
                     type: string
-  /vsdb_reg/get_minted:
-    get:
+  /voter/reset_:
+    put:
       tags:
-        - VSDBRegistry
-      summary: Get total minted VSDB
-      description: Get total minted VSDB
-      parameters:
-        - name: VSDBRegistry
-          in: query
-          description: Get total minted VSDB
-          required: true
-          explode: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: successful operation
-          content:
-            application/json:
-              schema:
-                type: integer
-                format: int64
-  /vsdb_reg/total_VeSDB:
-    get:
-      tags:
-        - VSDBRegistry
-      summary: Get total circulating VeSDB
-      description: Get total circulating VeSDB
-      parameters:
-        - name: VSDBRegistry
-          in: query
-          description: Get total circulating VeSDB
-          required: true
-          explode: true
-          schema:
-            type: string
-        - name: Clock
-          in: query
-          description: Sui Clock Object
-          required: true
-          explode: true
-          schema:
-            type: string
-            example: "0x06"
-      responses:
-        '200':
-          description: successful operation
-          content:
-            application/json:
-              schema:
-                type: integer
-                format: int64
-  /vsdb/lock:
-    post:
-      tags:
-        - "VSDB"
-      summary: Lock SDB for max 4 years in exchange for VSDB
-      description: Lock SDB for max 4 years in exchange for VSDB
+        - "Voter"
+      summary: Reset Voting State
+      description: Reset Voting State
       requestBody:
-        description: locked SDB amount & choosen duration
+        description: Reset Voting State
         content:
           application/json:
             schema:
               type: object
               properties:
-                  vsdb_reg:
+                  potato:
                     type: string
-                  sdb:
+                  voter:
                     type: string
-                  duration:
-                    type: integer
-                    format: int64
-                  clock:
+                  vsdb:
                     type: string
-        required: true
-      responses:
-        '200':
-          description: Deposite
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  vsdb_id:
+                  gauge:
                     type: string
-                  locked_value:
-                    type: integer
-                    format: int64
-                  unlock_time:
-                    type: integer
-                    format: int64
-  /vsdb/lock_for:
-    post:
-      tags:
-        - "VSDB"
-      summary: create VSDB and transfer to recipient
-      description: create VSDB and transfer to recipient
-      requestBody:
-        description: create VSDB and transfer to recipient
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                  vsdb_reg:
+                  internal_bribe:
                     type: string
-                  sdb:
-                    type: string
-                  duration:
-                    type: integer
-                    format: int64
-                  recipient:
+                  external_bribe:
                     type: string
                   clock:
                     type: string
         required: true
       responses:
         '200':
-          description: Deposite
+          description: Abstain
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  vsdb_id:
+                  vsdb:
                     type: string
-                  locked_value:
+                  amount:
                     type: integer
                     format: int64
-                  unlock_time:
+  /voter/vote_:
+    put:
+      tags:
+        - "Voter"
+      summary: Vote Pool
+      description: Vote Pool
+      requestBody:
+        description: Vote Pool
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  potato:
+                    type: string
+                  voter:
+                    type: string
+                  vsdb:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  external_bribe:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Abstain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vsdb:
+                    type: string
+                  amount:
                     type: integer
                     format: int64
-  /vsdb/{VSDB_id}:
+  /voter/claim_rewards:
+    put:
+      tags:
+        - "Voter"
+      summary: Claim Weekly SDB emissions
+      description: Claim Weekly SDB emissions
+      requestBody:
+        description: Claim Weekly SDB emissions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  voter:
+                    type: string
+                  minter:
+                    type: string
+                  distributor:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  pool:
+                    type: string
+                  vsdb_reg:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimer:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+  /voter/claim_bribes:
+    put:
+      tags:
+        - "Voter"
+      summary: Claim Pool Bribes
+      description: Claim Pool Bribes
+      requestBody:
+        description: Claim Pool Bribes
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  external_bribe:
+                    type: string
+                  vsdb:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimer:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+  /voter/claim_fees:
+    put:
+      tags:
+        - "Voter"
+      summary: Claim Pool Fees
+      description: Claim Pool Fees
+      requestBody:
+        description: Claim Pool Fees
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  internal_bribe:
+                    type: string
+                  vsdb:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimer:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+
+  /gauge/{Gauge_id}:
     get:
       tags:
-        - VSDB
-      summary: Get VSDB Object
-      description: Get VSDB Object
+        - Gauge
+      summary: Get Gauge Object
+      description: Get Gauge Object
       parameters:
-        - name: VSDB
+        - name: Gauge
           in: query
-          description: Get VSDB Object
+          description: Get Gauge Object
           required: true
           explode: true
           schema:
@@ -473,25 +565,27 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VSDBRegistry"
-  /vsdb/increase_unlock_time:
+                $ref: "#/components/schemas/Gauge"
+  /gauge/stake:
     put:
       tags:
-        - "VSDB"
-      summary: increase VSDB unlocked time
-      description: increase VSDB unlocked time
+        - "Gauge"
+      summary: LP stake LP
+      description: LP stake LP
       requestBody:
-        description: increase VSDB unlocked time
+        description: LP stake LP
         content:
           application/json:
             schema:
               type: object
               properties:
-                  vsdb_reg:
+                  gauge:
                     type: string
-                  vsdb:
+                  pool:
                     type: string
-                  extended_duration:
+                  lp_position:
+                    type: string
+                  value:
                     type: integer
                     format: int64
                   clock:
@@ -499,74 +593,168 @@ paths:
         required: true
       responses:
         '200':
-          description: Deposite
+          description: WithdrawLP
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  vsdb_id:
+                  from:
                     type: string
-                  locked_value:
+                  amount:
                     type: integer
                     format: int64
-                  unlock_time:
-                    type: integer
-                    format: int64
-  /vsdb/increase_unlock_amount:
+  /gauge/unstake:
     put:
       tags:
-        - "VSDB"
-      summary: increase VSDB unlocked amount
-      description: increase VSDB unlocked amount
+        - "Gauge"
+      summary: LP unstake LP
+      description: LP unstake LP
       requestBody:
-        description: increase VSDB unlocked amount
+        description: LP unstake LP
         content:
           application/json:
             schema:
               type: object
               properties:
-                  vsdb_reg:
+                  gauge:
                     type: string
-                  vsdb:
+                  pool:
                     type: string
-                  sdb:
+                  lp_position:
                     type: string
+                  value:
+                    type: integer
+                    format: int64
                   clock:
                     type: string
         required: true
       responses:
         '200':
-          description: Deposite
+          description: DepositLP
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  vsdb_id:
+                  from:
                     type: string
-                  locked_value:
+                  amount:
                     type: integer
                     format: int64
-                  unlock_time:
-                    type: integer
-                    format: int64
-  /vsdb/merge:
+  /gauge/get_reward:
     put:
       tags:
-        - "VSDB"
-      summary: merge 2 VSDB
-      description: merge 2 VSDB
+        - "Gauge"
+      summary: LP Claim SDB
+      description: LP Claim SDB
       requestBody:
-        description: merge 2 VSDB
+        description: LP Claim SDB
         content:
           application/json:
             schema:
               type: object
               properties:
-                  vsdb_reg:
+                  gauge:
                     type: string
-                  self:
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /gauge/earned:
+    get:
+      tags:
+        - Gauge
+      summary: Get LP accrued SDB
+      description: Get LP accrued SDB
+      parameters:
+        - name: Gauge
+          in: query
+          description: Get LP accrued SDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /internal_bribe/{InternalBribe_id}:
+    get:
+      tags:
+        - InternalBribe
+      summary: Get InternalBribe Object
+      description: Get InternalBribe Object
+      parameters:
+        - name: InternalBribe
+          in: query
+          description: Get InternalBribe Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalBribe"
+  /internal_bribe/get_reward_balance:
+    get:
+      tags:
+        - InternalBribe
+      summary: Reward's accrued Pool Fees
+      description: Reward's accrued Pool Fees
+      parameters:
+        - name: InternalBribe
+          in: query
+          description: Reward's accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /internal_bribe/get_reward:
+    put:
+      tags:
+        - "InternalBribe"
+      summary: Voter Claim Pool Fees
+      description: Voter Claim Pool Fees
+      requestBody:
+        description: Voter Claim Pool Fees
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  internal_bribe:
                     type: string
                   vsdb:
                     type: string
@@ -575,34 +763,99 @@ paths:
         required: true
       responses:
         '200':
-          description: Deposite
+          description: ClaimReward
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  vsdb_id:
+                  from:
                     type: string
-                  locked_value:
+                  amount:
                     type: integer
                     format: int64
-                  unlock_time:
-                    type: integer
-                    format: int64
-  /vsdb/unlock:
-    delete:
+  /internal_bribe/earned:
+    get:
       tags:
-        - "VSDB"
-      summary: Unlock VSDB & withdraw SDB
-      description: Unlock VSDB & withdraw SDB
+        - InternalBribe
+      summary: Voter accrued Pool Fees
+      description: Voter accrued Pool Fees
+      parameters:
+        - name: InternalBribe
+          in: query
+          description: Voter accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /external_bribe/{ExternalBribe_id}:
+    get:
+      tags:
+        - ExternalBribe
+      summary: Get ExternalBribe Object
+      description: Get ExternalBribe Object
+      parameters:
+        - name: ExternalBribe
+          in: query
+          description: Get ExternalBribe Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalBribe"
+  /external_bribe/get_reward_balance:
+    get:
+      tags:
+        - ExternalBribe
+      summary: Reward's accrued Pool Fees
+      description: Reward's accrued Pool Fees
+      parameters:
+        - name: ExternalBribe
+          in: query
+          description: Reward's accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /external_bribe/get_reward:
+    put:
+      tags:
+        - "ExternalBribe"
+      summary: Voter Claim Pool Fees
+      description: Voter Claim Pool Fees
       requestBody:
-        description: Unlock VSDB & withdraw SDB
+        description: Voter Claim Pool Fees
         content:
           application/json:
             schema:
               type: object
               properties:
-                  vsdb_reg:
+                  external_bribe:
                     type: string
                   vsdb:
                     type: string
@@ -611,115 +864,39 @@ paths:
         required: true
       responses:
         '200':
-          description: Withdraw
+          description: ClaimReward
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  vsdb_id:
+                  from:
                     type: string
-                  unlocked_value:
+                  amount:
                     type: integer
                     format: int64
-                  ts:
-                    type: integer
-                    format: int64
-  /vsdb/url:
+  /external_bribe/earned:
     get:
       tags:
-        - VSDB
-      summary: Get VSDB URL
-      description: Get VSDB URL
+        - ExternalBribe
+      summary: Voter accrued Pool Fees
+      description: Voter accrued Pool Fees
       parameters:
-        - name: VSDB
+        - name: ExternalBribe
           in: query
-          description: Get VSDB URL
+          description: Voter accrued Pool Fees
           required: true
           explode: true
           schema:
             type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
       responses:
         '200':
           description: successful operation
           content:
             application/json:
               schema:
-                type: string
-                example: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHByZXNlcnZlQXNwZWN0UmF0aW89J3hNaW5ZTWluIG1lZXQnIHZpZXdCb3g9JzAgMCAzNTAgMzUwJz48c3R5bGU+LmJhc2UgeyBmaWxsOiB3aGl0ZTsgZm9udC1mYW1pbHk6IHNlcmlmOyBmb250LXNpemU6IDE0cHg7IH08L3N0eWxlPjxyZWN0IHdpZHRoPScxMDAlJyBoZWlnaHQ9JzEwMCUnIGZpbGw9JyM5M2M1ZmQnIC8+PHRleHQgeD0nMTAnIHk9JzIwJyBjbGFzcz0nYmFzZSc+U3VpRG91QmFzaGkgVmVTREIgPC90ZXh0Pjx0ZXh0IHg9JzEwJyB5PSc0MCcgY2xhc3M9J2Jhc2UnPlZvdGluZyBXZWlnaHQ6IDEwNDIyMTU3NDgxMDk2NDwvdGV4dD48dGV4dCB4PScxMCcgeT0nNjAnIGNsYXNzPSdiYXNlJz5Mb2NrZWQgZW5kOiAxNzA4NTYwMDAwPC90ZXh0Pjx0ZXh0IHg9JzEwJyB5PSc4MCcgY2xhc3M9J2Jhc2UnPkxvY2tlZF9hbW91bnQ6IDYxMTYwNzE0MTE0MTEyMDwvdGV4dD48L3N2Zz4="
-  /vsdb/locked_balance:
-    get:
-      tags:
-        - VSDB
-      summary: Get VSDB locked_balance
-      description: Get VSDB locked_balance
-      parameters:
-        - name: VSDB
-          in: query
-          description: Get VSDB locked_balance
-          required: true
-          explode: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: successful operation
-          content:
-            application/json:
-              schema:
-                type: string
-                example: "12312523"
-  /vsdb/locked_end:
-    get:
-      tags:
-        - VSDB
-      summary: Get VSDB locked_end
-      description: Get VSDB locked_end
-      parameters:
-        - name: VSDB
-          in: query
-          description: Get VSDB locked_end
-          required: true
-          explode: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: successful operation
-          content:
-            application/json:
-              schema:
-                type: string
-                example: "1684160307"
-  /vsdb_reg/voting_weight:
-    get:
-      tags:
-        - VSDB
-      summary: Get VSDB latest voting_weight
-      description: Get VSDB latest voting_weight
-      parameters:
-        - name: VSDB
-          in: query
-          description: Get VSDB latest voting_weight
-          required: true
-          explode: true
-          schema:
-            type: string
-        - name: Clock
-          in: query
-          description: Sui Clock Object
-          required: true
-          explode: true
-          schema:
-            type: string
-            example: "0x06"
-      responses:
-        '200':
-          description: successful operation
-          content:
-            application/json:
-              schema:
-                type: integer
+                type:  integer
                 format: int64
 components:
   schemas:
@@ -1029,80 +1206,3 @@ components:
         balance:
           type:  integer
           format: int64
-    VSDBRegistry:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
-        whitelist_modules:
-          type: array
-          items:
-            type: boolean
-            additionalProperties:
-              type: string
-        minted_sdb:
-          type: integer
-          format: int64
-        locked_total:
-          type: integer
-          format: int64
-        epoch:
-          type: integer
-          format: int64
-        point_history:
-          type: array
-          items:
-            $ref : "#/components/schemas/Point"
-        slope_changes:
-          type: array
-          items:
-            type: integer
-            format: int64
-            additionalProperties:
-              type:  integer
-              format: int64
-    Point:
-      type: object
-      properties:
-        slope:
-          type: integer
-          format: int64
-        bias:
-          type: integer
-          format: int64
-        ts:
-          type: integer
-          format: int64
-    VSDB:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
-        url:
-          type: string
-          example: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHByZXNlcnZlQXNwZWN0UmF0aW89J3hNaW5ZTWluIG1lZXQnIHZpZXdCb3g9JzAgMCAzNTAgMzUwJz48c3R5bGU+LmJhc2UgeyBmaWxsOiB3aGl0ZTsgZm9udC1mYW1pbHk6IHNlcmlmOyBmb250LXNpemU6IDE0cHg7IH08L3N0eWxlPjxyZWN0IHdpZHRoPScxMDAlJyBoZWlnaHQ9JzEwMCUnIGZpbGw9JyM5M2M1ZmQnIC8+PHRleHQgeD0nMTAnIHk9JzIwJyBjbGFzcz0nYmFzZSc+U3VpRG91QmFzaGkgVmVTREIgPC90ZXh0Pjx0ZXh0IHg9JzEwJyB5PSc0MCcgY2xhc3M9J2Jhc2UnPlZvdGluZyBXZWlnaHQ6IDEwNDIyMTU3NDgxMDk2NDwvdGV4dD48dGV4dCB4PScxMCcgeT0nNjAnIGNsYXNzPSdiYXNlJz5Mb2NrZWQgZW5kOiAxNzA4NTYwMDAwPC90ZXh0Pjx0ZXh0IHg9JzEwJyB5PSc4MCcgY2xhc3M9J2Jhc2UnPkxvY2tlZF9hbW91bnQ6IDYxMTYwNzE0MTE0MTEyMDwvdGV4dD48L3N2Zz4="
-        player_epoch:
-          type: integer
-          format: int64
-        player_point_history:
-          type: array
-          items:
-            $ref: "#/components/schemas/Point"
-            additionalProperties:
-              type: integer
-              format: int64
-        locked_balance:
-          type: object
-          properties:
-            balance:
-              type: integer
-              format: int64
-            end:
-              type: integer
-              format: int64
-        modules:
-          type: array
-          items:
-            type: string
