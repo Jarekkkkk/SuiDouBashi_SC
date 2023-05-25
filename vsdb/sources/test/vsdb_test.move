@@ -40,7 +40,7 @@ module suiDouBashi_vsdb::vsdb_test{
         next_tx(s, a);{ // extend 2 weeks duration
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::increase_unlock_time(&mut reg, &mut vsdb, four_years() + week(), &clock);
+            vsdb::increase_unlock_time(&mut reg, &mut vsdb, vsdb::max_time() + week(), &clock);
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
@@ -93,7 +93,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let end = vsdb::round_down_week(get_time(clock) + week());
             let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock));
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
-            assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
             test::return_to_sender(s, vsdb);
@@ -111,7 +111,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let end = vsdb::round_down_week(get_time(clock) + 2 * week());
             let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock));
             assert!( vsdb::locked_end(&vsdb) == end, 0);
-            assert!( vsdb::get_user_epoch(&vsdb) == 2, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 2, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);
@@ -130,7 +130,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let slope = vsdb::calculate_slope(value);
             let bias = vsdb::calculate_bias(value, end, get_time(clock));
             assert!( vsdb::locked_end(&vsdb) == end, 0);
-            assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);
@@ -140,11 +140,14 @@ module suiDouBashi_vsdb::vsdb_test{
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::unlock(&mut reg, vsdb, clock, ctx(s));
+            let len_prev = sui::table_vec::length(vsdb::point_history(&reg));
             vsdb::global_checkpoint(&mut reg, clock);
             vsdb::global_checkpoint(&mut reg, clock);
             vsdb::global_checkpoint(&mut reg, clock);
             vsdb::global_checkpoint(&mut reg, clock);
             vsdb::global_checkpoint(&mut reg, clock);
+            let len_post = sui::table_vec::length(vsdb::point_history(&reg));
+            assert!(len_prev == len_post, 404);
             test::return_shared(reg);
         };
         next_tx(s, a);{ // vsdb been burnt
@@ -218,7 +221,6 @@ module suiDouBashi_vsdb::vsdb_test{
     public fun stake_1(): u64 { math::pow(10, 6)}
     // time utility
     public fun start_time(): u64 { 1672531200 }
-    public fun four_years(): u64 { 4 * 365 * 86400 }
     public fun week(): u64 { 7 * 86400 }
     public fun day(): u64 { 86400 }
 }

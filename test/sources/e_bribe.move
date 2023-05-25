@@ -9,7 +9,6 @@ module test::e_bribe_test{
     use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::voter::{Self, Voter};
-    use suiDouBashi_vest::reward_distributor::{Distributor};
     use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
     use suiDouBashi_vest::minter::{ mint_sdb, Minter};
     use suiDouBashi_amm::pool::{LP};
@@ -25,7 +24,6 @@ module test::e_bribe_test{
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
-            let distributor = test::take_shared<Distributor>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -33,7 +31,7 @@ module test::e_bribe_test{
             let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
-            voter::distribute_(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+            voter::distribute_(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             {// bribing 100K for gauge_a
                 e_bribe::bribe(&mut e_bribe, mint<USDC>(setup::usdc_100K(), ctx(s)), clock, ctx(s));
@@ -44,7 +42,6 @@ module test::e_bribe_test{
 
             test::return_shared(voter);
             test::return_shared(minter);
-            test::return_shared(distributor);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
@@ -69,7 +66,7 @@ module test::e_bribe_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
-                    assert!( vsdb::voting_weight(&vsdb, clock) == 973972467857480085, 404);
+                    assert!( vsdb::voting_weight(&vsdb, clock) == 837300806505227859, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));
@@ -101,7 +98,6 @@ module test::e_bribe_test{
         next_tx(s, a);{ // Withdraw weekly emissions after expiry
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
-            let distributor = test::take_shared<Distributor>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -109,14 +105,13 @@ module test::e_bribe_test{
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
             {
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
 
             test::return_shared(voter);
             test::return_shared(minter);
-            test::return_shared(distributor);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
@@ -126,7 +121,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // Assertion: received the reward
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            assert!(coin::value(&sdb) == 14627810189300145, 404);
+            assert!(coin::value(&sdb) == 16846004620266315, 404);
             burn(sdb);
         };
 
@@ -149,10 +144,10 @@ module test::e_bribe_test{
             let sdb = test::take_from_sender<Coin<SDB>>(s);
 
             // unused voting powers are still be counted
-            assert!(coin::value(&usdc) == 8290_577_366, 404);
-            assert!(coin::value(&usdt) == 8290577366, 404);
-            assert!(coin::value(&sui) == 8290577366830, 404);
-            assert!(coin::value(&sdb) == 8290577366830, 404);
+            assert!(coin::value(&usdc) == 8053_428_600, 404);
+            assert!(coin::value(&usdt) == 8053428600, 404);
+            assert!(coin::value(&sui) == 8053428600712, 404);
+            assert!(coin::value(&sdb) == 8053428600712, 404);
 
             burn(usdc);
             burn(usdt);

@@ -19,23 +19,17 @@ module suiDouBashi_vsdb::vsdb{
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vsdb::point::{Self, Point};
     use suiDouBashi_vsdb::event;
-
     use suiDouBashi_vsdb::encode::base64_encode as encode;
     use suiDouBashi_vsdb::i128::{Self, I128};
 
-    const MAX_TIME: u64 = { 4 * 365 * 86400 };
+    const MAX_TIME: u64 = { 36 * 7 * 86400 };
     const WEEK: u64 = { 7 * 86400 };
-    const YEAR: u256 = { 365 * 86400 };
-    const SVG_PREFIX: vector<u8> = b"data:image/svg+xml;base64,";
 
-    // Error
     const E_INVALID_UNLOCK_TIME: u64 =  001 ;
     const E_LOCK: u64 =  002 ;
     const E_ALREADY_REGISTERED: u64 = 003;
     const E_ZERO_INPUT: u64 = 004;
     const E_EMPTY_BALANCE: u64 = 005;
-
-    // modules
     const E_NOT_REGISTERED: u64 = 004;
     const E_NOT_PURE: u64 = 005;
 
@@ -43,9 +37,8 @@ module suiDouBashi_vsdb::vsdb{
     struct VSDB has key, store {
         id: UID,
         url: Url,
-        // TODO: last updated
         player_epoch: u64,
-        player_point_history: Table<u64, Point>, // epoch -> point_history
+        player_point_history: Table<u64, Point>,
         locked_balance: LockedSDB,
         modules: vector<String>,
     }
@@ -62,20 +55,24 @@ module suiDouBashi_vsdb::vsdb{
         minted_vsdb: u64,
         locked_total: u64,
         epoch: u64,
-        point_history: TableVec<Point>, // epoch -> Point
-        slope_changes: Table<u64, I128> // week_ts -> d_slope
+        point_history: TableVec<Point>,
+        /// slope difference for each week
+        slope_changes: Table<u64, I128>
     }
 
     public fun get_minted(reg: &VSDBRegistry): u64 { reg.minted_vsdb }
 
+    public fun locked_total(reg: &VSDBRegistry): u64 { reg.locked_total }
+
     public fun epoch(reg: &VSDBRegistry ): u64 { reg.epoch }
+
+    public fun point_history(reg: &VSDBRegistry):&TableVec<Point> { &reg.point_history }
 
     public fun get_global_point_history(reg: &VSDBRegistry, epoch: u64): &Point{ table_vec::borrow(&reg.point_history, epoch) }
 
     public fun total_VeSDB(reg: &VSDBRegistry, clock: &Clock): u64{
         total_VeSDB_at(reg, clock::timestamp_ms(clock))
     }
-
     public fun total_VeSDB_at(self: &VSDBRegistry, ts: u64): u64{
         // calculate by latest epoch
         let point = table_vec::borrow(&self.point_history, self.epoch);
@@ -128,10 +125,6 @@ module suiDouBashi_vsdb::vsdb{
     }
     public entry fun remove_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
         table::remove(&mut reg.whitelist_modules, type_name::get<T>());
-    }
-    /// check if module successfully register fields in SDB
-    public fun module_exists(self: &VSDB, name: vector<u8>):bool{
-        vec::contains(&self.modules, &ascii::string(name))
     }
 
     // ===== entry =====
@@ -249,9 +242,7 @@ module suiDouBashi_vsdb::vsdb{
         assert!(locked_end_ >= ts , E_LOCK);
         assert!(locked_bal_ > 0, E_EMPTY_BALANCE);
 
-        // empty the old vsdb
         let coin = withdraw(&mut vsdb, ctx);
-        vsdb.locked_balance.end = 0;
         checkpoint_(true, reg, locked_balance(&vsdb), locked_end(&vsdb), locked_bal_, locked_end_, clock);
 
         destroy(vsdb);
@@ -268,7 +259,7 @@ module suiDouBashi_vsdb::vsdb{
         event::deposit(object::id(self), locked_balance(self), end_);
     }
 
-    /// Withdraw all the unlocked coin only when due date is expired
+    /// Withdraw all the unlocked coin when due date is expired
     public entry fun unlock(reg: &mut VSDBRegistry, self: VSDB, clock: &Clock, ctx: &mut TxContext){
         let locked_bal = locked_balance(&self);
         let locked_end = locked_end(&self);
@@ -278,7 +269,6 @@ module suiDouBashi_vsdb::vsdb{
         assert!(locked_bal > 0, E_EMPTY_BALANCE);
 
         let coin = withdraw(&mut self, ctx);
-        self.locked_balance.end = 0;
         let withdrawl = coin::value(&coin);
         let id = object::id(&self);
 
@@ -325,7 +315,7 @@ module suiDouBashi_vsdb::vsdb{
 
             last_point_bias = i128::sub(&last_point_bias, &diff);
 
-            if(i128::compare(&last_point_bias, &i128::zero()) == 1){
+            if(i128::is_neg(&last_point_bias)){
                 last_point_bias = i128::zero();
             };
             return ((i128::as_u128(&last_point_bias))as u64)
@@ -333,7 +323,7 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     // - point
-    public fun get_user_epoch(self: &VSDB): u64 { self.player_epoch }
+    public fun get_player_epoch(self: &VSDB): u64 { self.player_epoch }
 
     public fun get_latest_bias(self: &VSDB): I128{ get_bias(self, self.player_epoch) }
 
@@ -353,7 +343,7 @@ module suiDouBashi_vsdb::vsdb{
         point::ts(table::borrow(&self.player_point_history, epoch))
     }
 
-    fun update_user_point_(self: &mut VSDB, clock: &Clock){
+    fun update_player_point_(self: &mut VSDB, clock: &Clock){
         let ts = clock::timestamp_ms(clock);
         let amount = balance::value(&self.locked_balance.balance);
         let slope = calculate_slope(amount);
@@ -375,7 +365,10 @@ module suiDouBashi_vsdb::vsdb{
         let slope = calculate_slope(amount);
         i128::mul(&slope, &i128::from((end as u128) - (ts as u128)))
     }
+
     public fun round_down_week(t: u64):u64{ t / WEEK * WEEK}
+
+    public fun max_time(): u64 { MAX_TIME }
 
     // ===== Main =====
     fun new(locked_sdb: Coin<SDB>, unlock_time: u64, clock: &Clock, ctx: &mut TxContext): VSDB {
@@ -397,7 +390,7 @@ module suiDouBashi_vsdb::vsdb{
             modules: vec::empty<String>(),
         };
 
-        update_user_point_(&mut vsdb, clock);
+        update_player_point_(&mut vsdb, clock);
 
         vsdb
     }
@@ -420,7 +413,7 @@ module suiDouBashi_vsdb::vsdb{
 
         option::destroy_none(coin);
 
-        update_user_point_(self, clock);
+        update_player_point_(self, clock);
     }
 
     fun withdraw(self: &mut VSDB, ctx: &mut TxContext): Coin<SDB>{
@@ -451,7 +444,7 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     fun checkpoint_(
-        user_checkpoint: bool,
+        player_checkpoint: bool,
         self: &mut VSDBRegistry,
         new_locked_amount: u64,
         new_locked_end: u64,
@@ -470,8 +463,7 @@ module suiDouBashi_vsdb::vsdb{
 
         let epoch = self.epoch;
 
-        // calculate slope & bias
-        if(user_checkpoint){
+        if(player_checkpoint){
             if(old_locked_end > time_stamp && old_locked_amount > 0){
                 u_old_slope = calculate_slope(old_locked_amount);
                 u_old_bias = calculate_bias(old_locked_amount,  old_locked_end, time_stamp);
@@ -480,20 +472,13 @@ module suiDouBashi_vsdb::vsdb{
                 u_new_slope = calculate_slope(new_locked_amount);
                 u_new_bias = calculate_bias(new_locked_amount, new_locked_end, time_stamp);
             };
-
-            // Read values of scheduled changes in the slope
-            // old_locked.end can be in the past and in the future
-            // new_locked.end can ONLY by in the FUTURE unless everything expired: than zeros
             if(table::contains(&self.slope_changes, old_locked_end)){
                 old_dslope = *table::borrow(&self.slope_changes, old_locked_end);
             };
-
-            if(new_locked_end != 0){ // exclude withdraw action
+            if(new_locked_end != 0){
                 if(new_locked_end == old_locked_end){
-                    // update dslope: depoisit & minted
                     new_dslope = old_dslope;
                 }else{
-                    // extend locking duration
                     if(table::contains(&self.slope_changes, new_locked_end)){
                         new_dslope = *table::borrow(&self.slope_changes, new_locked_end);
                     };
@@ -501,31 +486,25 @@ module suiDouBashi_vsdb::vsdb{
             };
         };
 
-        // get the latest point
         let last_point = if(self.epoch > 0){
             *table_vec::borrow(&self.point_history, self.epoch)
         }else{
             point::new( i128::zero(), i128::zero(), time_stamp )
         };
 
-        // Go over weeks to fill history and calculate what the current point is
-
-        // things get easier we copy all the fields value first
         let last_point_bias = point::bias(&last_point);
         let last_point_slope = point::slope(&last_point);
         let last_point_ts = point::ts(&last_point);
 
         let t_i = round_down_week(last_point_ts);
         let i = 0;
-        while( i < 255 ){ // broken when never used over 5 years
-            t_i = t_i + WEEK; // endpoint of interval where checkpoint at
+        while( i < 255 ){
+            t_i = t_i + WEEK;
             let d_slope = i128::zero();
 
             if( t_i > time_stamp ){
-                //latest, all histroy has been filled, no need of recording point_history
                 t_i = time_stamp;
             }else{
-                // get the d_slope of this interval, only update when the period is passed
                 if(table::contains(&self.slope_changes, t_i)){
                     d_slope = *table::borrow(&self.slope_changes, t_i);
                 };
@@ -533,20 +512,15 @@ module suiDouBashi_vsdb::vsdb{
 
             let time_left = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
 
-            // update new bias & slope as we insert new checkpoint
             last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left));
             last_point_slope = i128::add(&last_point_slope, &d_slope);
 
             let compare_bias = i128::compare(&last_point_bias, &i128::zero());
-            // if last_point_bais <= 0
             if(compare_bias == 1 || compare_bias == 0){
-                // this could be negative as current interval of 2 checkpoint is larger than previous interval
                 last_point_bias = i128::zero();
             };
             let compare_slope = i128::compare(&last_point_slope, &i128::zero());
-            // if last_point_slope <= 0
             if(compare_slope == 1 || compare_slope == 0){
-                // this won't happen, just make sure
                 last_point_slope = i128::zero();
             };
 
@@ -556,7 +530,6 @@ module suiDouBashi_vsdb::vsdb{
             if(t_i == time_stamp){
                 break
             }else{
-                // update obsolete checkpoints
                 let point = point::new(last_point_bias, last_point_slope, last_point_ts);
                 table_vec::push_back(&mut self.point_history, point);
             };
@@ -565,16 +538,12 @@ module suiDouBashi_vsdb::vsdb{
         };
 
         // Now point_history is filled until t=now
-        if (user_checkpoint) {
-            // If last point was in this block, the slope change has been applied already
-            // But in such case we have 0 slope(s)
+        if (player_checkpoint) {
             last_point_slope = i128::add(&last_point_slope, &i128::sub(&u_new_slope, &u_old_slope));
             last_point_bias = i128::add(&last_point_bias, &i128::sub(&u_new_bias, &u_old_bias));
-            //  if last_point_slope < 0
             if (i128::compare(&last_point_slope, &i128::zero()) == 1) {
                 last_point_slope = i128::zero();
             };
-            //  if last_point_bias < 0
             if (i128::compare(&last_point_bias, &i128::zero()) == 1) {
                 last_point_bias = i128::zero();
             };
@@ -591,7 +560,7 @@ module suiDouBashi_vsdb::vsdb{
             table_vec::push_back(&mut self.point_history, last_point);
         };
 
-        if(user_checkpoint){
+        if(player_checkpoint){
             // Schedule the slope changes (slope is going down)
             // We subtract new_user_slope from [new_locked.end]
             // and add old_user_slope to [old_locked.end]
@@ -634,115 +603,116 @@ module suiDouBashi_vsdb::vsdb{
         checkpoint_(false, self, 0, 0, 0, 0, clock);
     }
 
-     // - df
-
+    public fun module_exists(self: &VSDB, name: vector<u8>):bool{
+        vec::contains(&self.modules, &ascii::string(name))
+    }
     /// Authorized module can add dynamic fields into VSDB
-    /// Witness is the entry of dyanmic fields , being careful of your generated witness, otherwise your registered state is exposed to public
+    /// Witness is the entry of dyanmic fields , being careful of your generated witness
+    /// otherwise your registered state is exposed to the public
     public fun df_add<T: copy + store + drop, V: store>(
         witness: &T, // Witness stands for Entry point
         reg: & VSDBRegistry,
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
         value: V
     ){
-        // retrieve address from witness
         let type = type_name::get<T>();
         assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), E_NOT_REGISTERED);
-
-        vec::push_back(&mut vsdb.modules, type_name::into_string(type));
-        df::add(&mut vsdb.id, *witness, value);
+        vec::push_back(&mut self.modules, type_name::into_string(type));
+        df::add(&mut self.id, *witness, value);
     }
     public fun df_exists<T: copy + drop + store>(
-        vsdb: &VSDB,
+        self: &VSDB,
         witness: T,
     ): bool{
-        df::exists_(&vsdb.id, witness)
+        df::exists_(&self.id, witness)
     }
     public fun df_exists_with_type<T: copy + store + drop, V: store>(
-        vsdb: &VSDB,
+        self: &VSDB,
         witness: T,
     ):bool{
-        df::exists_with_type<T, V>(&vsdb.id, witness)
+        df::exists_with_type<T, V>(&self.id, witness)
     }
     public fun df_borrow<T: copy + drop + store, V: store>(
-        vsdb: &VSDB,
+        self: &VSDB,
         witness: T,
     ): &V{
-        df::borrow(&vsdb.id, witness)
+        df::borrow(&self.id, witness)
     }
     /// registered module should check borrow_mut reference
     public fun df_borrow_mut<T: copy + drop + store, V: store>(
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
         witness: T,
     ): &mut V{
-        df::borrow_mut(&mut vsdb.id, witness)
+        df::borrow_mut(&mut self.id, witness)
     }
     public fun df_remove_if_exists<T: copy + store + drop, V: store>(
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
         witness: &T,
     ):Option<V>{
-        let (success, idx) = vec::index_of(&vsdb.modules, &type_name::into_string(type_name::get<T>()));
+        let (success, idx) = vec::index_of(&self.modules, &type_name::into_string(type_name::get<T>()));
         assert!(success, E_NOT_REGISTERED);
-        vec::remove(&mut vsdb.modules, idx);
-        df::remove_if_exists(&mut vsdb.id, *witness)
+        vec::remove(&mut self.modules, idx);
+        df::remove_if_exists(&mut self.id, *witness)
     }
     public fun df_remove<T: copy + store + drop, V: store>(
         witness: &T,
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
     ):V{
-        let (success, idx) = vec::index_of(&vsdb.modules, &type_name::into_string(type_name::get<T>()));
+        let (success, idx) = vec::index_of(&self.modules, &type_name::into_string(type_name::get<T>()));
         assert!(success, E_NOT_REGISTERED);
-        vec::remove(&mut vsdb.modules, idx);
-        df::remove(&mut vsdb.id, *witness)
+        vec::remove(&mut self.modules, idx);
+        df::remove(&mut self.id, *witness)
     }
 
     // - dof
     public fun dof_add<T: copy + store + drop, V: key + store>(
         witness: &T, // Witness stands for Entry point
         reg: & VSDBRegistry,
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
         value: V
     ){
         // retrieve address from witness
         let type = type_name::get<T>();
         assert!(table::contains(&reg.whitelist_modules, type) && *table::borrow(&reg.whitelist_modules, type), E_NOT_REGISTERED);
 
-        vec::push_back(&mut vsdb.modules, type_name::into_string(type));
-        dof::add(&mut vsdb.id, *witness, value);
+        vec::push_back(&mut self.modules, type_name::into_string(type));
+        dof::add(&mut self.id, *witness, value);
     }
     public fun dof_exists<T: copy + drop + store>(
-        vsdb: &VSDB,
+        self: &VSDB,
         witness: T,
     ): bool{
-        dof::exists_(&vsdb.id, witness)
+        dof::exists_(&self.id, witness)
     }
     public fun dof_exists_with_type<T: copy + store + drop, V: key + store>(
-        vsdb: &VSDB,
+        self: &VSDB,
         witness: T,
     ):bool{
-        dof::exists_with_type<T, V>(&vsdb.id, witness)
+        dof::exists_with_type<T, V>(&self.id, witness)
     }
     public fun dof_borrow<T: copy + drop + store, V: key + store>(
-        vsdb: &VSDB,
+        self: &VSDB,
         witness: T,
     ): &V{
-        dof::borrow(&vsdb.id, witness)
+        dof::borrow(&self.id, witness)
     }
     public fun dof_borrow_mut<T: copy + drop + store, V: key + store>(
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
         witness: T,
     ): &mut V{
-        dof::borrow_mut(&mut vsdb.id, witness)
+        dof::borrow_mut(&mut self.id, witness)
     }
     public fun dof_remove<T: copy + store + drop, V: key + store>(
         witness: &T,
-        vsdb: &mut VSDB,
+        self: &mut VSDB,
     ):V{
-        let (success, idx) = vec::index_of(&vsdb.modules, &type_name::into_string(type_name::get<T>()));
+        let (success, idx) = vec::index_of(&self.modules, &type_name::into_string(type_name::get<T>()));
         assert!(success, E_NOT_REGISTERED);
-        vec::remove(&mut vsdb.modules, idx);
-        dof::remove(&mut vsdb.id, *witness)
+        vec::remove(&mut self.modules, idx);
+        dof::remove(&mut self.id, *witness)
     }
 
+    const SVG_PREFIX: vector<u8> = b"data:image/svg+xml;base64,";
     fun img_url_(_id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): Url {
         let vesdb = SVG_PREFIX;
         let encoded_b = vec::empty<u8>();

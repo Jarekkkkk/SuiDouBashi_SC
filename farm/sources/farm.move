@@ -130,8 +130,9 @@ module suiDouBashi_farm::farm{
         reg.sdb_per_second = sdb_per_second;
     }
 
-    /// Here's some moderations from orignal MasterChef smart contract,
-    /// remove dynamic alloc_points setting requiring update all the pool's index when adding single farm, which is a bit tedious. Therefore, it's publisher's reponsiblity to make sure sum of pools allocated pointes shoud match total_alloc_points and all total points have be well distributed before farming start
+    /// Here's some modifications from orignal MasterChef smart contract,
+    /// 1. remove dynamic alloc_points setting that requires update from all pools.
+    /// 2. total alloc points have to be fully distributed before start_time
     public fun add_farm<X,Y>(
         reg: &mut FarmReg,
         pool: &Pool<X,Y>,
@@ -240,7 +241,7 @@ module suiDouBashi_farm::farm{
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         value: u64,
-        clock:&Clock,
+        clock: &Clock,
         ctx:&mut TxContext
     ){
         assert_setup(reg);
@@ -345,6 +346,7 @@ module suiDouBashi_farm::farm{
 
         table::remove(&mut reg.total_pending, player);
     }
+    // todo: deposit staked fees to first epoch of voter
 
     #[test_only] public fun init_for_testing( ctx: &mut TxContext) { init(ctx) }
 }

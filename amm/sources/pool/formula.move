@@ -1,8 +1,6 @@
 module suiDouBashi_amm::formula{
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
-    use sui::math;
-
     public fun k_(res_x: u64, res_y: u64, scale_x: u64, scale_y: u64): u256 {
         // x^3y + xy^3 = k
         let _x = (res_x as u256) * SCALE_FACTOR / (scale_x as u256);
@@ -12,27 +10,6 @@ module suiDouBashi_amm::formula{
         let _b =(( _x * _x) / SCALE_FACTOR) + (( _y * _y) / SCALE_FACTOR) ;
 
         (_a * _b / SCALE_FACTOR)
-    }
-
-    public fun get_output(
-        stable: bool,
-        dx: u64,
-        reserve_x: u64,
-        reserve_y: u64,
-        decimal_x: u8,
-        decimal_y: u8
-    ):u64{
-        if(stable){
-           (stable_swap_output(
-                dx,
-                reserve_x,
-                reserve_y,
-                math::pow(10, decimal_x),
-                math::pow(10, decimal_y)
-            ) as u64)
-        }else{
-            (variable_swap_output( dx, reserve_x, reserve_y) as u64)
-        }
     }
 
     /// Action: Swap: swap X for Y
@@ -65,7 +42,7 @@ module suiDouBashi_amm::formula{
     }
 
     /// Calculate optimized one-side adding liquidity
-    public fun zap_optimized_output(res_x: u256, input_x: u256, fee_percentage: u8):u256{
+    public fun zap_optimized_input(res_x: u256, input_x: u256, fee_percentage: u8):u64{
         // let var_1 = ( 4 * scaling_ * scaling_ - 4 * fee_ * scaling_ + fee_ * fee_);
         // let var_2 =  4 * scaling_ * scaling_ -  4 * fee_ * scaling_ ;
         // let var_3 = ( 2 * scaling_ - fee_);
@@ -82,7 +59,7 @@ module suiDouBashi_amm::formula{
             (399_800_025, 399_800_000, 19_995, 19_990)
         };
 
-        (sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4
+        (((sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4 ) as u64 )
     }
 
     fun get_y(x0: u256, xy: u256, y: u256): u256 {
@@ -159,10 +136,6 @@ module suiDouBashi_amm::formula{
         let dx = input_x - input_x * 3 / (10000 as u64);
         let _out = variable_swap_output(dx, res_x, res_y);
         assert!(_out == 187095656, 1);
-    }
-    #[test]
-    fun test_zap(){
-        let _foo = zap_optimized_output(1_000_000, 70_000, 3);
     }
     #[test]
     fun test_coin_out() {

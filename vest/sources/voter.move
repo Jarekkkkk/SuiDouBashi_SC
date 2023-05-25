@@ -16,11 +16,11 @@ module suiDouBashi_vest::voter{
 
     use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
+
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::event;
     use suiDouBashi_vest::err;
     use suiDouBashi_vest::minter::{Self, Minter};
-    use suiDouBashi_vest::reward_distributor::Distributor;
     use suiDouBashi_vest::internal_bribe::{Self, InternalBribe};
     use suiDouBashi_vest::external_bribe::{Self, ExternalBribe};
 
@@ -59,11 +59,11 @@ module suiDouBashi_vest::voter{
         last_voted: u64 // ts
     }
 
-    // VDSB Protocol
-    public fun initialized(vsdb: &VSDB):bool{
+    // Protocol Standard
+    public fun is_initialized(vsdb: &VSDB): bool{
         vsdb::df_exists(vsdb, VOTER_SDB {})
     }
-    public entry fun initialize_voting(reg: &VSDBRegistry, vsdb: &mut VSDB){
+    public entry fun initialize(reg: &VSDBRegistry, vsdb: &mut VSDB){
         let value = VotingState{
             pool_votes: vec_map::empty(),
             voted: false,
@@ -72,7 +72,7 @@ module suiDouBashi_vest::voter{
         };
         vsdb::df_add(&VOTER_SDB{}, reg, vsdb, value);
     }
-    public fun drop_voting_state(vsdb: &mut VSDB){
+    public fun clear(vsdb: &mut VSDB){
         let voting_state:VotingState = vsdb::df_remove( &VOTER_SDB{}, vsdb );
 
         let VotingState{
@@ -98,7 +98,9 @@ module suiDouBashi_vest::voter{
         let pool_votes = &voting_state_borrow(vsdb).pool_votes;
         *vec_map::get(pool_votes, pool_id)
     }
+
     public fun used_weights(vsdb: &VSDB):u64 { voting_state_borrow(vsdb).used_weights }
+
     public fun voted(vsdb: &VSDB):bool { voting_state_borrow(vsdb).voted }
 
     // POTATO to realize one-time action for each epoch
@@ -198,6 +200,75 @@ module suiDouBashi_vest::voter{
         self.total_weight = self.total_weight - used_weight;
     }
 
+    public fun poke_entry(
+        potato: Potato,
+        self: &mut Voter,
+        vsdb: &mut VSDB,
+    ):Potato{
+        assert!(!potato.reset && potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
+        let pool_votes_borrow = &voting_state_borrow(vsdb).pool_votes;
+        let pool_ids = vec_map::keys(pool_votes_borrow);
+
+        let weights = vec::empty<u64>();
+        let pools = vec::empty<address>();
+        let i = 0;
+        while( i <  vec_map::size(pool_votes_borrow)){
+            let pool_id = vec::borrow(&pool_ids, i);
+            vec::push_back( &mut weights, *vec_map::get(pool_votes_borrow, pool_id));
+            vec::push_back( &mut pools, object::id_to_address(pool_id));
+        };
+
+        vote_entry(potato, self, pools, weights)
+    }
+
+    /// Should be called after reset
+    public fun vote_entry(
+        potato: Potato,
+        self: &mut Voter,
+        pools: vector<address>,
+        weights: vector<u64>,
+    ):Potato{
+        assert!(potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
+        assert!(vec::length(&pools) == vec::length(&weights), E_NOT_VOTE );
+        self.total_weight = self.total_weight - potato.used_weight;
+        let total_weight = 0;
+
+        let (i ,len) = ( 0, vec::length(&weights));
+        while( i < len){
+            let weight = vec::pop_back(&mut weights);
+            let pool = vec::pop_back(&mut pools);
+            total_weight = total_weight + weight;
+            vec_map::insert(&mut potato.weights, object::id_from_address(pool), weight);
+            i = i + 1;
+        };
+
+        potato.used_weight = 0;
+        potato.total_weight = total_weight;
+        potato.reset = true;
+
+        potato
+    }
+
+    public fun vote_exit(
+        potato: Potato,
+        self: &mut Voter,
+        vsdb: &mut VSDB,
+    ){
+        let Potato {
+            reset,
+            weights,
+            used_weight,
+            total_weight: _
+        } = potato;
+        assert!(reset && vec_map::size(&weights) == 0 , E_NOT_VOTE);
+
+        let voting_state_mut = voting_state_borrow_mut(vsdb);
+
+        voting_state_mut.used_weights = used_weight;
+        voting_state_mut.voted = true;
+        self.total_weight = self.total_weight + used_weight;
+    }
+
     /// Be called in programmable tx
     public fun reset_<X,Y>(
         potato: Potato,
@@ -230,27 +301,6 @@ module suiDouBashi_vest::voter{
         };
 
         potato
-    }
-
-    public fun poke_entry(
-        potato: Potato,
-        self: &mut Voter,
-        vsdb: &mut VSDB,
-    ):Potato{
-        assert!(!potato.reset && potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
-        let pool_votes_borrow = &voting_state_borrow(vsdb).pool_votes;
-        let pool_ids = vec_map::keys(pool_votes_borrow);
-
-        let weights = vec::empty<u64>();
-        let pools = vec::empty<address>();
-        let i = 0;
-        while( i <  vec_map::size(pool_votes_borrow)){
-            let pool_id = vec::borrow(&pool_ids, i);
-            vec::push_back( &mut weights, *vec_map::get(pool_votes_borrow, pool_id));
-            vec::push_back( &mut pools, object::id_to_address(pool_id));
-        };
-
-        vote_entry(potato, self, pools, weights)
     }
 
     public fun vote_<X,Y>(
@@ -289,55 +339,7 @@ module suiDouBashi_vest::voter{
 
             event::voted<X,Y>(object::id(vsdb), pool_weight);
         };
-
         potato
-    }
-
-    /// Should be called after reset
-    public fun vote_entry(
-        potato: Potato,
-        self: &mut Voter,
-        pools: vector<address>,
-        weights: vector<u64>,
-    ):Potato{
-        assert!(potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
-        assert!(vec::length(&pools) == vec::length(&weights), E_NOT_VOTE );
-        self.total_weight = self.total_weight - potato.used_weight;
-        let total_weight = 0;
-
-        let (i ,len) = ( 0, vec::length(&weights));
-        while( i < len){
-            let weight = vec::pop_back(&mut weights);
-            let pool = vec::pop_back(&mut pools);
-            total_weight = total_weight + weight;
-            vec_map::insert(&mut potato.weights, object::id_from_address(pool), weight);
-            i = i + 1;
-        };
-
-        potato.used_weight = 0;
-        potato.total_weight = total_weight;
-        potato.reset = true;
-
-        potato
-    }
-    public fun vote_exit(
-        potato: Potato,
-        self: &mut Voter,
-        vsdb: &mut VSDB,
-    ){
-        let Potato {
-            reset,
-            weights,
-            used_weight,
-            total_weight: _
-        } = potato;
-        assert!(reset && vec_map::size(&weights) == 0 , E_NOT_VOTE);
-
-        let voting_state_mut = voting_state_borrow_mut(vsdb);
-
-        voting_state_mut.used_weights = used_weight;
-        voting_state_mut.voted = true;
-        self.total_weight = self.total_weight + used_weight;
     }
 
     // - Gauge
@@ -384,7 +386,6 @@ module suiDouBashi_vest::voter{
     public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
-        distributor: &mut Distributor,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
@@ -393,7 +394,7 @@ module suiDouBashi_vest::voter{
         ctx: &mut TxContext
     ){
         // could be optimized by checking if weekly emision is distributed to cost down the gas usage
-        distribute_(self, minter, distributor, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
+        distribute_(self, minter, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
         // Guage collect SDB weekly emission
         gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
@@ -434,7 +435,6 @@ module suiDouBashi_vest::voter{
     public fun distribute_<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
-        distributor: &mut Distributor,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
@@ -442,13 +442,12 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let coin_option = minter::update_period(minter, distributor, vsdb_reg, clock, ctx);
+        let coin_option = minter::update_period(minter, vsdb_reg, clock, ctx);
         if(option::is_some(&coin_option)){
             notify_reward_amount_(self , option::extract(&mut coin_option))
         };
         option::destroy_none(coin_option);
 
-    // should the below only be executed when weekly emissions distributed
         update_for_(self, gauge);
 
         let claimable = gauge::get_claimable(gauge);

@@ -17,55 +17,63 @@ module suiDouBashi_amm::pool{
 
     friend suiDouBashi_amm::pool_reg;
 
-    const FEE_SCALING:u64 = 10000; //fee percentage: [0.01%, 0.050%]
+    const FEE_SCALING:u64 = 10000; //fee percentage: [0.01%, 0.05%]
 
-    const PERIOD_SIZE:u64 = 1800; // update for esch 30 minutes
+    const PERIOD_SIZE:u64 = 1800; // 30 minutes TWAP
 
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     const MINIMUM_LIQUIDITY: u64 = 1_000;
 
-    // ERROR
-    // - Pool
     const ERR_INVALID_TYPE: u64 = 000;
     const ERR_POOL_LOCK: u64 = 001;
     const ERR_EMPTY_INPUT: u64 = 002;
     const ERR_INSIFFICIENT_INPUT: u64 = 003;
     const ERR_EMPTY_RESERVE: u64 = 004;
     const ERR_K: u64 = 005;
-    // - Flashloan
-    const ERR_INSUFFICIENT_LOAN: u64 = 100;
-    const ERR_INVALID_REPAY: u64 = 101;
+    const ERR_INSUFFICIENT_LOAN: u64 = 006;
+    const ERR_INVALID_REPAY: u64 = 007;
 
     struct Pool<phantom X, phantom Y> has key {
         id: UID,
         stable:bool,
         locked: bool,
         lp_supply: Supply<LP_TOKEN<X, Y>>,
-        /// reserves
         reserve_x: Balance<X>,
         reserve_y: Balance<Y>,
         reserve_lp: Balance<LP_TOKEN<X, Y>>,
-        // decimals
         decimal_x: u8,
         decimal_y: u8,
-        /// oracle
         last_block_timestamp: u64,
         last_price_x_cumulative: u256,
         last_price_y_cumulative: u256,
         observations: TableVec<Observation>,
-        // Pool Fees
         fee:Fee<X,Y>,
     }
-
-    // - Fee
     struct Fee<phantom X, phantom Y> has store{
         fee_x:  Balance<X>,
         fee_y:  Balance<Y>,
-        index_x: u256, // fee_x/ total_supply * 10e18
-        index_y: u256, // fee_y/ total_supply * 10e18
-        fee_percentage: u8, // 2 decimal placee, range[ 1%, 5% ]
+        index_x: u256,
+        index_y: u256,
+        fee_percentage: u8,
     }
+
+    public fun get_reserves<X, Y>(pool: &Pool<X, Y>): (u64, u64, u64) {
+        (
+            balance::value(&pool.reserve_x),
+            balance::value(&pool.reserve_y),
+            balance::supply_value(&pool.lp_supply)
+        )
+    }
+    public fun get_stable<X,Y>(pool: &Pool<X,Y>):bool { pool.stable }
+
+    public fun get_decimals_x<X, Y>(pool: &Pool<X,Y>): u8 { pool.decimal_x }
+
+    public fun get_decimals_y<X, Y>(pool: &Pool<X,Y>): u8 { pool.decimal_y }
+
+    public fun get_total_supply<X,Y>(self: &Pool<X,Y>): u64 { balance::supply_value(&self.lp_supply)}
+
+    public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u64{ pool.last_block_timestamp }
 
     public fun get_fee_x<X,Y>(self:&Pool<X,Y>):u64{ balance::value(&self.fee.fee_x) }
     public fun get_fee_y<X,Y>(self:&Pool<X,Y>):u64{ balance::value(&self.fee.fee_y) }
@@ -90,12 +98,11 @@ module suiDouBashi_amm::pool{
     struct LP<phantom X, phantom Y> has key, store{
         id: UID,
         lp_balance: Balance<LP_TOKEN<X,Y>>,
-        index_x: u256, //
+        index_x: u256,
         index_y: u256,
         claimable_x: u64,
         claimable_y: u64
     }
-    /// When adding liquidity, make sure create lp position first
     public fun create_lp<X,Y>(self: &Pool<X,Y>, ctx: &mut TxContext):LP<X,Y>{
         LP<X,Y>{
             id: object::new(ctx),
@@ -107,7 +114,7 @@ module suiDouBashi_amm::pool{
         }
     }
 
-    /// IMPORTANT: all the claimable fees have to be settled before balance changes
+    // claimable fees have to be settled before balance changes
     public entry fun join_lp<X,Y>(self: &Pool<X,Y>, payee_lp: &mut LP<X,Y>, payer_lp: &mut LP<X,Y>, value: u64){
         update_lp_(self, payee_lp);
         update_lp_(self, payer_lp);
@@ -133,10 +140,9 @@ module suiDouBashi_amm::pool{
     // Flash Loan
     struct Receipt<phantom X, phantom Y, phantom T> {
         amount: u64,
-        fee: u64,
+        fee: u64
     }
 
-    // ===== Assertion =====
     fun assert_pool_unlocked<X, Y>(pool: &Pool<X, Y>){
         assert!(pool.locked == false, ERR_POOL_LOCK);
     }
@@ -144,24 +150,6 @@ module suiDouBashi_amm::pool{
         let type = type_name::get<T>();
         assert!(type_name::get<X>() == type || type_name::get<Y>() == type, ERR_INVALID_TYPE);
     }
-
-    // ===== getter =====
-    public fun get_reserves<X, Y>(pool: &Pool<X, Y>): (u64, u64, u64) {
-        (
-            balance::value(&pool.reserve_x),
-            balance::value(&pool.reserve_y),
-            balance::supply_value(&pool.lp_supply)
-        )
-    }
-    public fun get_stable<X,Y>(pool: &Pool<X,Y>):bool { pool.stable }
-
-    public fun get_decimals_x<X, Y>(pool: &Pool<X,Y>): u8 { pool.decimal_x }
-
-    public fun get_decimals_y<X, Y>(pool: &Pool<X,Y>): u8 { pool.decimal_y }
-
-    public fun get_total_supply<X,Y>(self: &Pool<X,Y>): u64 { balance::supply_value(&self.lp_supply)}
-
-    public fun get_last_timestamp<X,Y>(pool: &Pool<X,Y>):u64{ pool.last_block_timestamp }
 
     public fun calculate_fee(value: u64, fee: u8): u64{
         value * (fee as u64) / FEE_SCALING
@@ -180,6 +168,7 @@ module suiDouBashi_amm::pool{
         self: &Pool<X,Y>,
         input_x: u64,
     ):u64{
+        assert_valid_type<X,Y,T>();
         let (res_x, res_y, _) = get_reserves(self);
         get_output_<X,Y,T>(self.stable, input_x - calculate_fee(input_x, self.fee.fee_percentage), res_x, res_y, self.decimal_x, self.decimal_y)
     }
@@ -232,12 +221,11 @@ module suiDouBashi_amm::pool{
         self.locked = locked;
     }
 
-    /// Adding liquidity, have to create LP first to record balance first
     public entry fun add_liquidity<X, Y>(
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
         coin_y: Coin<Y>,
-        lp: &mut LP<X,Y>, // should create in advance
+        lp: &mut LP<X,Y>,
         deposit_x_min:u64,
         deposit_y_min:u64,
         clock: &Clock,
@@ -255,7 +243,6 @@ module suiDouBashi_amm::pool{
         event::liquidity_added<X,Y>(deposit_x, deposit_y, lP_value)
     }
 
-    /// - remove liquidity
     public entry fun remove_liquidity<X, Y>(
         self:&mut Pool<X, Y>,
         lp: &mut LP<X,Y>,
@@ -345,20 +332,21 @@ module suiDouBashi_amm::pool{
 
     // - zap
     /// x: single assets LP hold; y: optimal output assets needed, ( X, Y ) = pool_reserves
-    /// holded assumption: (X + dx) / ( Y - dy ) = ( x - dx) / y
+    /// holded assumption: (X + dx) / ( Y - dy ) = ( x - dx) / dy
+    /// currently only fit varibale formula
     public entry fun zap_x<X,Y>(
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
         lp: &mut LP<X,Y>,
-        deposit_x_min:u64,
-        deposit_y_min:u64,
+        deposit_x_min: u64,
+        deposit_y_min: u64,
         clock: &Clock,
         ctx:&mut TxContext
     ){
         assert_pool_unlocked(self);
         let value_x = coin::value<X>(&coin_x);
         let (res_x, _, _) = get_reserves(self);
-        value_x = (formula::zap_optimized_output((res_x as u256), (value_x as u256), self.fee.fee_percentage) as u64);
+        value_x = formula::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage) ;
         let coin_x_split = coin::split<X>(&mut coin_x, value_x, ctx);
         let output_min = get_output<X,Y,X>(self, value_x);
         let (coin_y, _, _) = swap_for_y_<X,Y>(self, coin_x_split, output_min, clock, ctx);
@@ -368,19 +356,19 @@ module suiDouBashi_amm::pool{
         self: &mut Pool<X, Y>,
         coin_y: Coin<Y>,
         lp: &mut LP<X,Y>,
-        deposit_x_min:u64,
-        deposit_y_min:u64,
+        deposit_x_min: u64,
+        deposit_y_min: u64,
         clock: &Clock,
         ctx:&mut TxContext
     ){
         assert_pool_unlocked(self);
         let value_y = coin::value<Y>(&coin_y);
         let (_, res_y, _) = get_reserves(self);
-        value_y = (formula::zap_optimized_output((res_y as u256), (value_y as u256), self.fee.fee_percentage) as u64);
+        value_y = formula::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage);
         let coin_y_split = coin::split<Y>(&mut coin_y, value_y, ctx);
         let output_min = get_output<X,Y,Y>(self, value_y);
         let (coin_x, _, _) = swap_for_x_<X,Y>(self, coin_y_split, output_min, clock, ctx);
-        add_liquidity<X,Y>(self, coin_x, coin_y, lp, deposit_x_min, deposit_y_min,clock, ctx);
+        add_liquidity<X,Y>(self, coin_x, coin_y, lp, deposit_x_min, deposit_y_min,  clock, ctx);
     }
     /// FlashLoan's fee revenue goes to LP holder
     public fun loan_x<X, Y>(
@@ -388,10 +376,12 @@ module suiDouBashi_amm::pool{
         amount: u64,
         ctx: &mut TxContext
     ):(Coin<X>, Receipt<X,Y,X>){
+        assert_pool_unlocked(self);
         let (res_x, _,  _) = get_reserves(self);
 
         assert!( amount <= res_x, ERR_INSUFFICIENT_LOAN);
         let fee_percentage = ( self.fee.fee_percentage as u64 );
+        // charged fee is slightly higher than directly swapping
         let fee = amount / ( FEE_SCALING - fee_percentage ) * fee_percentage + 1;
         let loan = coin::take(&mut self.reserve_x, amount, ctx);
 
@@ -402,10 +392,10 @@ module suiDouBashi_amm::pool{
         amount: u64,
         ctx: &mut TxContext
     ):(Coin<Y>, Receipt<X,Y,Y>){
+        assert_pool_unlocked(self);
         let (_, res_y,  _) = get_reserves(self);
 
         assert!( amount <= res_y, ERR_INSUFFICIENT_LOAN);
-        // charged fee is slightly hider than directly swapping.
         let fee_percentage = ( self.fee.fee_percentage as u64 );
         let fee = amount / ( FEE_SCALING - fee_percentage ) * fee_percentage + 1;
         let loan = coin::take(&mut self.reserve_y, amount, ctx);
@@ -481,32 +471,6 @@ module suiDouBashi_amm::pool{
         );
         pool_id
     }
-    #[test_only]
-    public fun add_liquidity_validate(
-        input_x:u64,
-        input_y:u64,
-        res_x:u64,
-        res_y:u64,
-        deposit_x_min:u64,
-        deposit_y_min:u64,
-    ):(u64, u64){
-        if (res_x == 0 && res_y == 0){
-            (input_x, input_y)
-        }else{
-            let opt_y  = quote(res_x, res_y, input_x);
-            if (opt_y <= input_y){
-                assert!(opt_y >= deposit_y_min, ERR_INSIFFICIENT_INPUT);
-
-                (input_x, opt_y)
-            }else{
-                let opt_x = quote(res_y, res_x, input_y);
-                assert!(opt_x <= input_x, ERR_INSIFFICIENT_INPUT);
-                assert!(opt_x >= deposit_x_min, ERR_INSIFFICIENT_INPUT);
-
-                (opt_x, input_y)
-            }
-        }
-    }
     fun add_liquidity_<X, Y>(
         pool: &mut Pool<X, Y>,
         coin_x: Coin<X>,
@@ -523,8 +487,6 @@ module suiDouBashi_amm::pool{
         let value_x = coin::value(&coin_x);
         let value_y = coin::value(&coin_y);
         assert!(value_x > 0 && value_y > 0, ERR_EMPTY_INPUT);
-
-        // quote the inputs
         let (reserve_x, reserve_y, lp_supply) = get_reserves(pool);
         let ( coin_x, coin_y) = if (reserve_x == 0 && reserve_y == 0){
             (coin_x, coin_y)
@@ -557,7 +519,7 @@ module suiDouBashi_amm::pool{
         // mint LP
         let deposit_x = coin::value(&coin_x);
         let deposit_y = coin::value(&coin_y);
-        let lp_output = if( balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply) == 0){
+        let lp_output = if(balance::supply_value<LP_TOKEN<X,Y>>(&pool.lp_supply) == 0){
             let amount = (amm_math::mul_sqrt(deposit_x, deposit_y) - MINIMUM_LIQUIDITY);
             let min = balance::increase_supply<LP_TOKEN<X, Y>>(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
             transfer::public_transfer(coin::from_balance(min,ctx), @0x00);
@@ -580,23 +542,6 @@ module suiDouBashi_amm::pool{
             deposit_x,
             deposit_y,
         )
-    }
-    #[test_only]
-    public fun remove_liquidity_validate<X, Y>(
-        pool: &Pool<X,Y>,
-        lp_value:u64,
-        withdrawl_x_min:u64,
-        withdrawl_y_min:u64,
-    ):(u64, u64){
-        let (res_x, res_y, lp_s) = get_reserves(pool);
-        let withdrawl_x = quote(lp_s, res_x, lp_value);
-        let withdrawl_y = quote(lp_s, res_y, lp_value);
-
-        assert!(withdrawl_x > 0 && withdrawl_y > 0, ERR_EMPTY_INPUT);
-        assert!(withdrawl_x >= withdrawl_x_min, ERR_INSIFFICIENT_INPUT);
-        assert!(withdrawl_y >= withdrawl_y_min, ERR_INSIFFICIENT_INPUT);
-
-        (withdrawl_x, withdrawl_y)
     }
     fun remove_liquidity_<X, Y>(
         pool:&mut Pool<X, Y>,
@@ -632,6 +577,7 @@ module suiDouBashi_amm::pool{
             lp_value
         )
     }
+
     fun swap_for_y_<X, Y>(
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
@@ -755,10 +701,10 @@ module suiDouBashi_amm::pool{
         self.last_block_timestamp = ts;
     }
 
+    /// IMPORTANT: have to be called for settlement before any lp balance updated
     fun update_lp_<X,Y>(self: &Pool<X,Y>, lp_position: &mut LP<X,Y>){
         let lp_balance = get_lp_balance(lp_position);
         if(lp_balance > 0){
-            // record down the percentage diffreence
             let delta_x = self.fee.index_x - lp_position.index_x;
             let delta_y = self.fee.index_y - lp_position.index_y;
 
@@ -773,9 +719,7 @@ module suiDouBashi_amm::pool{
         };
         lp_position.index_x = self.fee.index_x;
         lp_position.index_y = self.fee.index_y;
-
     }
-    /// Update global fee distribution when swapping
     fun update_fee_index_x_<X,Y>(self: &mut Pool<X,Y>, fee_x: u64 ){
         let ratio_x = (fee_x as u256) * SCALE_FACTOR / (get_total_supply(self) as u256);
         self.fee.index_x = self.fee.index_x + ratio_x;
@@ -817,7 +761,6 @@ module suiDouBashi_amm::pool{
         let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
         let len = table_vec::length(&self.observations);
         if(len == 1){
-            // only gensis observation exist
             return 0
         }else if(ts == observation.timestamp){
             observation = table_vec::borrow(&self.observations, len - 2 );
@@ -838,7 +781,6 @@ module suiDouBashi_amm::pool{
         let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
         let len = table_vec::length(&self.observations);
         if(len == 1){
-            // only gensis observation exist
             return 0
         }else if(ts == observation.timestamp){
             observation = table_vec::borrow(&self.observations, len - 2 );
@@ -851,6 +793,7 @@ module suiDouBashi_amm::pool{
     }
 
     public fun quote_TWAP<X,Y,T>(self: &Pool<X,Y>, input: u64, granularity: u64): u64{
+        assert_valid_type<X,Y,T>();
         let prices = prices<X,Y,T>(self, input, granularity);
         let cumulative = 0;
         let (i, len) = (0, vec::length(&prices));
@@ -862,9 +805,11 @@ module suiDouBashi_amm::pool{
         cumulative / granularity
     }
     public fun prices<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64): vector<u64> {
+        assert_valid_type<X,Y,T>();
         smaple<X,Y,T>(self, input, points, 1)
     }
     public fun smaple<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64, size: u64):vector<u64>{
+        assert_valid_type<X,Y,T>();
         let prices = vec::empty<u64>();
         let len = table_vec::length(&self.observations) - 1;
         let start_idx = len - ( points * size );
@@ -886,8 +831,6 @@ module suiDouBashi_amm::pool{
         prices
     }
 
-    // TODO: remove public, currently for teseting usage
-    // - Fee Distribution
     public entry fun claim_fees_player<X,Y>(
         self: &mut Pool<X,Y>,
         lp_position: &mut LP<X,Y>,

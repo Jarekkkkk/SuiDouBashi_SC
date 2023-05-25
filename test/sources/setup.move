@@ -30,7 +30,6 @@ module test::setup{
     public fun stake_1(): u64 { math::pow(10, 6)}
     // time utility
     public fun start_time(): u64 { 1672531200 }
-    public fun four_years(): u64 { 4 * 365 * 86400 }
     public fun week(): u64 { 7 * 86400 }
     public fun day(): u64 { 86400 }
 
@@ -79,7 +78,6 @@ module test::setup{
 
 
     use suiDouBashi_vest::minter::{Self, Minter};
-    use suiDouBashi_vest::reward_distributor;
     use suiDouBashi_vsdb::vsdb::VSDBRegistry;
 
     public fun deploy_minter(clock: &mut Clock, s: &mut Scenario){
@@ -91,7 +89,6 @@ module test::setup{
             let claim_amounts = vec::empty<u64>();
             // maxL 20M
             minter::initialize(sdb_cap, &mut vsdb_reg, 20 * sui_1M(), claimants, claim_amounts, clock, ctx(s));
-            reward_distributor::init_for_testing(ctx(s));
             test::return_shared(vsdb_reg);
         };
         next_tx(s,a);{

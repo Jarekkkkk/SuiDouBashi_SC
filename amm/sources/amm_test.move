@@ -126,7 +126,7 @@ module suiDouBashi_amm::amm_test{
             let pool_gov = test::take_shared<PoolReg>(test);
             pool_reg::create_pool<X, Y>(
                 &mut pool_gov,
-                false,
+                true,
                 &meta_x,
                 &meta_y,
                 3,
@@ -359,9 +359,7 @@ module suiDouBashi_amm::amm_test{
         };
         next_tx(test, trader);{
             let is_coin_y = test::has_most_recent_for_address<Coin<Y>>(trader);
-            let pool = test::take_shared<Pool< X, Y>>(test);
             assert!(!is_coin_y, 0);
-            test::return_shared(pool);
         };
     }
 
@@ -392,10 +390,10 @@ module suiDouBashi_amm::amm_test{
         next_tx(test, trader);{
             let pool = test::take_shared<Pool<X,Y>>(test);
             let input = 1_000_000_000;
-            assert!(pool::current_x(&pool, input, clock) == 900329889, 404);
-            assert!(pool::current_y(&pool, input, clock) == 1110469546, 404);
-            assert!(pool::quote_TWAP<X,Y,X>(&pool, input, 1) == 1110987668, 404);
-            assert!(pool::quote_TWAP<X,Y,Y>(&pool, input, 1) == 899910008, 404);
+            assert!(pool::current_x(&pool, input, clock) == 999711070, 404);
+            assert!(pool::current_y(&pool, input, clock) == 1000287277, 404);
+            assert!(pool::quote_TWAP<X,Y,X>(&pool, input, 1) == 1000290756, 404);
+            assert!(pool::quote_TWAP<X,Y,Y>(&pool, input, 1) == 999707579, 404);
             test::return_shared(pool);
         }
     }

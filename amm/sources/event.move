@@ -40,9 +40,7 @@ module suiDouBashi_amm::event{
         amount_y: u64
     }
 
-
     // - AMM
-
     public fun pool_created <X, Y>(pool_id: ID, creator: address){
         emit(
             PoolCreated<X,Y>{

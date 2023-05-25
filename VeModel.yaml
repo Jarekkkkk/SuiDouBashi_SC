@@ -194,7 +194,7 @@ paths:
                 type: array
                 items:
                   type: string
-  /voter/vsdb/initialize_voting:
+  /voter/vsdb/initialize:
     post:
       tags:
         - Voter
@@ -220,7 +220,7 @@ paths:
       responses:
         '200':
           description: successful operation
-  /voter/vsdb/initialized:
+  /voter/vsdb/is_initialized:
     get:
       tags:
         - Voter
@@ -318,7 +318,7 @@ paths:
               schema:
                 type: integer
                 format: int64
-  /voter/vsdb/drop_voting_state:
+  /voter/vsdb/clear:
     delete:
       tags:
         - "Voter"

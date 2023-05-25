@@ -144,8 +144,6 @@ paths:
               properties:
                   pool:
                     type: string
-                  coin_y:
-                    type: string
                   lp:
                     type: string
                   value:
@@ -195,12 +193,6 @@ paths:
                     type: string
                   lp:
                     type: string
-                  deposit_x_min:
-                    type: integer
-                    format: int64
-                  deposit_y_min:
-                    type: integer
-                    format: int64
                   clock:
                     type: string
         required: true
@@ -251,12 +243,6 @@ paths:
                     type: string
                   lp:
                     type: string
-                  deposit_x_min:
-                    type: integer
-                    format: int64
-                  deposit_y_min:
-                    type: integer
-                    format: int64
                   clock:
                     type: string
         required: true

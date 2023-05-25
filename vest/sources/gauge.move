@@ -34,20 +34,13 @@ module suiDouBashi_vest::gauge{
         id: UID,
         is_alive:bool,
         pool: ID,
-
-        // LP
         total_supply: LP<X,Y>,
         balance_of: Table<address, u64>,
-
         fees_x: Balance<X>,
         fees_y: Balance<Y>,
-
         supply_checkpoints: TableVec<SupplyCheckpoint>, // total LP staked amount
-
         checkpoints: Table<address, TableVec<Checkpoint>>, // each address can stake once for each pool
-
-        // voting, distributing, fee
-        supply_index: u256, // track the balance
+        supply_index: u256,
         claimable: u64
     }
 

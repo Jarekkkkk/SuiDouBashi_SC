@@ -541,7 +541,6 @@ module suiDouBashi_vest::internal_bribe{
                 start_timestamp = ts;
             };
         };
-
         return ( reward_token_stored, start_timestamp )
     }
 

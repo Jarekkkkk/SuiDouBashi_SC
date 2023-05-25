@@ -12,7 +12,8 @@ module suiDouBashi_vest::minter{
     use suiDouBashi_vest::err;
     use suiDouBashi_vest::event;
     use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
-    use suiDouBashi_vest::reward_distributor::{Self, Distributor};
+
+    //use suiDouBashi_vest::reward_distributor::{Self, Distributor};
 
     use sui::math;
 
@@ -21,7 +22,6 @@ module suiDouBashi_vest::minter{
     const PRECISION: u64 = 1000;
     const TAIL_EMISSION: u64 = 2; // minium 0.2%
     const WEEKLY: u256 = 15_000_000 ; // 15M
-    const LOCK: u64 = { 86400 * 365 * 4 };
 
     const MAX_TEAM_RATE: u64 = 50; // 50 bps = 5%
 
@@ -32,7 +32,7 @@ module suiDouBashi_vest::minter{
     struct Minter has key{
         id: UID,
         supply: Supply<SDB>,
-        balance: Balance<SDB>,
+        balance: Balance<SDB>, // no need (?)
         team: address,
         team_rate: u64,
         active_period: u64,
@@ -40,7 +40,7 @@ module suiDouBashi_vest::minter{
     }
 
     public fun balance(self: &Minter): u64 { balance::value(&self.balance) }
-
+    public fun total_sypply(self: &Minter): u64 { balance::supply_value(&self.supply) }
 
     fun init(ctx: &mut TxContext){
         transfer::transfer(
@@ -66,7 +66,7 @@ module suiDouBashi_vest::minter{
             team: tx_context::sender(ctx),
             team_rate: 30,
             active_period: tx_context::epoch_timestamp_ms(ctx) / WEEK * WEEK,
-            weekly: 15_000_000 * (math::pow(10, 9)) // 15M
+            weekly: 50_000 * (math::pow(10, 9)) // 15M
         };
         let sdb_balance = balance::increase_supply(&mut minter.supply, initial_amount);
 
@@ -76,7 +76,7 @@ module suiDouBashi_vest::minter{
             let ads = vec::pop_back(&mut claimants);
             let amount = vec::pop_back(&mut claim_amounts);
             let sdb_coin = coin::take(&mut sdb_balance, amount, ctx);
-            vsdb::lock_for(vsdb_reg, sdb_coin, 4 * 365 * 86400, ads, clock, ctx);
+            vsdb::lock_for(vsdb_reg, sdb_coin, vsdb::max_time(), ads, clock, ctx);
         };
 
         balance::join(&mut minter.balance, sdb_balance);
@@ -118,11 +118,11 @@ module suiDouBashi_vest::minter{
         (((((minted as u128) * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2) as u64 )
     }
 
-     // TODO: add firned module
-     /// update period can only be called once per epoch (1 week)
-     public fun update_period (
+    // TODO: add firned module
+    /// update period can only be called once per epoch (1 week)
+     public (friend) fun update_period (
         self: &mut Minter,
-        distributor: &mut Distributor,
+        //distributor: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry ,
         clock: &Clock,
         ctx: &mut TxContext
@@ -135,10 +135,12 @@ module suiDouBashi_vest::minter{
             self.weekly = weekly_emission(self, vsdb_reg, clock);
 
             let weekly = self.weekly;
+
             // rebase
-            let rebase = calculate_growth(self, vsdb_reg, weekly, clock);
-            let team_emission = (self.team_rate * (rebase + weekly)) / (PRECISION - self.team_rate);
-            let required = rebase + weekly + team_emission;
+            //let rebase = calculate_growth(self, vsdb_reg, weekly, clock);
+
+            let team_emission = (self.team_rate * weekly) / (PRECISION - self.team_rate);
+            let required = weekly + team_emission;
             let balance = balance::value(&self.balance);
 
             if(required > balance){
@@ -151,11 +153,13 @@ module suiDouBashi_vest::minter{
             let team_coin = coin::take(&mut self.balance, team_emission, ctx);
             transfer::public_transfer(team_coin, self.team);
             // rebase
-            let rebase_coin = coin::take(&mut self.balance, rebase, ctx);
-            reward_distributor::deposit_reward(distributor, rebase_coin);
+
+            //{ // remove rebase
+            //reward_distributor::deposit_reward(distributor, rebase_coin);
             // checkpoint balance that was just distributed
-            reward_distributor::checkpoint_token(distributor, clock);
-            reward_distributor::checkpoint_total_supply(distributor, vsdb_reg, clock);
+            //reward_distributor::checkpoint_token(distributor, clock);
+            //reward_distributor::checkpoint_total_supply(distributor, vsdb_reg, clock);
+            //}
 
             event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg, clock), circulating_emission(self, vsdb_reg, clock));
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))
@@ -163,11 +167,9 @@ module suiDouBashi_vest::minter{
         option::none()
      }
 
-
      public fun buyback(_cap: &MinterCap, self: &mut Minter, sdb: Coin<SDB>){
         balance::decrease_supply(&mut self.supply, coin::into_balance(sdb));
      }
-
 
     #[test_only] public fun mint_sdb(self: &mut Minter, value: u64, ctx: &mut TxContext):Coin<SDB>{
         coin::from_balance(balance::increase_supply(&mut self.supply, value), ctx)

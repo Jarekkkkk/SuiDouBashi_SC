@@ -68,7 +68,7 @@ module test::main{
         next_tx(s, a);{ // create lock
             let reg = test::take_shared<VSDBRegistry>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_1B(), ctx(s)), setup::four_years(), clock, ctx(s));
+            vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_1B(), ctx(s)), vsdb::max_time(), clock, ctx(s));
 
             test::return_to_sender(s, sdb);
             test::return_shared(reg);
@@ -77,11 +77,11 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >=  4404404404910976000, 1);
+            assert!(voting >=  4940476190464377600, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
-            assert!(vsdb::total_VeSDB(&reg, clock) == 4999999999910976000, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 4940476190464377600, 1);
             assert!(vsdb::get_minted(&reg) == 1, 1);
-            assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
@@ -95,7 +95,7 @@ module test::main{
             let reg = test::take_shared<VSDBRegistry>(s);
 
             vsdb::increase_unlock_amount(&mut reg, &mut vsdb, coin::split(&mut sdb, 5 * setup::sui_1B(), ctx(s)), clock);
-              vsdb::increase_unlock_time(&mut reg, &mut vsdb, setup::four_years(), clock);
+              vsdb::increase_unlock_time(&mut reg, &mut vsdb, vsdb::max_time(), clock);
 
             test::return_to_sender(s, sdb);
             test::return_to_sender(s, vsdb);
@@ -105,12 +105,12 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >= 9999999999948096000, 1);
+            assert!(voting >= 9880952380950268800, 1);
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
 
-            assert!(vsdb::total_VeSDB(&reg, clock) == 9999999999948096000, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 9880952380950268800, 1);
             assert!(vsdb::get_minted(&reg) == 1, 1);
-            assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
 
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
@@ -118,8 +118,8 @@ module test::main{
         next_tx(s,a);{ // create 2 additional new VeSDB
             let reg = test::take_shared<VSDBRegistry>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_100M(), ctx(s)), setup::four_years(), clock, ctx(s));
-            vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_100M(), ctx(s)), setup::four_years(), clock, ctx(s));
+            vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_100M(), ctx(s)), vsdb::max_time(), clock, ctx(s));
+            vsdb::lock(&mut reg, coin::split(&mut sdb, 5 * setup::sui_100M(), ctx(s)), vsdb::max_time(), clock, ctx(s));
 
             test::return_to_sender(s, sdb);
             test::return_shared(reg);
@@ -129,11 +129,11 @@ module test::main{
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting >= 440440499877568000, 1);
+            assert!(voting >= 494047619033529600, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(),1);
-            assert!(vsdb::total_VeSDB(&reg, clock) == 10999999999703232000, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 10869047619017328000, 1);
             assert!(vsdb::get_minted(&reg) == 3, 1);
-            assert!( vsdb::get_user_epoch(&vsdb) == 1, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);
@@ -158,13 +158,13 @@ module test::main{
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting >= 10404404404955520000, 1);
+            assert!(voting >= 10869047619038841600, 1);
             assert!(vsdb::locked_balance(&vsdb) == 110 * setup::sui_100M(),1);
-            assert!( vsdb::get_user_epoch(&vsdb) == 3, 0);
+            assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
             // check NFTs are removed from global storage
             assert!(!test::was_taken_from_address(a, id),1); // not exist
             assert!(!test::was_taken_from_address(a, id_1),1); // not exist
-            assert!(vsdb::total_VeSDB(&reg, clock) == 10999999999955520000, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 10869047619038841600, 1);
             assert!(vsdb::get_minted(&reg) == 1, 1);
 
             test::return_to_sender(s, vsdb);
@@ -175,7 +175,6 @@ module test::main{
     use suiDouBashi_vest::internal_bribe::{InternalBribe};
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::voter::{Self, Voter};
-    use suiDouBashi_vest::reward_distributor::{Distributor};
     use suiDouBashi_amm::pool::{Self, LP};
     use sui::table;
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
@@ -228,17 +227,16 @@ module test::main{
         next_tx(s,a);{ // Actions: distribute weekly emissions
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
-            let distributor = test::take_shared<Distributor>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
 
-            voter::distribute_(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+
+            voter::distribute_(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
             test::return_shared(minter);
-            test::return_shared(distributor);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
@@ -247,32 +245,29 @@ module test::main{
         next_tx(s,c);{ // Assertion: first time distribution
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
-            let distributor = test::take_shared<Distributor>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let reward = gauge::borrow_reward(&gauge);
             let sdb_team = test::take_from_sender<Coin<SDB>>(s);
 
            { // new weekly index
-                let _weekly = 14850000000000000;
-                let prev_idx = 85012;
+                let _weekly = 15071747136074714; // locked ratio is too low
+                let prev_idx = 95382;
                 let total_voting_weight = voter::get_total_weight(&voter);
                 let index = prev_idx + (_weekly as u256) * SCALE_FACTOR / (total_voting_weight as u256);
                 assert!(voter::get_index(&voter) == index && index == gauge::get_supply_index(&gauge), 404);
             };
-            let _new_claiabe = 7425000000499992;
+            let _new_claiabe = 7535873568537349; // have to hard-coded, we had reset it in the distribute function
             assert!(gauge::get_reward_rate(reward) == _new_claiabe / (7 * 86400), 404);
 
-
-            assert!(coin::value(&sdb_team) == 523154306979953 , 404);
-            assert!(voter::get_balance(&voter) == 7425000000500008, 404);
-            assert!(gauge::get_reward_balance(reward) == 7425000001413592, 404);
+            assert!(coin::value(&sdb_team) == 466136509363135 , 404);
+            assert!(voter::get_balance(&voter) == 7535873568537365, 404);
+            assert!(gauge::get_reward_balance(reward) == 7535873569450949, 404);
             assert!(gauge::get_claimable(&gauge) == 0, 404);
 
             burn(sdb_team);
             test::return_shared(voter);
             test::return_shared(gauge);
             test::return_shared(minter);
-            test::return_shared(distributor);
         };
         next_tx(s,a);{ // Action: staker A withdraw weekly emissions
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -287,7 +282,7 @@ module test::main{
 
             // staked for 6 days, previous epoch rate stay at 1
             assert!(coin::value(&sdb) == 1 * 6 * 86400, 404);
-            assert!( gauge::get_reward_balance(reward) == 7425000001413592 - coin::value(&sdb), 404);
+            assert!( gauge::get_reward_balance(reward) == 7535873569450949 - coin::value(&sdb), 404);
             // reward
             assert!(gauge::get_period_finish(reward) == get_time(clock) + setup::week() , 404);
             assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock) , 404);
@@ -382,17 +377,15 @@ module test::main{
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
-            let distributor = test::take_shared<Distributor>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
 
-            voter::distribute_(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+            voter::distribute_(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
             test::return_shared(minter);
-            test::return_shared(distributor);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
@@ -451,9 +444,8 @@ module test::main{
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
 
-            // only estimation, wouldn't be accuate until we
             let prev_earned = gauge::earned(&gauge, a, clock);
-            assert!(prev_earned == 109386160713, 404);
+            assert!(prev_earned == 122770227411, 404);
             gauge::get_reward(&mut gauge, clock, ctx(s));
             gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
             add_time(clock, 1);
@@ -469,7 +461,6 @@ module test::main{
         let prev_sdb = { // Action: repeated exploitative behavior
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
-            let distributor = test::take_shared<Distributor>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -478,37 +469,37 @@ module test::main{
 
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut distributor, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 add_time(clock, 1);
             };
 
@@ -522,7 +513,6 @@ module test::main{
 
             test::return_shared(voter);
             test::return_shared(minter);
-            test::return_shared(distributor);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
