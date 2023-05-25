@@ -13,7 +13,7 @@ module suiDouBashi_vsdb::vsdb_test{
         let (a, _, _) = people();
         let scenario = test::begin(a);
         let clock = clock::create_for_testing(ctx(&mut scenario));
-        add_time(&mut clock, 1672531200);
+        add_time(&mut clock, 1672531200  * 1000);
 
         test_create_lock_(&mut clock, &mut scenario);
         test_whitelisted_module(&mut clock, &mut scenario);
@@ -28,7 +28,7 @@ module suiDouBashi_vsdb::vsdb_test{
         let scenario = test::begin(a);
         let clock = clock::create_for_testing(ctx(&mut scenario));
         let s = &mut scenario;
-        add_time(&mut clock, 1672531200);
+        add_time(&mut clock, 1672531200  * 1000);
 
         // main
         vsdb::init_for_testing(ctx(s));
@@ -56,7 +56,7 @@ module suiDouBashi_vsdb::vsdb_test{
         let scenario = test::begin(a);
         let clock = clock::create_for_testing(ctx(&mut scenario));
         let s = &mut scenario;
-        add_time(&mut clock, 1672531200);
+        add_time(&mut clock, 1672531200 * 1000);
 
         // main
         vsdb::init_for_testing(ctx(s));
@@ -90,8 +90,8 @@ module suiDouBashi_vsdb::vsdb_test{
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
             let slope = vsdb::calculate_slope(sui_100M());
-            let end = vsdb::round_down_week(get_time(clock) + week());
-            let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock));
+            let end = vsdb::round_down_week(get_time(clock) / 1000 + week());
+            let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock) / 1000);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
@@ -108,8 +108,8 @@ module suiDouBashi_vsdb::vsdb_test{
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
             let slope = vsdb::calculate_slope(sui_100M()); // slope is unchanged
-            let end = vsdb::round_down_week(get_time(clock) + 2 * week());
-            let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock));
+            let end = vsdb::round_down_week(get_time(clock)/1000 + 2 * week());
+            let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock) / 1000);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
             assert!( vsdb::get_player_epoch(&vsdb) == 2, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
@@ -126,16 +126,16 @@ module suiDouBashi_vsdb::vsdb_test{
         next_tx(s, a);{
             let vsdb = test::take_from_sender<VSDB>(s);
             let value = sui_1B() + sui_100M();
-            let end = vsdb::round_down_week(get_time(clock) + 2 * week());
+            let end = vsdb::round_down_week(get_time(clock) / 1000 + 2 * week());
             let slope = vsdb::calculate_slope(value);
-            let bias = vsdb::calculate_bias(value, end, get_time(clock));
+            let bias = vsdb::calculate_bias(value, end, get_time(clock) / 1000);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
             assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);
         };
-        add_time(clock, 3 * week());
+        add_time(clock, 3 * week() * 1000);
         next_tx(s, a);{ // unlock
             let vsdb = test::take_from_sender<VSDB>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
@@ -220,7 +220,7 @@ module suiDouBashi_vsdb::vsdb_test{
     // stake
     public fun stake_1(): u64 { math::pow(10, 6)}
     // time utility
-    public fun start_time(): u64 { 1672531200 }
+    public fun start_time(): u64 { 1672531200  * 1000}
     public fun week(): u64 { 7 * 86400 }
     public fun day(): u64 { 86400 }
 }

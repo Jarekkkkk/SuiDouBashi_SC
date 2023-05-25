@@ -64,7 +64,7 @@ module test::voter_test{
             test::return_to_sender(s, vsdb);
         };
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week()* 1000);
         next_tx(s,a);{ // Action: poke
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -174,7 +174,7 @@ module test::voter_test{
         };
 
         // // Unable reset until the epoch pass
-        add_time(clock, setup::week());
+        add_time(clock, setup::week() * 1000);
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);
@@ -230,7 +230,7 @@ module test::voter_test{
             test::return_to_sender(s, vsdb);
         };
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week()* 1000);
         next_tx(s,a);{ // Action: VSDB holder A voting
             let voter = test::take_shared<Voter>(s);
             let vsdb = test::take_from_sender<VSDB>(s);

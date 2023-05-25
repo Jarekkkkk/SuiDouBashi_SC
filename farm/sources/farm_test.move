@@ -45,8 +45,7 @@ module suiDouBashi_farm::farm_test{
             amm_test::add_liquidity_<SDB, USDC>(setup::sui_100M(), setup::usdc_100M(), clock, s);
         };
         // time
-        set_time(clock, 1684040292);
-        add_time(clock, 0);
+        set_time(clock, 1684040292 * 1000);
     }
 
     fun create_reg(s: &mut Scenario){
@@ -64,7 +63,7 @@ module suiDouBashi_farm::farm_test{
 
         next_tx(s,a);{ // Action: initialize reg
             let reg = test::take_shared<FarmReg>(s);
-            let start_time = get_time(clock) + setup::week();
+            let start_time = get_time(clock) / 1000 + setup::week();
             let duration = 4 * 7 * 86400;
             let sdb = mint<SDB>(625_000 * math::pow(10, 9), ctx(s)); // 625K SDB with 9 decimals
 
@@ -164,7 +163,7 @@ module suiDouBashi_farm::farm_test{
             test::return_shared(reg);
         };
 
-        add_time(clock, 4 * setup::day());
+        add_time(clock, 4 * setup::day() * 1000);
 
         next_tx(s,a);{ // still zero rewards when stake before start time
             let reg = test::take_shared<FarmReg>(s);
@@ -188,7 +187,7 @@ module suiDouBashi_farm::farm_test{
             test::return_shared(reg);
         };
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week() * 1000);
 
         next_tx(s,a);{ // accumulating rewards when staking, 4 days after start_time
              let reg = test::take_shared<FarmReg>(s);
@@ -220,7 +219,7 @@ module suiDouBashi_farm::farm_test{
             test::return_shared(reg);
         };
 
-        add_time(clock, 3 * setup::day());
+        add_time(clock, 3 * setup::day() * 1000);
 
         next_tx(s,a);{
             let reg = test::take_shared<FarmReg>(s);
@@ -250,7 +249,7 @@ module suiDouBashi_farm::farm_test{
             test::return_shared(reg);
         };
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week() * 1000);
 
         next_tx(s,a);
         let harvest = {
@@ -301,7 +300,7 @@ module suiDouBashi_farm::farm_test{
             test::return_shared(reg);
         };
 
-        add_time(clock, 2 * setup::week());
+        add_time(clock, 2 * setup::week() * 1000);
 
         next_tx(s,a);{
             let reg = test::take_shared<FarmReg>(s);
@@ -350,7 +349,7 @@ module suiDouBashi_farm::farm_test{
             let reward_b = ( 28 - 0 ) * 86400 * 258349867 * 3 / 10;
             let reward_c = ( 28 - 0 ) * 86400 * 258349867 * 5 / 10;
             assert!(vsdb::locked_balance(&vsdb) == reward_a + reward_b + reward_c, 404);
-            let time = vsdb::round_down_week(get_time(clock) + 36 * 7 * 86400);
+            let time = vsdb::round_down_week(get_time(clock) / 1000 + 36 * 7 * 86400);
             assert!(vsdb::locked_end(&vsdb) == time, 404);
            std::debug::print(&vsdb);
 

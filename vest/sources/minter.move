@@ -65,7 +65,7 @@ module suiDouBashi_vest::minter{
             balance: balance::zero<SDB>(),
             team: tx_context::sender(ctx),
             team_rate: 30,
-            active_period: tx_context::epoch_timestamp_ms(ctx) / WEEK * WEEK,
+            active_period: tx_context::epoch_timestamp_ms(ctx) / 1000 / WEEK * WEEK,
             weekly: 50_000 * (math::pow(10, 9)) // 15M
         };
         let sdb_balance = balance::increase_supply(&mut minter.supply, initial_amount);
@@ -129,8 +129,8 @@ module suiDouBashi_vest::minter{
     ):  Option<Coin<SDB>>{
         let period = self.active_period;
         // new week
-        if(clock::timestamp_ms(clock) >= period + WEEK){
-            period = ( clock::timestamp_ms(clock) / WEEK * WEEK);
+        if(clock::timestamp_ms(clock) / 1000 >= period + WEEK){
+            period = ( clock::timestamp_ms(clock) / 1000 / WEEK * WEEK);
             self.active_period = period;
             self.weekly = weekly_emission(self, vsdb_reg, clock);
 

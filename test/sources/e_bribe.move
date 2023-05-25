@@ -20,7 +20,7 @@ module test::e_bribe_test{
     public fun external_bribe_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week() * 1000);
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
@@ -66,7 +66,7 @@ module test::e_bribe_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
-                    assert!( vsdb::voting_weight(&vsdb, clock) == 837300806505227859, 404);
+                    assert!( vsdb::voting_weight(&vsdb, clock) == 837301541367073827, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));
@@ -93,7 +93,7 @@ module test::e_bribe_test{
             test::return_to_sender(s, vsdb);
         };
 
-        add_time(clock, setup::week() + 1);
+        add_time(clock, setup::week() * 1000 + 1);
 
         next_tx(s, a);{ // Withdraw weekly emissions after expiry
             let voter = test::take_shared<Voter>(s);
@@ -121,7 +121,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // Assertion: received the reward
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            assert!(coin::value(&sdb) == 16846004620266315, 404);
+            assert!(coin::value(&sdb) == 16846200418723200, 404);
             burn(sdb);
         };
 
@@ -144,10 +144,10 @@ module test::e_bribe_test{
             let sdb = test::take_from_sender<Coin<SDB>>(s);
 
             // unused voting powers are still be counted
-            assert!(coin::value(&usdc) == 8053_428_600, 404);
-            assert!(coin::value(&usdt) == 8053428600, 404);
-            assert!(coin::value(&sui) == 8053428600712, 404);
-            assert!(coin::value(&sdb) == 8053428600712, 404);
+            assert!(coin::value(&usdc) == 8053435099, 404);
+            assert!(coin::value(&usdt) == 8053435099, 404);
+            assert!(coin::value(&sui) == 8053435099622, 404);
+            assert!(coin::value(&sdb) == 8053435099622, 404);
 
             burn(usdc);
             burn(usdt);

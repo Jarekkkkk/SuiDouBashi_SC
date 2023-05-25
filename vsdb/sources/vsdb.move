@@ -71,8 +71,9 @@ module suiDouBashi_vsdb::vsdb{
     public fun get_global_point_history(reg: &VSDBRegistry, epoch: u64): &Point{ table_vec::borrow(&reg.point_history, epoch) }
 
     public fun total_VeSDB(reg: &VSDBRegistry, clock: &Clock): u64{
-        total_VeSDB_at(reg, clock::timestamp_ms(clock))
+        total_VeSDB_at(reg, clock::timestamp_ms(clock) / 1000)
     }
+
     public fun total_VeSDB_at(self: &VSDBRegistry, ts: u64): u64{
         // calculate by latest epoch
         let point = table_vec::borrow(&self.point_history, self.epoch);
@@ -129,7 +130,7 @@ module suiDouBashi_vsdb::vsdb{
 
     // ===== entry =====
     fun init(ctx: &mut TxContext){
-        let point_history = table_vec::singleton<Point>(point::new(i128::zero(), i128::zero(), tx_context::epoch_timestamp_ms(ctx)), ctx);
+        let point_history = table_vec::singleton<Point>(point::new(i128::zero(), i128::zero(), tx_context::epoch_timestamp_ms(ctx)/ 1000), ctx);
         let slope_changes = table::new<u64, I128>(ctx);
 
         transfer::transfer(VSDBCap { id: object::new(ctx)}, tx_context::sender(ctx));
@@ -162,7 +163,7 @@ module suiDouBashi_vsdb::vsdb{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let unlock_time = round_down_week(duration + ts);
 
         assert!(coin::value(&sdb) > 0 , E_ZERO_INPUT);
@@ -184,7 +185,7 @@ module suiDouBashi_vsdb::vsdb{
         extended_duration: u64,
         clock: &Clock,
     ){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let unlock_time = round_down_week(ts + extended_duration );
@@ -211,7 +212,7 @@ module suiDouBashi_vsdb::vsdb{
         let locked_end = locked_end(self);
         let value = coin::value(&sdb);
 
-        assert!(locked_end > clock::timestamp_ms(clock), E_LOCK);
+        assert!(locked_end > clock::timestamp_ms(clock) / 1000, E_LOCK);
         assert!(locked_bal > 0, E_EMPTY_BALANCE);
         assert!(value > 0 , E_ZERO_INPUT);
 
@@ -235,7 +236,7 @@ module suiDouBashi_vsdb::vsdb{
         let locked_end = locked_end(self);
         let locked_bal_ = locked_balance(&vsdb);
         let locked_end_ = locked_end(&vsdb);
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock)/ 1000;
 
         assert!(locked_end_ >= ts , E_LOCK);
         assert!(locked_bal_ > 0, E_EMPTY_BALANCE);
@@ -263,7 +264,7 @@ module suiDouBashi_vsdb::vsdb{
     public entry fun unlock(reg: &mut VSDBRegistry, self: VSDB, clock: &Clock, ctx: &mut TxContext){
         let locked_bal = locked_balance(&self);
         let locked_end = locked_end(&self);
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock)/ 1000;
 
         assert!(ts >= locked_end , E_LOCK);
         assert!(locked_bal > 0, E_EMPTY_BALANCE);
@@ -301,7 +302,7 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     public fun voting_weight(self: &VSDB, clock: &Clock):u64{
-        voting_weight_at(self, clock::timestamp_ms(clock))
+        voting_weight_at(self, clock::timestamp_ms(clock)/ 1000)
     }
 
     public fun voting_weight_at(self: &VSDB, ts: u64): u64{
@@ -344,7 +345,7 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     fun update_player_point_(self: &mut VSDB, clock: &Clock){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock)/ 1000;
         let amount = balance::value(&self.locked_balance.balance);
         let slope = calculate_slope(amount);
         let bias = calculate_bias(amount, self.locked_balance.end, ts);
@@ -375,7 +376,7 @@ module suiDouBashi_vsdb::vsdb{
         let uid = object::new(ctx);
         let id = object::uid_to_inner(&uid);
         let amount = coin::value(&locked_sdb);
-        let voting_weight = i128::as_u128(&calculate_bias(amount, unlock_time, clock::timestamp_ms(clock)));
+        let voting_weight = i128::as_u128(&calculate_bias(amount, unlock_time, clock::timestamp_ms(clock)/ 1000));
         let player_point_history = table::new<u64, Point>(ctx);
 
         let vsdb = VSDB {
@@ -452,7 +453,7 @@ module suiDouBashi_vsdb::vsdb{
         old_locked_end: u64 ,
         clock: &Clock
     ){
-        let time_stamp = clock::timestamp_ms(clock);
+        let time_stamp = clock::timestamp_ms(clock) / 1000;
         let old_dslope = i128::zero();
         let new_dslope = i128::zero();
 

@@ -223,7 +223,7 @@ module suiDouBashi_vest::external_bribe{
         clock: &Clock,
     ){
         let vsdb = object::id(vsdb);
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
 
         if( !table::contains(&self.checkpoints, vsdb)){
             let checkpoints = vec::empty();
@@ -247,7 +247,7 @@ module suiDouBashi_vest::external_bribe{
         self: &mut ExternalBribe<X,Y>,
         clock: &Clock,
     ){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let supply = self.total_supply;
 
         let len = table_vec::length(&self.supply_checkpoints);
@@ -262,7 +262,7 @@ module suiDouBashi_vest::external_bribe{
     }
 
     public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        math::min(clock::timestamp_ms(clock), reward.period_finish)
+        math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
     }
 
     public entry fun get_all_rewards<X,Y>(
@@ -301,7 +301,7 @@ module suiDouBashi_vest::external_bribe{
         if(!table::contains(&reward.last_earn, id)){
             table::add(&mut reward.last_earn, id, 0);
         };
-        *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock);
+        *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock) / 1000;
         if(_reward > 0){
             let coin = coin::take(&mut reward.balance, _reward, ctx);
             let value_x = coin::value(&coin);
@@ -371,7 +371,7 @@ module suiDouBashi_vest::external_bribe{
         let last_epoch_start = bribe_start(checkpoints::balance_ts(cp));
         let last_epoch_end = last_epoch_start + DURATION;
 
-        if(clock::timestamp_ms(clock) > last_epoch_end){
+        if(clock::timestamp_ms(clock) / 1000 > last_epoch_end){
             let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
 
             let rewards =  if(table::contains(&reward.token_rewards_per_epoch, last_epoch_start)){
@@ -428,7 +428,7 @@ module suiDouBashi_vest::external_bribe{
     }
 
     public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock));
+        let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock) / 1000);
         if (!table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){
             0
         }else{
@@ -450,7 +450,7 @@ module suiDouBashi_vest::external_bribe{
         assert!(value > 0, err::empty_coin());
 
         // bribes kick in at the start of next bribe period
-        let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock));
+        let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock) / 1000);
         let epoch_rewards = if(table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){
             *table::borrow(&reward.token_rewards_per_epoch, adjusted_ts)
         }else{

@@ -168,7 +168,6 @@ module suiDouBashi_amm::formula{
     //     let y = 2520572000001255;
 
     //     let r = f(x0 , y );
-    //     std::debug::print(&r);
     //     assert!(r == 160149899619106589403934712464197979, 0);
 
     //     let r = (f(0, 0) as u128 );

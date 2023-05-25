@@ -66,7 +66,7 @@ module test::gauge_test{
             }
         };
 
-        add_time(clock, setup::day());
+        add_time(clock, setup::day() * 1000);
 
         next_tx(s,b);{ // Action: LP B stake LP
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
@@ -94,10 +94,10 @@ module test::gauge_test{
                 assert!(pool::get_lp_balance(&lp) == 1000000 - setup::stake_1(), 0);
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, b) == setup::stake_1(), 0);
-                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) == get_time(clock), 0);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) == get_time(clock)/1000, 0);
                 assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) ==  setup::stake_1(), 0);
                 // supply points index at 1
-                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) == get_time(clock), 404);
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) == get_time(clock)/1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) ==  2 * setup::stake_1(), 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  2 * setup::stake_1() , 1);
@@ -110,10 +110,10 @@ module test::gauge_test{
                 assert!(pool::get_lp_balance(&lp) ==  31622776 - setup::stake_1(), 0);
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, b) == setup::stake_1(), 0);
-                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) == get_time(clock), 0);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) == get_time(clock)/1000, 0);
                 assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 0)) ==  setup::stake_1(), 0);
                 // supply points index at 1
-                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) == get_time(clock), 404);
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) == get_time(clock)/1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 1)) ==  2 * setup::stake_1(), 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == 2 * setup::stake_1() , 1);
@@ -122,7 +122,7 @@ module test::gauge_test{
             }
         };
         // checkpoint only update when previous ts is different,
-        add_time(clock, 1);
+        add_time(clock, 1000);
         next_tx(s,b);{ // Action: LP B unstake
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
@@ -149,10 +149,10 @@ module test::gauge_test{
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, b) == 0, 404);
                 // index at 1
-                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == get_time(clock)/1000, 404);
                 assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) ==  0, 404);
                 // supply points index at 2
-                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) == get_time(clock), 404);
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) == get_time(clock)/1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) ==  setup::stake_1(), 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  setup::stake_1() , 404);
@@ -166,10 +166,10 @@ module test::gauge_test{
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, b) == 0, 404);
                 // index at 1
-                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == get_time(clock)/1000, 404);
                 assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, b), 1)) == 0, 404);
                 // supply points index at 2
-                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) == get_time(clock), 404);
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) == get_time(clock)/1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 2)) ==   setup::stake_1(), 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == setup::stake_1() , 404);

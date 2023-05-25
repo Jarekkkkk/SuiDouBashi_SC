@@ -256,7 +256,7 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock,
     ){
         let vsdb = object::id(vsdb);
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
 
         if( !table::contains(&self.checkpoints, vsdb)){
             let checkpoints = vec::empty();
@@ -294,7 +294,7 @@ module suiDouBashi_vest::internal_bribe{
         self: &mut InternalBribe<X,Y>,
         clock: &Clock,
     ){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let supply = self.total_supply;
 
         let len = table_vec::length(&self.supply_checkpoints);
@@ -313,7 +313,7 @@ module suiDouBashi_vest::internal_bribe{
         // Two scenarios
         // 1. return current time if latest fun  is deposited in 7 days
         // 2  return period_finish bribe has been abandoned over 7 days
-        math::min(clock::timestamp_ms(clock), reward.period_finish)
+        math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
     }
 
     /// allows a voter to claim reward for a given bribe
@@ -353,7 +353,7 @@ module suiDouBashi_vest::internal_bribe{
         reward.reward_per_token_stored = reward_per_token_stored;
         reward.last_update_time = last_update_time;
 
-        *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock);
+        *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock) / 1000;
         *table::borrow_mut(&mut reward.user_reward_per_token_stored, id) = reward_per_token_stored;
 
         if(_reward > 0){
@@ -405,7 +405,7 @@ module suiDouBashi_vest::internal_bribe{
     {
         assert_generic_type<X,Y,T>();
 
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let reward = borrow_reward<X,Y,T>(self);
         let start_timestamp = reward.last_update_time;
         let reward_token_stored = reward.reward_per_token_stored;
@@ -496,7 +496,7 @@ module suiDouBashi_vest::internal_bribe{
     {
         assert_generic_type<X,Y,T>();
 
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let reward = borrow_reward<X,Y,T>(self);
         let start_timestamp = reward.last_update_time;
         let reward_token_stored = reward.reward_per_token_stored;
@@ -645,7 +645,7 @@ module suiDouBashi_vest::internal_bribe{
     }
 
     public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let period_finish = reward.period_finish;
         let reward_rate = reward.reward_rate;
 
@@ -669,7 +669,7 @@ module suiDouBashi_vest::internal_bribe{
         let reward = borrow_reward<X,Y,T>(self);
         assert!(value > 0, err::empty_coin());
 
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         if(reward.reward_rate == 0){
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), 0, ts);
         };

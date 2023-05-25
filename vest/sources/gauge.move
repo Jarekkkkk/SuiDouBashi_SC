@@ -325,7 +325,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
 
         if(!table::contains(&self.checkpoints, staker)){
             table::add(&mut self.checkpoints, staker, table_vec::empty(ctx));
@@ -362,7 +362,7 @@ module suiDouBashi_vest::gauge{
         self: &mut Gauge<X,Y>,
         clock: &Clock,
     ){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let supply = pool::get_lp_balance(&self.total_supply);
 
         let len = table_vec::length(&self.supply_checkpoints);
@@ -377,7 +377,7 @@ module suiDouBashi_vest::gauge{
     }
 
     public fun last_time_reward_applicable<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
-        math::min(clock::timestamp_ms(clock), reward.period_finish)
+        math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
     }
 
     // TODO: add friend module
@@ -405,7 +405,7 @@ module suiDouBashi_vest::gauge{
 
         let _reward = earned<X,Y>(self, staker, clock);
         let reward = borrow_reward_mut<X,Y>(self);
-        *table::borrow_mut(&mut reward.last_earn, staker) = clock::timestamp_ms(clock);
+        *table::borrow_mut(&mut reward.last_earn, staker) = clock::timestamp_ms(clock) / 1000;
         *table::borrow_mut(&mut reward.user_reward_per_token_stored, staker) = reward_per_token_stored;
         if(_reward > 0){
             let coin_x = coin::take(&mut reward.balance, _reward, ctx);
@@ -461,7 +461,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
     ):(u128, u64) // ( reward_per_token_stored, last_update_time)
     {
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let reward = borrow_reward<X,Y>(self);
         let start_timestamp = reward.last_update_time;
         let reward_token_stored = reward.reward_per_token_stored;
@@ -515,7 +515,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock
     ):(u128, u64) // ( reward_per_token_stored, last_update_time)
     {
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let reward = borrow_reward<X,Y>(self);
         let start_timestamp = reward.last_update_time;
         let reward_token_stored = reward.reward_per_token_stored;
@@ -525,7 +525,7 @@ module suiDouBashi_vest::gauge{
         };
 
         if(reward.reward_rate == 0){
-            return ( reward_token_stored, clock::timestamp_ms(clock))
+            return ( reward_token_stored, clock::timestamp_ms(clock) / 1000)
         };
 
         let start_idx = get_prior_supply_index(self, start_timestamp);
@@ -683,7 +683,7 @@ module suiDouBashi_vest::gauge{
     }
 
     public fun left<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let period_finish = reward.period_finish;
         let reward_rate = reward.reward_rate;
 
@@ -710,7 +710,7 @@ module suiDouBashi_vest::gauge{
         let value = coin::value(&coin);
         let reward = borrow_reward<X,Y>(self);
         assert!(value > 0, err::zero_input());
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         if(reward.reward_rate == 0){
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), 0, ts);
         };

@@ -53,7 +53,7 @@ module test::bribe_test{
                 let reward = gauge::borrow_reward(&gauge);
                 assert!( gauge::get_reward_rate(reward) == reward_index, 0);
                 assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
-                assert!( gauge::get_period_finish(reward) == get_time(clock) + setup::week(), 0);
+                assert!( gauge::get_period_finish(reward) == get_time(clock) / 1000 + setup::week(), 0);
                 assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
                 assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == reward_index, 0);
                 assert!( gauge::reward_per_token(&gauge, clock) == 0, 404);
@@ -64,7 +64,7 @@ module test::bribe_test{
                 let reward = gauge::borrow_reward(&gauge);
                 assert!( gauge::get_reward_rate(reward) == reward_index, 0);
                 assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
-                assert!( gauge::get_period_finish(reward) == get_time(clock) + setup::week(), 0);
+                assert!( gauge::get_period_finish(reward) == get_time(clock)/ 1000 + setup::week(), 0);
                 assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
                 assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == reward_index, 0);
                 assert!( gauge::reward_per_token(&gauge, clock) == 0, 404);
@@ -73,7 +73,7 @@ module test::bribe_test{
             {// e_bribe_a
                 let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
                 let reward = e_bribe::borrow_reward<USDC, USDT, SDB>(&e_bribe);
-                let epoch_start = e_bribe::get_epoch_start(get_time(clock));
+                let epoch_start = e_bribe::get_epoch_start(get_time(clock)/ 1000);
                 assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
                 assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
                 assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
@@ -83,7 +83,7 @@ module test::bribe_test{
             {// e_bribe_a
                 let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
                 let reward = e_bribe::borrow_reward<SDB, USDC, SDB>(&e_bribe);
-                let epoch_start = e_bribe::get_epoch_start(get_time(clock));
+                let epoch_start = e_bribe::get_epoch_start(get_time(clock)/ 1000);
                 assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
                 assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
                 assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
@@ -92,7 +92,7 @@ module test::bribe_test{
             };
         };
         // stake for a day
-        add_time(clock, setup::day());
+        add_time(clock, setup::day() * 1000);
 
         next_tx(s,a);{ // Action: LP A unstake & claim rewards
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
@@ -131,17 +131,17 @@ module test::bribe_test{
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
                 // index at 1
-                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == get_time(clock)/ 1000, 404);
                 assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) ==  0, 404);
                 // supply points index at 1
-                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock), 404);
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock)/ 1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==  0, 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  0, 404);
                 // receeive accumulated rewards
                 assert!(coin::value(&sdb_reward) == 86400, 404);
                 assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000000000000, 404);
-                assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
+                assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock)/ 1000, 404);
 
 
                 test::return_shared(gauge);
@@ -157,17 +157,17 @@ module test::bribe_test{
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
                 // index at 1
-                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == get_time(clock), 404);
+                assert!(checkpoints::balance_ts(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == get_time(clock)/ 1000, 404);
                 assert!(checkpoints::balance(table_vec::borrow(gauge::checkpoints_borrow(&gauge, a), 1)) == 0, 404);
                 // supply points index at 1
-                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock), 404);
+                assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock)/ 1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==   0, 404);
                 // total staked lp
                 assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == 0 , 404);
                 // receeive accumulated rewards
                 assert!(coin::value(&sdb_reward) == 86400, 404);
                 assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000000000000, 404);
-                assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock), 404);
+                assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock)/ 1000, 404);
 
                 test::return_shared(gauge);
                 burn(sdb_reward);
@@ -193,6 +193,6 @@ module test::bribe_test{
             test::return_shared(pool_b);
         };
 
-        add_time(clock, setup::week());
+        add_time(clock, setup::week() * 1000);
     }
 }

@@ -162,8 +162,8 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
     ):Potato{
         let voting_state = voting_state_borrow_mut(vsdb);
-        assert!((clock::timestamp_ms(clock) / DURATION) * DURATION > voting_state.last_voted, err::already_voted());
-        voting_state.last_voted = clock::timestamp_ms(clock);
+        assert!((clock::timestamp_ms(clock) / 1000 / DURATION) * DURATION > voting_state.last_voted, err::already_voted());
+        voting_state.last_voted = clock::timestamp_ms(clock) / 1000;
 
         // copy and clear pool_votes fields
         let weights = voting_state.pool_votes;

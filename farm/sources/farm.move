@@ -118,7 +118,7 @@ module suiDouBashi_farm::farm{
     ){
         assert_governor(reg, ctx);
         assert!(!reg.initialized, ERR_INITIALIZED);
-        assert!(start_time > clock::timestamp_ms(clock) || duration != 0, ERR_INVALID_TIME);
+        assert!(start_time > clock::timestamp_ms(clock) / 1000 || duration != 0, ERR_INVALID_TIME);
 
         let end_time = start_time + duration;
         let sdb_per_second = coin::value(&sdb) / duration;
@@ -143,7 +143,7 @@ module suiDouBashi_farm::farm{
         assert_governor(reg, ctx);
         assert!(alloc_point <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);
 
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
 
         let last_reward_time = if(ts > reg.start_time){
             ts
@@ -186,7 +186,7 @@ module suiDouBashi_farm::farm{
     public fun pending_rewards<X,Y>(self: &Farm<X,Y>, reg: &FarmReg, player: address, clock: &Clock): u64{
         if(!table::contains(&self.player_infos, player)) return 0;
 
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let player_info = table::borrow(&self.player_infos, player);
         let index = self.index;
         let lp_balance = pool::get_lp_balance(&self.lp_balance);
@@ -202,7 +202,7 @@ module suiDouBashi_farm::farm{
 
     /// settle accumulated rewards
     fun update_farm<X,Y>(reg: &FarmReg, self: &mut Farm<X,Y>, clock: &Clock){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
 
         if(ts <= self.last_reward_time) return;
 
@@ -339,7 +339,7 @@ module suiDouBashi_farm::farm{
         assert_setup(reg);
         let player = tx_context::sender(ctx);
         assert!(table::contains(&reg.total_pending, player) && *table::borrow(&reg.total_pending, player) > 0, ERR_NO_REWARD);
-        assert!(clock::timestamp_ms(clock) >= reg.end_time, ERR_NOT_FINISH);
+        assert!(clock::timestamp_ms(clock) / 1000 >= reg.end_time, ERR_NOT_FINISH);
         let reward = table::borrow(&reg.total_pending, player);
         let sdb = coin::take(&mut reg.sdb_balance, *reward, ctx);
         vsdb::lock(vsdb_reg, sdb, LOCK, clock, ctx);
