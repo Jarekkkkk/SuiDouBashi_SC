@@ -444,9 +444,6 @@ module test::main{
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
 
-            let prev_earned = gauge::earned(&gauge, a, clock);
-           std::debug::print(&prev_earned);
-            //assert!(prev_earned == 122770227411, 404);
             gauge::get_reward(&mut gauge, clock, ctx(s));
             gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
             add_time(clock, 1);
@@ -545,5 +542,4 @@ module test::main{
             test::return_shared(vsdb_reg);
         };
     }
-
 }

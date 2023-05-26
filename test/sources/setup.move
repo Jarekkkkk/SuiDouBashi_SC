@@ -19,7 +19,7 @@ module test::setup{
     public fun usdc_100M(): u64 { math::pow(10, 14)}
     public fun usdc_1B(): u64 { math::pow(10, 15) }
     public fun usdc_10B(): u64 { math::pow(10, 16) }
-    // 9 decimals, max value: 18.44B
+    // 9 decimals, max coin supply: 18.44B
     public fun sui_1(): u64 { math::pow(10, 9) }
     public fun sui_100K(): u64 { math::pow(10, 14) }
     public fun sui_1M(): u64 { math::pow(10, 15) }
@@ -62,7 +62,6 @@ module test::setup{
         let (i, len) = (0, vec::length(&owners));
         while( i < len ){
             let owner = vec::pop_back(&mut owners);
-            // 1B for each owner
             let v = math::pow(10, 9);
             let usdc = coin::mint_for_testing<USDC>( v * usdc_1(), ctx);
             let usdt = coin::mint_for_testing<USDT>( v * usdc_1(), ctx);
