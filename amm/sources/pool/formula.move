@@ -121,7 +121,6 @@ module suiDouBashi_amm::formula{
     #[test] fun test_sqrt256(){
         let foo = sqrt_u256(3);
         let bar = sqrt_u256(100);
-
         let baz = sqrt_u256(289465520400);
 
         assert!(foo == 1, 0);
@@ -149,7 +148,6 @@ module suiDouBashi_amm::formula{
         assert!(out == 2513_05799999, 0);
 
     }
-
     #[test]
     fun test_coin_out_vise_vera() {
         let out = stable_swap_output(
@@ -161,63 +159,4 @@ module suiDouBashi_amm::formula{
         );
         assert!(out == 2513057999, 0);
     }
-
-    // #[test]
-    // fun test_f() {
-    //     let x0 = 10000518365287;
-    //     let y = 2520572000001255;
-
-    //     let r = f(x0 , y );
-    //     assert!(r == 160149899619106589403934712464197979, 0);
-
-    //     let r = (f(0, 0) as u128 );
-    //     assert!(r == 0, 1);
-    // }
-
-    // #[test]
-    // fun test_d() {
-    //     let x0 = 10000518365287;
-    //     let y = 2520572000001255;
-
-    //     let z = d(x0, y);
-    //     let r = (( z / 100_000_000 ) as u128 );
-
-    //     assert!(r == 1906093763356467088703995764640866982, 0);
-
-    //     let x0 = 5000000000;
-    //     let y = 10000000000000000;
-
-    //     let z = d(x0, y);
-    //     let r = ( ( z / 100000000) as u128);
-
-    //     assert!(r == 15000000000001250000000000000000000, 1);
-
-    //     let x0 = 1;
-    //     let y = 2;
-
-    //     let z = d(x0, y);
-    //     let r = (z as u128);
-    //     assert!(r == 13, 2);
-    // }
-
-    // #[test]
-    // fun test_k__compute() {
-    //     // 0.3 ^ 3 * 0.5 + 0.5 ^ 3 * 0.3 = 0.051 (12 decimals)
-    //     let k_ = k_(300000, 1000000, 500000, 1000000);
-
-    //     assert!(
-    //         (k_ as u128 ) == 5100000000000000000000000000000,
-    //         0
-    //     );
-
-    //     k_ = k_(
-    //         500000899318256,
-    //         1000000,
-    //         25000567572582123,
-    //         1000000000000
-    //     );
-
-    //     k_ = k_ /  1000000000000000000000000;
-    //     assert!((k_ as u128) == 312508781701599715772756132553838833260, 1);
-    // }
 }

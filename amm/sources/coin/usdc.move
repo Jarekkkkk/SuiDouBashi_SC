@@ -1,3 +1,4 @@
+/// Test usage
 module suiDouBashi_amm::usdc{
     use std::option;
     use sui::coin;

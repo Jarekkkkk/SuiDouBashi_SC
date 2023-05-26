@@ -44,6 +44,22 @@ module suiDouBashi_vest::gauge{
         claimable: u64
     }
 
+    public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
+
+    public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
+
+    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u256{ self.supply_index }
+
+    public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
+
+    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){ self.supply_index = v; }
+
+    public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
+
+    public (friend) fun kill_gauge_<X,Y>(self: &mut Gauge<X,Y> ){ self.is_alive = false }
+
+    public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
+
     public fun get_balance_of<X,Y>(self: &Gauge<X,Y>, staker: address):u64{
         *table::borrow(&self.balance_of, staker)
     }
@@ -63,14 +79,13 @@ module suiDouBashi_vest::gauge{
 
         balance: Balance<SDB>,
 
-        //update when bribe is deposited
         reward_rate: u64, // reward_amount / 7 days
         period_finish: u64,
 
-        last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4.deposite bribe
+        last_update_time: u64,
         reward_per_token_stored: u128,
-        user_reward_per_token_stored: Table<address, u128>, // record latest withdrawl of staker
-        last_earn: Table<address, u64>, // last time staker claim rewards
+        user_reward_per_token_stored: Table<address, u128>,
+        last_earn: Table<address, u64>,
 
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
     }
@@ -119,7 +134,7 @@ module suiDouBashi_vest::gauge{
 
             pool: object::id(pool),
 
-            total_supply: pool::create_lp(pool, ctx), // no owner
+            total_supply: pool::create_lp(pool, ctx),
             balance_of: table::new<address, u64>(ctx),
 
             fees_x: balance::zero<X>(),
@@ -127,12 +142,12 @@ module suiDouBashi_vest::gauge{
 
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
-            checkpoints: table::new<address, TableVec<Checkpoint>>(ctx), //voting weights for each voter
+            checkpoints: table::new<address, TableVec<Checkpoint>>(ctx),
 
             supply_index: 0,
             claimable: 0
         };
-        // SDB emission
+        // SDB emission rewards
         let reward =  Reward<X,Y>{
             id: object::new(ctx),
             balance: balance::zero<SDB>(),
@@ -151,7 +166,7 @@ module suiDouBashi_vest::gauge{
         (gauge, internal_id, external_id)
     }
 
-    // Claim the fees from pool
+    /// Claim the fees from pool
     public fun claim_fee<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
@@ -183,7 +198,7 @@ module suiDouBashi_vest::gauge{
             let bal_x = balance::value(&self.fees_x);
             let bal_y = balance::value(&self.fees_y);
 
-            // only deposit when accumulated amount is over left
+            // only deposit when accumulated amount exceed the left amount
             if(bal_x > internal_bribe::left(internal_bribe::borrow_reward<X,Y,X>(bribe),clock) && bal_x / DURATION > 0  ){
                 let withdraw = balance::withdraw_all(&mut self.fees_x);
                 internal_bribe::deposit_pool_fees(bribe, coin::from_balance(withdraw, ctx), clock, ctx);
@@ -197,15 +212,6 @@ module suiDouBashi_vest::gauge{
 
         event::claim_fees(tx_context::sender(ctx), value_x, value_y);
     }
-    // ===== Getter =====
-    public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
-
-    public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
-    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u256{ self.supply_index }
-    public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
-
-    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){ self.supply_index = v; }
-    public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
 
     public fun get_prior_balance_index<X,Y>(
         self: & Gauge<X,Y>,
@@ -278,7 +284,7 @@ module suiDouBashi_vest::gauge{
         };
         return lower
     }
-    // move to REWARD
+
     public fun get_prior_reward_per_token<X, Y>(
         reward: &Reward<X, Y>,
         ts:u64
@@ -345,7 +351,7 @@ module suiDouBashi_vest::gauge{
 
     fun write_reward_per_token_checkpoint_<X, Y>(
         reward: &mut Reward<X, Y>,
-        reward_per_token: u128, // record down balance
+        reward_per_token: u128,
         timestamp: u64,
     ){
         let rp_s = &mut reward.reward_per_token_checkpoints;
@@ -380,8 +386,6 @@ module suiDouBashi_vest::gauge{
         math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
     }
 
-    // TODO: add friend module
-    /// allow staker to withdraw emission, should only be called by voter function
     public fun get_reward<X,Y>(
         self: &mut Gauge<X,Y>,
         clock: &Clock,
@@ -428,7 +432,7 @@ module suiDouBashi_vest::gauge{
         let reward = borrow_reward<X,Y>(self);
         let reward_per_token_stored = reward.reward_per_token_stored;
         let total_supply = pool::get_lp_balance(&self.total_supply);
-        // no one staking
+
         if(total_supply == 0){
             return reward_per_token_stored
         };
@@ -440,13 +444,12 @@ module suiDouBashi_vest::gauge{
         return reward_per_token_stored + (reward_rate as u128) * PRECISION / (total_supply as u128) * elapsed
     }
 
-    // calculate reward between 2 supply checkpoints
     fun calc_reward_per_token<X, Y>(
         reward: &Reward<X, Y>,
         timestamp_1: u64,
         timestamp_0: u64,
         supply: u64,
-        start_timestamp: u64 // last update time
+        start_timestamp: u64
     ):(u128, u64){
         let end_time = math::max(timestamp_1, start_timestamp);
         let start_time = math::max(timestamp_0, start_timestamp);
@@ -457,7 +460,7 @@ module suiDouBashi_vest::gauge{
 
     public fun batch_reward_per_token<X,Y>(
         self: &mut Gauge<X,Y>,
-        max_run:u64, // useful when tx might be out of gas
+        max_run:u64,
         clock: &Clock,
     ):(u128, u64) // ( reward_per_token_stored, last_update_time)
     {
@@ -531,7 +534,6 @@ module suiDouBashi_vest::gauge{
         let start_idx = get_prior_supply_index(self, start_timestamp);
         let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
 
-        // update reward_per_token_checkpoints
         if(end_idx > 0){
             let i = start_idx;
             while( i <= end_idx - 1){
@@ -565,7 +567,7 @@ module suiDouBashi_vest::gauge{
     }
 
     /// Calculate staker's SDB reward by weekly
-    /// earned will update after get_reward function calling
+    /// this is estimation, earned will only update after calling update_reward_per_token_()
     public fun earned<X,Y>(
         self: & Gauge<X,Y>,
         staker: address,
@@ -591,7 +593,6 @@ module suiDouBashi_vest::gauge{
         let end_idx = table_vec::length(bps_borrow) - 1;
 
         let earned_reward = 0;
-        // accumulate rewards in each reward checkpoints derived from balance checkpoints
         if(end_idx > 0){
             let i = start_idx;
             while( i <= end_idx - 1){ // leave last one
@@ -624,7 +625,7 @@ module suiDouBashi_vest::gauge{
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp_position: &mut LP<X,Y>, // not taking the ownership, otherwise owner lose all of its previous shares
-        value: u64, // removed, we only allow stake all
+        value: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -687,16 +688,12 @@ module suiDouBashi_vest::gauge{
         let period_finish = reward.period_finish;
         let reward_rate = reward.reward_rate;
 
-        // no on bribing
         if(ts >= period_finish) return 0;
 
         let _remaining = period_finish - ts;
         return _remaining * reward_rate
     }
 
-    // ===== Setter =====
-    public (friend) fun kill_gauge_<X,Y>(self: &mut Gauge<X,Y> ){ self.is_alive = false }
-    public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
 
     /// distribute the weekly rebase amonut
     public fun distribute_emissions<X,Y>(
@@ -722,13 +719,11 @@ module suiDouBashi_vest::gauge{
         claim_fee(self, bribe, pool, clock, ctx);
 
         let reward = borrow_reward_mut<X,Y>(self);
-        // initial bribe in each epoch
 
         if(ts >= reward.period_finish){
             coin::put(&mut reward.balance, coin);
             reward.reward_rate = value / DURATION;
         }else{
-            // accumulate bribes in each eopch
             let _remaining = reward.period_finish - ts;
             let _left = _remaining * reward.reward_rate;
             assert!(value > _left, err::insufficient_bribes());

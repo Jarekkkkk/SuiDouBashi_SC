@@ -100,7 +100,7 @@ module suiDouBashi_vsdb::encode{
         };
 
         let mod = n % 3;
-        if (mod == 1){ // when 1 item is remained
+        if (mod == 1){
             let v1 = vector::borrow(&bytes, i);
             let c1 = vector::borrow(&BASE64_CHARS, ((*v1 >> 2) as u64));
             let c2 = vector::borrow(&BASE64_CHARS, (((*v1 & 0x03) << 4 ) as u64));
@@ -108,7 +108,7 @@ module suiDouBashi_vsdb::encode{
             vector::push_back(&mut retval, *c2);
             vector::push_back(&mut retval, PADDING);
             vector::push_back(&mut retval, PADDING);
-        }else if(mod == 2){ // when 2 items are remained
+        }else if(mod == 2){
             let v1 = vector::borrow(&bytes, i);
             let v2 = vector::borrow(&bytes, i + 1);
             let c1 = vector::borrow(&BASE64_CHARS, ((*v1 >> 2) as u64));
@@ -156,7 +156,7 @@ module suiDouBashi_vsdb::encode{
         };
         let mod = n - i ;
         assert!(mod != 1, ELAYERZERO_INVALID_LENGTH);
-        if(mod == 3){//when decoded bytes are composed of 2 items
+        if(mod == 3){
             let s1 = vector::borrow(&bytes, i);
             let s2 = vector::borrow(&bytes, i + 1 );
             let s3 = vector::borrow(&bytes, i + 2 );
@@ -168,7 +168,7 @@ module suiDouBashi_vsdb::encode{
             vector::push_back(&mut retval, v1);
             vector::push_back(&mut retval, v2);
 
-        }else if (mod == 2){//when decoded bytes are composed of single items
+        }else if (mod == 2){
             let s1 = vector::borrow(&bytes, i);
             let s2 = vector::borrow(&bytes, i + 1);
             let r1 = vector::borrow(&DECODE_LUT_64, (*s1 as u64));

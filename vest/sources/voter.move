@@ -25,13 +25,13 @@ module suiDouBashi_vest::voter{
     use suiDouBashi_vest::external_bribe::{Self, ExternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 1e18
 
     const E_EMPTY_VALUE: u64 = 0;
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
-    /// Witness
+    /// Witness, stands for entry to VSDB fields
     struct VOTER_SDB has copy, store, drop {}
 
     struct Voter has key, store{
@@ -51,7 +51,7 @@ module suiDouBashi_vest::voter{
     #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
-    /// Voting state to be added into VSDB
+    /// additional fields in VSDB vesting NFT
     struct VotingState has store{
         pool_votes: VecMap<ID, u64>, // pool -> voting weight
         voted: bool,
@@ -59,7 +59,7 @@ module suiDouBashi_vest::voter{
         last_voted: u64 // ts
     }
 
-    // Protocol Standard
+    // VSDB dynamic fields Standard
     public fun is_initialized(vsdb: &VSDB): bool{
         vsdb::df_exists(vsdb, VOTER_SDB {})
     }
@@ -103,12 +103,11 @@ module suiDouBashi_vest::voter{
 
     public fun voted(vsdb: &VSDB):bool { voting_state_borrow(vsdb).voted }
 
-    // POTATO to realize one-time action for each epoch
+    // POTATO to realize one-time action for one-time action ( voting, reset, poke )
     struct Potato{
         reset: bool,
         weights: VecMap<ID, u64>,
         used_weight: u64,
-        /// distinguished from voting function
         total_weight: u64
     }
 
@@ -179,6 +178,7 @@ module suiDouBashi_vest::voter{
             total_weight: 0
         }
     }
+    /// Exit for reset action
     public fun reset_exit(
         potato: Potato,
         self: &mut Voter,
@@ -282,7 +282,6 @@ module suiDouBashi_vest::voter{
     ):Potato{
         assert!(!potato.reset, E_NOT_RESET);
         let pool_id = gauge::pool_id(gauge);
-        // Potato to verify reset function
         if(vec_map::contains(&potato.weights, &pool_id) && potato.total_weight == 0){
             let ( pool_id, pool_weight ) = vec_map::remove(&mut potato.weights, &pool_id);
 
@@ -314,7 +313,6 @@ module suiDouBashi_vest::voter{
         ctx: &mut TxContext
     ): Potato{
         assert!(potato.reset, E_NOT_VOTE);
-        // index weights by given gauge
         let pool_id = gauge::pool_id(gauge);
 
         if(vec_map::contains(&potato.weights, &pool_id)){
@@ -322,16 +320,14 @@ module suiDouBashi_vest::voter{
 
             assert!(weights > 0, E_NOT_VOTE);
             let player_weight = vsdb::voting_weight(vsdb, clock);
-            let pool_weight = ((weights as u128) * (player_weight as u128) / (potato.total_weight as u128) as u64); // get the pro rata voting weight
+            let pool_weight = ((weights as u128) * (player_weight as u128) / (potato.total_weight as u128) as u64);
             assert!(pool_weight > 0, err::invalid_weight());
             update_for_(self, gauge);
 
-            // add vec_map entry
             let voting_state_mut = voting_state_borrow_mut(vsdb);
             vec_map::insert(&mut voting_state_mut.pool_votes, pool_id, pool_weight);
             *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) + pool_weight;
 
-            // vote for voting power
             internal_bribe::deposit<X,Y>(internal_bribe, vsdb, pool_weight, clock, ctx);
             external_bribe::deposit<X,Y>(external_bribe, vsdb, pool_weight, clock, ctx);
 
@@ -393,9 +389,7 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        // could be optimized by checking if weekly emision is distributed to cost down the gas usage
         distribute_(self, minter, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
-        // Guage collect SDB weekly emission
         gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
 
@@ -431,7 +425,7 @@ module suiDouBashi_vest::voter{
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
-    /// distribute weekly emission, have to be called each week, otherwise all the stakers of the gauge lose its shares
+    //amount of distributed SDB towards every pool is proportional to the voting power received from the voters every epoch
     public fun distribute_<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
@@ -453,7 +447,6 @@ module suiDouBashi_vest::voter{
         let claimable = gauge::get_claimable(gauge);
         if( claimable > gauge::left(gauge::borrow_reward<X,Y>(gauge), clock) && claimable / DURATION > 0 ){
             gauge::update_claimable(gauge, 0);
-            // deposit the rebase to gauge
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
 
             gauge::distribute_emissions<X,Y>(gauge, internal_bribe, pool, coin_sdb, clock, ctx);
@@ -464,31 +457,25 @@ module suiDouBashi_vest::voter{
 
     // ===== Internal =====
     // TODO: remove public
-    /// update gauge's index to check if there's any distributed emissions
     public fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
         let gauge_weights = *table::borrow(&self.weights, gauge::pool_id(gauge));
         if(gauge_weights > 0){
             let s_idx = gauge::get_supply_index(gauge);
             let index_ = self.index;
-            gauge::update_supply_index(gauge, index_);
 
             let delta = index_ - s_idx;
             if(delta > 0){
-                let share = (gauge_weights as u256) * (delta as u256) / SCALE_FACTOR;// add accrued difference for each supplied token
+                let share = (gauge_weights as u256) * (delta as u256) / SCALE_FACTOR;
                 if(gauge::is_alive(gauge)){
                     let updated = (share as u64) + gauge::get_claimable(gauge);
                     gauge::update_claimable(gauge, updated);
                 }
             };
-        }else{
-            // new gauge set to global state
-            gauge::update_supply_index(gauge, self.index);
         };
+        gauge::update_supply_index(gauge, self.index);
     }
 
-    /// update self.index by given weekly emissions
     public fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
-        // update global index
         let value = coin::value(&sdb);
         let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
         if(ratio > 0){
@@ -498,6 +485,7 @@ module suiDouBashi_vest::voter{
 
         event::voter_notify_reward(value);
     }
+
      #[test_only]
      public fun init_for_testing(ctx: &mut TxContext){
         init(ctx);

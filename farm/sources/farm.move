@@ -16,7 +16,7 @@ module suiDouBashi_farm::farm{
     use sui::clock::{Self, Clock};
 
     const TOTAL_ALLOC_POINT: u64 = 100;
-    /// 625K SDB distribution for duration 4 weeks
+    /// 625K SDB distribution for 4 weeks duration
     const SDB_PER_SECOND: u64 = 258349867;
     const LOCK: u64 = { 36 * 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
@@ -131,7 +131,7 @@ module suiDouBashi_farm::farm{
     }
 
     /// Here's some modifications from orignal MasterChef smart contract,
-    /// 1. remove dynamic alloc_points setting that requires update from all pools.
+    /// 1. remove dynamic alloc_points setting that requires all pools update
     /// 2. total alloc points have to be fully distributed before start_time
     public fun add_farm<X,Y>(
         reg: &mut FarmReg,
@@ -346,7 +346,8 @@ module suiDouBashi_farm::farm{
 
         table::remove(&mut reg.total_pending, player);
     }
-    // todo: deposit staked fees to first epoch of voter
+
+    // TODO: collect the Pool fees during farming campaign
 
     #[test_only] public fun init_for_testing( ctx: &mut TxContext) { init(ctx) }
 }

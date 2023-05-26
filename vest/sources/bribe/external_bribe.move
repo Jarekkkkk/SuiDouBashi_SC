@@ -1,4 +1,4 @@
-// Internal Bribes represent pool fee distributed to LP holders
+// External Bribes represent coin brbies from protocol
 module suiDouBashi_vest::external_bribe{
     use std::type_name::{Self, TypeName};
     use sui::object::{Self, UID, ID};
@@ -30,12 +30,11 @@ module suiDouBashi_vest::external_bribe{
 
     struct ExternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
-        /// Voting weight
         total_supply: u64,
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
-        checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> balance checkpoint
+        checkpoints: Table<ID, vector<Checkpoint>>,
     }
 
     public fun total_voting_weight<X,Y>(self: &ExternalBribe<X,Y>):u64{ self.total_supply }
@@ -49,7 +48,7 @@ module suiDouBashi_vest::external_bribe{
         balance: Balance<T>,
         token_rewards_per_epoch: Table<u64, u64>,
         period_finish: u64,
-        last_earn: Table<ID, u64>, // last time voter withdraw
+        last_earn: Table<ID, u64>,
     }
 
     // - Reward
@@ -101,7 +100,7 @@ module suiDouBashi_vest::external_bribe{
             balance_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
-            checkpoints: table::new<ID, vector<Checkpoint>>(ctx), // voting weights for each voter,
+            checkpoints: table::new<ID, vector<Checkpoint>>(ctx),
         };
         let id = object::id(&bribe);
 
@@ -124,7 +123,6 @@ module suiDouBashi_vest::external_bribe{
         id
     }
 
-    // ===== Getter =====
     public fun bribe_start(ts: u64):u64{
         ts - (ts % DURATION)
     }
@@ -219,7 +217,7 @@ module suiDouBashi_vest::external_bribe{
     fun write_checkpoint_<X,Y>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
-        balance: u64, // record down balance
+        balance: u64,
         clock: &Clock,
     ){
         let vsdb = object::id(vsdb);
@@ -285,7 +283,6 @@ module suiDouBashi_vest::external_bribe{
             get_reward<X,Y,SDB>(self, vsdb, clock, ctx);
         };
     }
-    /// allows a voter to claim reward for external bribes
     public entry fun get_reward<X, Y, T>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &VSDB,
@@ -313,7 +310,6 @@ module suiDouBashi_vest::external_bribe{
         }
     }
 
-    // get accumulated coins for individual players
     fun earned<X,Y,T>(
         self: &ExternalBribe<X,Y>,
         vsdb: &VSDB,
@@ -343,7 +339,7 @@ module suiDouBashi_vest::external_bribe{
         let _pre_supply = 1;
         if(end_idx > 0){
             let i = start_idx;
-            while( i <= end_idx - 1){ // leave last one
+            while( i <= end_idx - 1){
                 let cp_0 = vec::borrow(bps_borrow, i);
                 let _next_epoch_start = bribe_start(checkpoints::balance_ts(cp_0));
                  // check that you've earned it
