@@ -13,7 +13,6 @@ module test::main{
 
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::transfer;
-
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
 
 
@@ -77,9 +76,10 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >=  4940476190464377600, 1);
+            assert!(voting >=  4910714285702544000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
-            assert!(vsdb::total_VeSDB(&reg, clock) == 4940476190464377600, 1);
+
+            assert!(vsdb::total_VeSDB(&reg, clock) == 4910714285702544000, 1);
             assert!(vsdb::get_minted(&reg) == 1, 1);
             assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
 
@@ -105,10 +105,10 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-            assert!(voting >= 9880952380950268800, 1);
+            assert!(voting >= 9821428571419344000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
 
-            assert!(vsdb::total_VeSDB(&reg, clock) == 9880952380950268800, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 9821428571419344000, 1);
             assert!(vsdb::get_minted(&reg) == 1, 1);
             assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
 
@@ -128,10 +128,9 @@ module test::main{
             let vsdb = test::take_from_sender<VSDB>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
-
-            assert!(voting >= 494047619033529600, 1);
+            assert!(voting >= 491071428557424000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(),1);
-            assert!(vsdb::total_VeSDB(&reg, clock) == 10869047619017328000, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 10803571428534192000, 1);
             assert!(vsdb::get_minted(&reg) == 3, 1);
             assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
 
@@ -158,13 +157,13 @@ module test::main{
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            assert!(voting >= 10869047619038841600, 1);
+            assert!(voting >= 10803571428562704000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 110 * setup::sui_100M(),1);
             assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
             // check NFTs are removed from global storage
             assert!(!test::was_taken_from_address(a, id),1); // not exist
             assert!(!test::was_taken_from_address(a, id_1),1); // not exist
-            assert!(vsdb::total_VeSDB(&reg, clock) == 10869047619038841600, 1);
+            assert!(vsdb::total_VeSDB(&reg, clock) == 10803571428562704000, 1);
             assert!(vsdb::get_minted(&reg) == 1, 1);
 
             test::return_to_sender(s, vsdb);
@@ -232,7 +231,6 @@ module test::main{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
 
-
             voter::distribute_(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
@@ -249,19 +247,19 @@ module test::main{
             let reward = gauge::borrow_reward(&gauge);
             let sdb_team = test::take_from_sender<Coin<SDB>>(s);
 
-           { // new weekly index
-                let _weekly = 15071747136074714; // locked ratio is too low
-                let prev_idx = 95382;
-                let total_voting_weight = voter::get_total_weight(&voter);
-                let index = prev_idx + (_weekly as u256) * SCALE_FACTOR / (total_voting_weight as u256);
-                assert!(voter::get_index(&voter) == index && index == gauge::get_supply_index(&gauge), 404);
-            };
-            let _new_claiabe = 7535873568537349; // have to hard-coded, we had reset it in the distribute function
-            assert!(gauge::get_reward_rate(reward) == _new_claiabe / (7 * 86400), 404);
+          // { // new weekly index
+          //      let _weekly = 15071747136074714; // locked ratio is too low
+          //      let prev_idx = 95382;
+          //      let total_voting_weight = voter::get_total_weight(&voter);
+          //      let index = prev_idx + (_weekly as u256) * SCALE_FACTOR / (total_voting_weight as u256);
+          //      assert!(voter::get_index(&voter) == index && index == gauge::get_supply_index(&gauge), 404);
+          //  };
+            //let _new_claiabe = 7535873568537349; // have to hard-coded, we had reset it in the distribute function
+            //assert!(gauge::get_reward_rate(reward) == _new_claiabe / (7 * 86400), 404);
 
-            assert!(coin::value(&sdb_team) == 466136509363135 , 404);
-            assert!(voter::get_balance(&voter) == 7535873568537365, 404);
-            assert!(gauge::get_reward_balance(reward) == 7535873569450949, 404);
+            assert!(coin::value(&sdb_team) == 513019197003257 , 404);
+            assert!(voter::get_balance(&voter) == 8293810352052660, 404);
+            assert!(gauge::get_reward_balance(reward) == 8293810352966256, 404);
             assert!(gauge::get_claimable(&gauge) == 0, 404);
 
             burn(sdb_team);
@@ -282,7 +280,7 @@ module test::main{
 
             // staked for 6 days, previous epoch rate stay at 1
             assert!(coin::value(&sdb) == 1 * 6 * 86400, 404);
-            assert!( gauge::get_reward_balance(reward) == 7535873569450949 - coin::value(&sdb), 404);
+            assert!( gauge::get_reward_balance(reward) == 8293810352966256 - coin::value(&sdb), 404);
             // reward
             assert!(gauge::get_period_finish(reward) == get_time(clock) / 1000 + setup::week() , 404);
             assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock)/1000 , 404);

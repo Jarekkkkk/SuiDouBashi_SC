@@ -240,7 +240,6 @@ module suiDouBashi_vest::external_bribe{
         };
     }
 
-
     fun write_supply_checkpoint_<X,Y>(
         self: &mut ExternalBribe<X,Y>,
         clock: &Clock,

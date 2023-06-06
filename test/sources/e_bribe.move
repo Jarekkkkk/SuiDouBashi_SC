@@ -66,7 +66,7 @@ module test::e_bribe_test{
                 let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
 
                 { // Potato
-                    assert!( vsdb::voting_weight(&vsdb, clock) == 837301541367073827, 404);
+                    assert!( vsdb::voting_weight(&vsdb, clock) == 755952312048497141, 404);
                     let weights = vec::singleton(50000);
                     vec::push_back(&mut weights, 50000);
                     let pools = vec::singleton(object::id_to_address(&pool_id_a));
@@ -121,7 +121,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // Assertion: received the reward
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            assert!(coin::value(&sdb) == 16846200418723200, 404);
+            assert!(coin::value(&sdb) == 19246888256400000, 404);
             burn(sdb);
         };
 
@@ -144,10 +144,10 @@ module test::e_bribe_test{
             let sdb = test::take_from_sender<Coin<SDB>>(s);
 
             // unused voting powers are still be counted
-            assert!(coin::value(&usdc) == 8053435099, 404);
-            assert!(coin::value(&usdt) == 8053435099, 404);
-            assert!(coin::value(&sui) == 8053435099622, 404);
-            assert!(coin::value(&sdb) == 8053435099622, 404);
+            assert!(coin::value(&usdc) == 7878411871, 404);
+            assert!(coin::value(&usdt) == 7878411871, 404);
+            assert!(coin::value(&sui) == 7878411871378, 404);
+            assert!(coin::value(&sdb) == 7878411871378, 404);
 
             burn(usdc);
             burn(usdt);

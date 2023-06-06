@@ -346,7 +346,11 @@ module suiDouBashi_amm::pool{
         assert_pool_unlocked(self);
         let value_x = coin::value<X>(&coin_x);
         let (res_x, _, _) = get_reserves(self);
-        value_x = formula::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage) ;
+        value_x = if(self.stable){
+            formula::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage)
+        }else{
+            value_x / 2
+        };
         let coin_x_split = coin::split<X>(&mut coin_x, value_x, ctx);
         let output_min = get_output<X,Y,X>(self, value_x);
         let (coin_y, _, _) = swap_for_y_<X,Y>(self, coin_x_split, output_min, clock, ctx);
@@ -364,7 +368,11 @@ module suiDouBashi_amm::pool{
         assert_pool_unlocked(self);
         let value_y = coin::value<Y>(&coin_y);
         let (_, res_y, _) = get_reserves(self);
-        value_y = formula::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage);
+        value_y = if(self.stable){
+            formula::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage)
+        }else{
+            value_y / 2
+        };
         let coin_y_split = coin::split<Y>(&mut coin_y, value_y, ctx);
         let output_min = get_output<X,Y,Y>(self, value_y);
         let (coin_x, _, _) = swap_for_x_<X,Y>(self, coin_y_split, output_min, clock, ctx);

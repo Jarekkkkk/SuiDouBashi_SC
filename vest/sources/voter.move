@@ -42,7 +42,7 @@ module suiDouBashi_vest::voter{
         emergency: address,
 
         total_weight: u64,
-        weights: Table<ID, u64>, // gauge -> distributed weights
+        weights: Table<ID, u64>, // pool -> distributed weights
         registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]: for front_end fetching
 
         index: u256 // distributed_sdb per voting weights ( 1e18 exntension )
@@ -425,7 +425,8 @@ module suiDouBashi_vest::voter{
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
-    //amount of distributed SDB towards every pool is proportional to the voting power received from the voters every epoch
+    //amount of distributed SDB towards every pool is proportional to the voting power received from the voters every epoc
+    // ALl the pool have to
     public fun distribute_<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,

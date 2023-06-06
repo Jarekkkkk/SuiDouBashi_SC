@@ -1,6 +1,7 @@
 [package]
 name = "suiDouBashiAmm"
 version = "0.0.1"
+published-at = "0x425d2d2e0619086df362cd2ad9289d93de417f849dee4bdedccbd1fe4b3bd990"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
@@ -8,7 +9,7 @@ MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
 [addresses]
-suiDouBashi_amm =  "0x0"
+suiDouBashi_amm =  "0x425d2d2e0619086df362cd2ad9289d93de417f849dee4bdedccbd1fe4b3bd990"
 std = "0x1"
 sui =  "0x2"
 sui_system = "0x3"

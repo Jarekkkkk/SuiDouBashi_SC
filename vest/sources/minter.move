@@ -13,8 +13,6 @@ module suiDouBashi_vest::minter{
     use suiDouBashi_vest::event;
     use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
 
-    //use suiDouBashi_vest::reward_distributor::{Self, Distributor};
-
     use sui::math;
 
     const WEEK: u64 = { 7 * 86400 };
@@ -32,7 +30,7 @@ module suiDouBashi_vest::minter{
     struct Minter has key{
         id: UID,
         supply: Supply<SDB>,
-        balance: Balance<SDB>, // no need (?)
+        balance: Balance<SDB>,
         team: address,
         team_rate: u64,
         active_period: u64,
@@ -101,11 +99,11 @@ module suiDouBashi_vest::minter{
 
     /// decay at 1% per week
     public fun calculate_emission(self: &Minter):u64{
-        ( self.weekly * EMISSION ) / PRECISION
+        (( (self.weekly as u128) * (EMISSION as u128) ) / (PRECISION as u128) as u64)
     }
     /// ( SDB_supply - VSDB_supply ) * 0.2%
     public fun circulating_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
-        (circulating_supply(self, vsdb_reg, clock) * TAIL_EMISSION ) / PRECISION
+        (((circulating_supply(self, vsdb_reg, clock) as u128) * (TAIL_EMISSION as u128) ) / (PRECISION as u128) as u64)
     }
 
     public fun weekly_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
@@ -136,9 +134,6 @@ module suiDouBashi_vest::minter{
 
             let weekly = self.weekly;
 
-            // rebase
-            //let rebase = calculate_growth(self, vsdb_reg, weekly, clock);
-
             let team_emission = (self.team_rate * weekly) / (PRECISION - self.team_rate);
             let required = weekly + team_emission;
             let balance = balance::value(&self.balance);
@@ -149,17 +144,8 @@ module suiDouBashi_vest::minter{
                 balance::join(&mut self.balance, minted);
             };
 
-            //transfer to team
             let team_coin = coin::take(&mut self.balance, team_emission, ctx);
             transfer::public_transfer(team_coin, self.team);
-            // rebase
-
-            //{ // remove rebase
-            //reward_distributor::deposit_reward(distributor, rebase_coin);
-            // checkpoint balance that was just distributed
-            //reward_distributor::checkpoint_token(distributor, clock);
-            //reward_distributor::checkpoint_total_supply(distributor, vsdb_reg, clock);
-            //}
 
             event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg, clock), circulating_emission(self, vsdb_reg, clock));
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))

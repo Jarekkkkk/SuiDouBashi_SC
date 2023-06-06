@@ -22,7 +22,7 @@ module suiDouBashi_vsdb::vsdb{
     use suiDouBashi_vsdb::encode::base64_encode as encode;
     use suiDouBashi_vsdb::i128::{Self, I128};
 
-    const MAX_TIME: u64 = { 36 * 7 * 86400 };
+    const MAX_TIME: u64 = { 24 * 7 * 86400 };
     const WEEK: u64 = { 7 * 86400 };
 
     const E_INVALID_UNLOCK_TIME: u64 =  001 ;
@@ -44,7 +44,7 @@ module suiDouBashi_vsdb::vsdb{
     }
     struct LockedSDB has store{
         balance: Balance<SDB>,
-        end: u64 // week-based
+        end: u64 // week-based ts
     }
 
     struct VSDBCap has key, store { id: UID }
@@ -158,7 +158,7 @@ module suiDouBashi_vsdb::vsdb{
     public entry fun lock_for(
         reg: &mut VSDBRegistry,
         sdb:Coin<SDB>,
-        duration: u64,
+        duration: u64, // timestamp
         recipient: address,
         clock: &Clock,
         ctx: &mut TxContext
@@ -178,11 +178,10 @@ module suiDouBashi_vsdb::vsdb{
 
         event::deposit(id, amount, unlock_time);
     }
-    /// extended from current time_stamp
     public entry fun increase_unlock_time(
         reg: &mut VSDBRegistry,
         self: &mut VSDB,
-        extended_duration: u64,
+        extended_duration: u64, // timestamp
         clock: &Clock,
     ){
         let ts = clock::timestamp_ms(clock) / 1000;
@@ -480,6 +479,7 @@ module suiDouBashi_vsdb::vsdb{
                 if(new_locked_end == old_locked_end){
                     new_dslope = old_dslope;
                 }else{
+                    // Action: increase_unlock_time, new d_slope has to be updated
                     if(table::contains(&self.slope_changes, new_locked_end)){
                         new_dslope = *table::borrow(&self.slope_changes, new_locked_end);
                     };
@@ -487,8 +487,8 @@ module suiDouBashi_vsdb::vsdb{
             };
         };
 
-        let last_point = if(self.epoch > 0){
-            *table_vec::borrow(&self.point_history, self.epoch)
+        let last_point = if(epoch > 0){
+            *table_vec::borrow(&self.point_history, epoch)
         }else{
             point::new( i128::zero(), i128::zero(), time_stamp )
         };
@@ -506,6 +506,7 @@ module suiDouBashi_vsdb::vsdb{
             if( t_i > time_stamp ){
                 t_i = time_stamp;
             }else{
+                // latest obsolete checkpoint
                 if(table::contains(&self.slope_changes, t_i)){
                     d_slope = *table::borrow(&self.slope_changes, t_i);
                 };
@@ -516,12 +517,10 @@ module suiDouBashi_vsdb::vsdb{
             last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left));
             last_point_slope = i128::add(&last_point_slope, &d_slope);
 
-            let compare_bias = i128::compare(&last_point_bias, &i128::zero());
-            if(compare_bias == 1 || compare_bias == 0){
+            if(i128::is_neg(&last_point_bias)){
                 last_point_bias = i128::zero();
             };
-            let compare_slope = i128::compare(&last_point_slope, &i128::zero());
-            if(compare_slope == 1 || compare_slope == 0){
+            if(i128::is_neg(&last_point_slope)){
                 last_point_slope = i128::zero();
             };
 
@@ -540,12 +539,13 @@ module suiDouBashi_vsdb::vsdb{
 
         // Now point_history is filled until t=now
         if (player_checkpoint) {
+            // update increment deposited amount
             last_point_slope = i128::add(&last_point_slope, &i128::sub(&u_new_slope, &u_old_slope));
             last_point_bias = i128::add(&last_point_bias, &i128::sub(&u_new_bias, &u_old_bias));
-            if (i128::compare(&last_point_slope, &i128::zero()) == 1) {
+            if (i128::is_neg(&last_point_slope)) {
                 last_point_slope = i128::zero();
             };
-            if (i128::compare(&last_point_bias, &i128::zero()) == 1) {
+            if (i128::is_neg(&last_point_bias)) {
                 last_point_bias = i128::zero();
             };
         };
@@ -569,8 +569,9 @@ module suiDouBashi_vsdb::vsdb{
                 // old_dslope was <something> - u_old.slope, so we cancel that
                 old_dslope = i128::add(&old_dslope, &u_old_slope);
 
-                if (new_locked_end == old_locked_end) { // extend_amount
-                    old_dslope = i128::sub( &old_dslope, &u_new_slope);  // It was a new deposit, not extension
+                if (new_locked_end == old_locked_end) {
+                    // Action: extend_amount, new deposit comes in
+                    old_dslope = i128::sub( &old_dslope, &u_new_slope);
                 };
                 // update old_locked.end in slope_changes
                 if(table::contains(&self.slope_changes, old_locked_end)){
@@ -581,9 +582,10 @@ module suiDouBashi_vsdb::vsdb{
             };
 
             if (new_locked_end > time_stamp) {
-                // else: we recorded it already in old_dslope
-                if (new_locked_end > old_locked_end) { // lock & extend locked_time
-                    new_dslope =  i128::sub(&new_dslope, &u_new_slope);// old slope disappeared at this point
+                if (new_locked_end > old_locked_end) {
+                    // Action: extend_unlock time
+                    // old slope disappeared at this point
+                    new_dslope =  i128::sub(&new_dslope, &u_new_slope);
 
                     // update new_locked.end in slope_changes
                      if(table::contains(&self.slope_changes, new_locked_end)){
@@ -608,7 +610,7 @@ module suiDouBashi_vsdb::vsdb{
         vec::contains(&self.modules, &ascii::string(name))
     }
     /// Authorized module can add dynamic fields into VSDB
-    /// Witness is the entry of dyanmic fields , being careful of your generated witness
+    /// Witness is the entry of dyanmic fields , be careful of your generated witness
     /// otherwise your registered state is exposed to the public
     public fun df_add<T: copy + store + drop, V: store>(
         witness: &T, // Witness stands for Entry point
