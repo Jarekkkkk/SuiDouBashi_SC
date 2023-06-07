@@ -6,13 +6,12 @@ module suiDouBashi_vest::internal_bribe{
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::clock::{Self, Clock};
-
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use std::vector as vec;
     use sui::balance::{Self, Balance};
 
-    use sui::dynamic_object_field as dof;
+    use sui::dynamic_field as df;
     use sui::math;
     use suiDouBashi_amm::math_u128;
 
@@ -36,7 +35,6 @@ module suiDouBashi_vest::internal_bribe{
         checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> voting balance checkpoint
     }
 
-    // - Self
     public fun total_voting_weight<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_supply }
     public fun get_balance_of<X,Y>(self: &InternalBribe<X,Y>, vsdb: &VSDB):u64 {
         *table::borrow(&self.balance_of, object::id(vsdb))
@@ -57,15 +55,15 @@ module suiDouBashi_vest::internal_bribe{
         last_earn: Table<ID, u64>,
     }
 
-    // - Reward
     public fun borrow_reward<X,Y,T>(self: &InternalBribe<X,Y>):&Reward<X, Y, T>{
         assert_generic_type<X,Y,T>();
-        dof::borrow(&self.id, type_name::get<T>())
+        df::borrow(&self.id, type_name::get<T>())
     }
     fun borrow_reward_mut<X,Y, T>(self: &mut InternalBribe<X,Y>):&mut Reward<X, Y, T>{
         assert_generic_type<X,Y,T>();
-        dof::borrow_mut(&mut self.id, type_name::get<T>())
+        df::borrow_mut(&mut self.id, type_name::get<T>())
     }
+
     #[test_only]
     public fun get_reward_rate<X,Y,T>(reward: &Reward<X,Y,T>):u64 { reward.reward_rate }
     #[test_only]
@@ -120,8 +118,8 @@ module suiDouBashi_vest::internal_bribe{
             last_earn: table::new<ID, u64>(ctx),
         };
 
-        dof::add(&mut bribe.id, type_name::get<X>(), reward_x);
-        dof::add(&mut bribe.id, type_name::get<Y>(), reward_y);
+        df::add(&mut bribe.id, type_name::get<X>(), reward_x);
+        df::add(&mut bribe.id, type_name::get<Y>(), reward_y);
 
         transfer::share_object(bribe);
 
@@ -308,7 +306,7 @@ module suiDouBashi_vest::internal_bribe{
     public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         // Two scenarios
         // 1. return current time if the latest deposited is in 7 days
-        // 2  return period_finish bribe has been abandoned over 7 days
+        // 2  return period_finish when bribe has been abandoned over 7 days
         math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
     }
 
@@ -371,11 +369,8 @@ module suiDouBashi_vest::internal_bribe{
         if(self.total_supply == 0){
             return reward_stored
         };
-        let last_update = reward.last_update_time;
-        let period_finish = reward.period_finish;
-        let reward_rate = reward.reward_rate;
-        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(last_update, period_finish)) as u128);
-        return reward_stored + elapsed * (reward_rate as u128) * PRECISION / (self.total_supply as u128)
+        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(reward.last_update_time, reward.period_finish)) as u128);
+        return reward_stored + elapsed * (reward.reward_rate as u128) * PRECISION / (self.total_supply as u128)
     }
 
     /// update obsolete reward per token data
@@ -623,13 +618,11 @@ module suiDouBashi_vest::internal_bribe{
 
     public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         let ts = clock::timestamp_ms(clock) / 1000;
-        let period_finish = reward.period_finish;
-        let reward_rate = reward.reward_rate;
 
-        if(ts >= period_finish) return 0;
+        if(ts >= reward.period_finish) return 0;
 
-        let _remaining = period_finish - ts;
-        return _remaining * reward_rate
+        let _remaining = reward.period_finish - ts;
+        return _remaining * reward.reward_rate
     }
 
     public fun deposit_pool_fees<X,Y,T>(

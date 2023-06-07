@@ -118,7 +118,7 @@ module suiDouBashi_farm::farm{
     ){
         assert_governor(reg, ctx);
         assert!(!reg.initialized, ERR_INITIALIZED);
-        assert!(start_time > clock::timestamp_ms(clock) / 1000 || duration != 0, ERR_INVALID_TIME);
+        assert!(start_time > clock::timestamp_ms(clock) / 1000 && duration != 0, ERR_INVALID_TIME);
 
         let end_time = start_time + duration;
         let sdb_per_second = coin::value(&sdb) / duration;
@@ -342,7 +342,7 @@ module suiDouBashi_farm::farm{
         assert!(clock::timestamp_ms(clock) / 1000 >= reg.end_time, ERR_NOT_FINISH);
         let reward = table::borrow(&reg.total_pending, player);
         let sdb = coin::take(&mut reg.sdb_balance, *reward, ctx);
-        vsdb::lock(vsdb_reg, sdb, LOCK, clock, ctx);
+        vsdb::lock(vsdb_reg, sdb, vsdb::max_time(), clock, ctx);
 
         table::remove(&mut reg.total_pending, player);
     }

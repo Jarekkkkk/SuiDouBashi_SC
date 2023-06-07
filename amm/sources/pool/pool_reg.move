@@ -26,8 +26,12 @@ module suiDouBashi_amm::pool_reg{
         assert!(self.guardian == guardian, ERR_INVALD_GUARDIAN);
     }
 
-    fun assert_fee(fee: u8){
-        assert!(fee == 1 || fee == 2 || fee == 3 || fee == 4 || fee == 5, ERR_INVALD_FEE);
+    fun assert_fee(stable: bool, fee: u8){
+        if(stable){
+            assert!(fee >= 1 && fee <= 5, ERR_INVALD_FEE);
+        }else{
+            assert!(fee >= 10 && fee <= 50, ERR_INVALD_FEE);
+        }
     }
 
     fun assert_sorted<X, Y>() {
@@ -80,7 +84,7 @@ module suiDouBashi_amm::pool_reg{
     ){
         assert_sorted<X, Y>();
         assert_guardian(self, tx_context::sender(ctx));
-        assert_fee(fee_percentage);
+        assert_fee(stable, fee_percentage);
 
         let pool_id = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
         let pool_name = get_pool_name<X,Y>();
@@ -98,11 +102,18 @@ module suiDouBashi_amm::pool_reg{
         assert_guardian(self, tx_context::sender(ctx));
         pool::udpate_lock(pool, locked);
     }
+
     entry fun update_fee<X,Y>(self: &PoolReg,pool: &mut Pool<X,Y>, fee: u8, ctx:&mut TxContext){
         assert_guardian(self, tx_context::sender(ctx));
-        assert_fee(fee);
+        assert_fee(pool::get_stable(pool), fee);
 
         pool::update_fee(pool, fee);
+    }
+
+    entry fun update_stable<X,Y>(self: &PoolReg,pool: &mut Pool<X,Y>, stable: bool, ctx:&mut TxContext){
+        assert_guardian(self, tx_context::sender(ctx));
+
+        pool::update_stable(pool, stable);
     }
 
     // ===== Utils =====
@@ -114,8 +125,8 @@ module suiDouBashi_amm::pool_reg{
         string::append(&mut symbol_x, symbol_y);
         symbol_x
     }
-    public fun pools_length(self: &PoolReg):u64{ table::length(&self.pools) }
 
+    public fun pools_length(self: &PoolReg):u64{ table::length(&self.pools) }
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {

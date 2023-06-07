@@ -160,7 +160,7 @@ module suiDouBashi_amm::amm_test{
             test_init_pool_<X, Y>(clock, test);
         };
 
-        add_time(clock, 1800 + 1);
+        add_time(clock, ( 1800 + 1 )* 1000 );
 
         next_tx(test, creator);
         let minted_lp ={
@@ -347,7 +347,7 @@ module suiDouBashi_amm::amm_test{
             add_liquidity_<X, Y>(amt_x, amt_y, clock, test);
         };
 
-        add_time(clock, 1800 + 1);
+        add_time(clock, ( 1800 + 1 )* 1000 );
 
         next_tx(test, creator);{// single zap
             let pool = test::take_shared<Pool< X, Y>>(test);
@@ -368,7 +368,7 @@ module suiDouBashi_amm::amm_test{
 
         let amount = 1_000_000_000;
 
-        add_time(clock, 1800 + 1);
+        add_time(clock, ( 1800 + 1 )* 1000 );
 
         next_tx(test, trader);{
             zap_y_<X,Y>(amt_x, amt_y, clock, test);
@@ -385,7 +385,7 @@ module suiDouBashi_amm::amm_test{
 
             test::return_shared(pool);
         };
-        add_time(clock, 1800);
+        add_time(clock, ( 1800 + 1 ) * 1000 );
 
         next_tx(test, trader);{
             let pool = test::take_shared<Pool<X,Y>>(test);

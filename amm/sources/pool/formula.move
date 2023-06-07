@@ -1,11 +1,12 @@
 module suiDouBashi_amm::formula{
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
+    const ERR_INVALD_FEE:u64 = 001;
+
     public fun k_(res_x: u64, res_y: u64, scale_x: u64, scale_y: u64): u256 {
         // x^3y + xy^3 = k
         let _x = (res_x as u256) * SCALE_FACTOR / (scale_x as u256);
         let _y = (res_y as u256) * SCALE_FACTOR / (scale_y as u256);
-
         let _a = (_x * _y ) / SCALE_FACTOR;
         let _b =(( _x * _x) / SCALE_FACTOR) + (( _y * _y) / SCALE_FACTOR) ;
 
@@ -41,22 +42,23 @@ module suiDouBashi_amm::formula{
         output_y_
     }
 
-    /// Calculate optimized one-side adding liquidity
-    public fun zap_optimized_input(res_x: u256, input_x: u256, fee_percentage: u8):u64{
+    /// Calculate optimized one-side adding liquidity ( Variable Pool )
+    public fun zap_optimized_input(res_x: u256, input_x: u256, fee: u8):u64{
+        assert!(fee >= 10 && fee <= 50, ERR_INVALD_FEE);
         // let var_1 = ( 4 * scaling_ * scaling_ - 4 * fee_ * scaling_ + fee_ * fee_);
         // let var_2 =  4 * scaling_ * scaling_ -  4 * fee_ * scaling_ ;
         // let var_3 = ( 2 * scaling_ - fee_);
         // let var_4 = 2 * ( scaling_ - fee_);
-        let (var_1, var_2, var_3, var_4) = if(fee_percentage == 1){
-            (399_960_001, 399_960_000, 19_999, 19_998)
-        }else if(fee_percentage == 2){
-            (399_920_004, 399_920_000, 19_998, 19_996)
-        }else if(fee_percentage == 3){
-            (399_880_009, 399_880_000, 19_997, 19_994)
-        }else if(fee_percentage == 4){
-            (399_840_016, 399_840_000, 19_996, 19_992)
-        }else{ // 0.05%
-            (399_800_025, 399_800_000, 19_995, 19_990)
+        let (var_1, var_2, var_3, var_4) = if(fee == 10){
+            (399_600_100, 399_600_000, 19_990, 19_980)
+        }else if(fee == 20){
+            (399_200_400, 399_200_000, 19_980, 19_960)
+        }else if(fee == 30){
+            (398_880_900, 398_800_000, 19_970, 19_940)
+        }else if(fee == 40){
+            (398_401_600, 398_400_000, 19_960, 19_920)
+        }else{ // 0.5%
+            (398_002_500, 398_000_000, 19_950, 19_900)
         };
 
         (((sqrt_u256( res_x * ( res_x *  var_1 + input_x * var_2)) - res_x * var_3 ) / var_4 ) as u64 )

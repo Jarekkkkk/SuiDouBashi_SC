@@ -78,6 +78,15 @@ module suiDouBashi_amm::pool{
     public fun get_fee_x<X,Y>(self:&Pool<X,Y>):u64{ balance::value(&self.fee.fee_x) }
     public fun get_fee_y<X,Y>(self:&Pool<X,Y>):u64{ balance::value(&self.fee.fee_y) }
 
+    public (friend) fun update_fee<X,Y>(self: &mut Pool<X,Y>, fee: u8){
+        self.fee.fee_percentage = fee;
+    }
+    public (friend) fun update_stable<X,Y>(self: &mut Pool<X,Y>, stable: bool){
+        self.stable = stable;
+    }
+    public (friend) fun udpate_lock<X,Y>(self: &mut Pool<X,Y>, locked: bool){
+        self.locked = locked;
+    }
     // - Oracle
     struct Observation has store {
         timestamp: u64,
@@ -214,12 +223,6 @@ module suiDouBashi_amm::pool{
     }
 
     // ===== Setter =====
-    public (friend) fun update_fee<X,Y>(self: &mut Pool<X,Y>, fee: u8){
-        self.fee.fee_percentage = fee;
-    }
-    public (friend) fun udpate_lock<X,Y>(self: &mut Pool<X,Y>, locked: bool){
-        self.locked = locked;
-    }
 
     public entry fun add_liquidity<X, Y>(
         self: &mut Pool<X, Y>,
@@ -347,9 +350,9 @@ module suiDouBashi_amm::pool{
         let value_x = coin::value<X>(&coin_x);
         let (res_x, _, _) = get_reserves(self);
         value_x = if(self.stable){
-            formula::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage)
-        }else{
             value_x / 2
+        }else{
+            formula::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage)
         };
         let coin_x_split = coin::split<X>(&mut coin_x, value_x, ctx);
         let output_min = get_output<X,Y,X>(self, value_x);
@@ -369,9 +372,9 @@ module suiDouBashi_amm::pool{
         let value_y = coin::value<Y>(&coin_y);
         let (_, res_y, _) = get_reserves(self);
         value_y = if(self.stable){
-            formula::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage)
-        }else{
             value_y / 2
+        }else{
+            formula::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage)
         };
         let coin_y_split = coin::split<Y>(&mut coin_y, value_y, ctx);
         let output_min = get_output<X,Y,Y>(self, value_y);
@@ -442,7 +445,7 @@ module suiDouBashi_amm::pool{
         ctx: &mut TxContext
     ):ID{
         let lp_supply = balance::create_supply(LP_TOKEN<X, Y>{});
-        let ts = tx_context::epoch_timestamp_ms(ctx);
+        let ts = tx_context::epoch_timestamp_ms(ctx) / 1000;
         let fee = Fee{
             fee_x: balance::zero<X>(),
             fee_y: balance::zero<Y>(),
@@ -685,9 +688,8 @@ module suiDouBashi_amm::pool{
     fun update_timestamp_<X,Y>(self: &mut Pool<X,Y>, clock: &Clock){
         let res_x = (balance::value<X>(&self.reserve_x) as u256);
         let res_y = (balance::value<Y>(&self.reserve_y) as u256);
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let elapsed = ( ts - self.last_block_timestamp );
-
 
         if(elapsed > 0 && res_x != 0 && res_y != 0){
             self.last_price_x_cumulative = self.last_price_x_cumulative + (res_x * (elapsed as u256));
@@ -696,7 +698,6 @@ module suiDouBashi_amm::pool{
 
         let observation = get_latest_observation(self);
         elapsed = (ts - observation.timestamp);
-
         // record observation every 30 minutes
         if( elapsed > PERIOD_SIZE ){
             table_vec::push_back(&mut self.observations,
@@ -744,7 +745,7 @@ module suiDouBashi_amm::pool{
         self: &Pool<X,Y>,
         clock: &Clock
     ):(u256, u256){
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let observation = get_latest_observation(self);
         let reserve_x_cumulative = observation.reserve_x_cumulative;
         let reserve_y_cumulative = observation.reserve_y_cumulative;
@@ -764,7 +765,7 @@ module suiDouBashi_amm::pool{
         dy: u64,
         clock: &Clock
     ):u64{
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let observation = get_latest_observation(self);
         let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
         let len = table_vec::length(&self.observations);
@@ -784,7 +785,7 @@ module suiDouBashi_amm::pool{
         dx: u64,
         clock: &Clock
     ):u64{
-        let ts = clock::timestamp_ms(clock);
+        let ts = clock::timestamp_ms(clock) / 1000;
         let observation = get_latest_observation(self);
         let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
         let len = table_vec::length(&self.observations);
@@ -809,7 +810,7 @@ module suiDouBashi_amm::pool{
             cumulative = cumulative + *vec::borrow(&prices, i);
             i = i + 1 ;
         };
-
+std::debug::print(&len);
         cumulative / granularity
     }
     public fun prices<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64): vector<u64> {

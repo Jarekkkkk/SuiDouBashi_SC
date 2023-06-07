@@ -139,7 +139,7 @@ module suiDouBashi_vest::event{
     }
     public fun voted<X,Y>(vsdb: ID, amount:u64){
         emit(
-            Abstain<X,Y>{
+            Voted<X,Y>{
                 vsdb,
                 amount
             }

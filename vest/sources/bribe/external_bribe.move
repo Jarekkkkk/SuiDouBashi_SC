@@ -12,7 +12,7 @@ module suiDouBashi_vest::external_bribe{
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use std::vector as vec;
-    use sui::dynamic_object_field as dof;
+    use sui::dynamic_field as df;
 
     use suiDouBashi_vsdb::vsdb::VSDB;
     use suiDouBashi_vsdb::sdb::SDB;
@@ -60,17 +60,17 @@ module suiDouBashi_vest::external_bribe{
             period_finish: 0,
             last_earn: table::new<ID, u64>(ctx)
         };
-        dof::add(&mut self.id, type_name::get<T>(), reward);
+        df::add(&mut self.id, type_name::get<T>(), reward);
     }
     public fun borrow_reward<X,Y,T>(self: &ExternalBribe<X,Y>):&Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
-        dof::borrow(&self.id, type_name)
+        df::borrow(&self.id, type_name)
     }
     fun borrow_reward_mut<X,Y,T>(self: &mut ExternalBribe<X,Y>):&mut Reward<X, Y, T>{
         let type_name = type_name::get<T>();
         assert_reward_created<X,Y,T>(self, type_name);
-        dof::borrow_mut(&mut self.id, type_name)
+        df::borrow_mut(&mut self.id, type_name)
     }
 
     public fun get_reward_balance<X,Y,T>(self: &ExternalBribe<X,Y>):u64 {
@@ -88,7 +88,7 @@ module suiDouBashi_vest::external_bribe{
         assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>() || type_t == type_name::get<SUI>() || type_t == type_name::get<SDB>(), err::invalid_type_argument());
     }
     public fun assert_reward_created<X,Y,T>(self: &ExternalBribe<X,Y>, type_name: TypeName){
-        assert!(dof::exists_(&self.id, type_name), err::reward_not_exist());
+        assert!(df::exists_(&self.id, type_name), err::reward_not_exist());
     }
     // called in gauge constructor
     public (friend )fun create_bribe<X,Y>(
@@ -123,7 +123,7 @@ module suiDouBashi_vest::external_bribe{
         id
     }
 
-    public fun bribe_start(ts: u64):u64{
+    fun bribe_start(ts: u64):u64{
         ts - (ts % DURATION)
     }
 
@@ -223,7 +223,7 @@ module suiDouBashi_vest::external_bribe{
         let vsdb = object::id(vsdb);
         let ts = clock::timestamp_ms(clock) / 1000;
 
-        if( !table::contains(&self.checkpoints, vsdb)){
+        if(!table::contains(&self.checkpoints, vsdb)){
             let checkpoints = vec::empty();
             table::add(&mut self.checkpoints, vsdb, checkpoints);
         };
@@ -309,7 +309,7 @@ module suiDouBashi_vest::external_bribe{
         }
     }
 
-    fun earned<X,Y,T>(
+    public fun earned<X,Y,T>(
         self: &ExternalBribe<X,Y>,
         vsdb: &VSDB,
         clock: &Clock
@@ -460,6 +460,6 @@ module suiDouBashi_vest::external_bribe{
         };
         reward.period_finish = adjusted_ts + DURATION;
 
-        event::notify_reward<X>(tx_context::sender(ctx), value);
+        event::notify_reward<T>(tx_context::sender(ctx), value);
     }
 }

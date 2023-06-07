@@ -1,6 +1,6 @@
 module suiDouBashi_vest::checkpoints{
 
-        ///checkpoint for marking reward rate
+    ///checkpoint for marking reward rate
     struct RewardPerTokenCheckpoint has store {
         timestamp: u64,
         reward_per_token: u128

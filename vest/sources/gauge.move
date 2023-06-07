@@ -5,7 +5,7 @@ module suiDouBashi_vest::gauge{
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_object_field as dof;
+    use sui::dynamic_field as df;
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::clock::{Self, Clock};
@@ -91,10 +91,10 @@ module suiDouBashi_vest::gauge{
     }
 
     public fun borrow_reward<X,Y>(self: &Gauge<X,Y>):&Reward<X, Y>{
-        dof::borrow(&self.id, type_name::get<SDB>())
+        df::borrow(&self.id, type_name::get<SDB>())
     }
     fun borrow_reward_mut<X,Y>(self: &mut Gauge<X,Y>):&mut Reward<X, Y >{
-        dof::borrow_mut(&mut self.id, type_name::get<SDB>())
+        df::borrow_mut(&mut self.id, type_name::get<SDB>())
     }
     #[test_only]
     public fun get_reward_balance<X,Y>(reward: &Reward<X,Y>):u64 { balance::value(&reward.balance) }
@@ -161,7 +161,7 @@ module suiDouBashi_vest::gauge{
             last_earn: table::new<address, u64>(ctx),
         };
 
-        dof::add(&mut gauge.id, type_name::get<SDB>(), reward);
+        df::add(&mut gauge.id, type_name::get<SDB>(), reward);
 
         (gauge, internal_id, external_id)
     }
@@ -621,6 +621,16 @@ module suiDouBashi_vest::gauge{
     }
 
      /// Stake LP_TOKEN
+    public entry fun stake_all<X,Y>(
+        self: &mut Gauge<X,Y>,
+        pool: &Pool<X,Y>,
+        lp_position: &mut LP<X,Y>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let balance = pool::get_lp_balance(lp_position);
+        stake(self, pool, lp_position, balance, clock, ctx);
+    }
     public entry fun stake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
@@ -649,10 +659,20 @@ module suiDouBashi_vest::gauge{
         write_checkpoint_(self, staker, value, clock, ctx);
         write_supply_checkpoint_(self, clock);
 
-        event::deposit_lp<X,Y>(tx_context::sender(ctx), lp_value);
+        event::deposit_lp<X,Y>(tx_context::sender(ctx), value);
     }
 
     /// LP unstake lp
+    public entry fun unstake_all<X,Y>(
+        self: &mut Gauge<X,Y>,
+        pool: &Pool<X,Y>,
+        lp_position: &mut LP<X,Y>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        let bal = get_balance_of(self, tx_context::sender(ctx));
+        unstake(self, pool, lp_position, bal, clock, ctx);
+    }
     public entry fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
@@ -685,17 +705,14 @@ module suiDouBashi_vest::gauge{
 
     public fun left<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
         let ts = clock::timestamp_ms(clock) / 1000;
-        let period_finish = reward.period_finish;
-        let reward_rate = reward.reward_rate;
 
-        if(ts >= period_finish) return 0;
+        if(ts >= reward.period_finish) return 0;
 
-        let _remaining = period_finish - ts;
-        return _remaining * reward_rate
+        let _remaining = reward.period_finish - ts;
+        return _remaining * reward.reward_rate
     }
 
-
-    /// distribute the weekly rebase amonut
+    // distribute pool fees
     public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,
         bribe: &mut InternalBribe<X,Y>,
@@ -736,6 +753,6 @@ module suiDouBashi_vest::gauge{
 
         reward.period_finish = ts + DURATION;
 
-        event::notify_reward<X>(tx_context::sender(ctx), value);
+        event::notify_reward<SDB>(tx_context::sender(ctx), value);
     }
 }
