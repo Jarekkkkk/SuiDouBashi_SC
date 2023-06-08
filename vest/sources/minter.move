@@ -4,23 +4,21 @@ module suiDouBashi_vest::minter{
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::transfer;
+    use sui::math;
     use sui::object::{Self, UID};
     use std::option::{Self, Option};
     use std::vector as vec;
 
     use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
     use suiDouBashi_vest::err;
     use suiDouBashi_vest::event;
-    use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
-
-    use sui::math;
 
     const WEEK: u64 = { 7 * 86400 };
     const EMISSION: u64 = 990; // linearly decrease 1 %
     const PRECISION: u64 = 1000;
-    const TAIL_EMISSION: u64 = 2; // minium 0.2%
+    const TAIL_EMISSION: u64 = 2; // minium 0.2n%
     const WEEKLY: u256 = 15_000_000 ; // 15M
-
     const MAX_TEAM_RATE: u64 = 50; // 50 bps = 5%
 
     friend suiDouBashi_vest::voter;
@@ -118,7 +116,7 @@ module suiDouBashi_vest::minter{
 
     // TODO: add firned module
     /// update period can only be called once per epoch (1 week)
-     public (friend) fun update_period (
+    public (friend) fun update_period (
         self: &mut Minter,
         //distributor: &mut Distributor,
         vsdb_reg: &mut VSDBRegistry ,
@@ -151,11 +149,11 @@ module suiDouBashi_vest::minter{
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))
         };
         option::none()
-     }
+    }
 
-     public fun buyback(_cap: &MinterCap, self: &mut Minter, sdb: Coin<SDB>){
+    public fun buyback(_cap: &MinterCap, self: &mut Minter, sdb: Coin<SDB>){
         balance::decrease_supply(&mut self.supply, coin::into_balance(sdb));
-     }
+    }
 
     #[test_only] public fun mint_sdb(self: &mut Minter, value: u64, ctx: &mut TxContext):Coin<SDB>{
         coin::from_balance(balance::increase_supply(&mut self.supply, value), ctx)

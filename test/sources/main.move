@@ -60,7 +60,7 @@ module test::main{
         }
     }
 
-    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     fun vest_(clock: &mut Clock, s: &mut Scenario){
         let (a,_,_) = setup::people();
 
@@ -73,7 +73,7 @@ module test::main{
             test::return_shared(reg);
         };
         next_tx(s, a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >=  4910714285702544000, 1);
@@ -91,7 +91,7 @@ module test::main{
 
         next_tx(s, a);{ // increase lock amount & time
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
 
             vsdb::increase_unlock_amount(&mut reg, &mut vsdb, coin::split(&mut sdb, 5 * setup::sui_1B(), ctx(s)), clock);
@@ -102,7 +102,7 @@ module test::main{
             test::return_shared(reg);
         };
         next_tx(s, a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >= 9821428571419344000, 1);
@@ -125,7 +125,7 @@ module test::main{
             test::return_shared(reg);
         };
         next_tx(s, a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             assert!(voting >= 491071428557424000, 1);
@@ -139,9 +139,9 @@ module test::main{
         };
         next_tx(s,a);
         let (id, id_1) = { // Action: Merge 3 vsdb into single
-            let vsdb = test::take_from_sender<VSDB>(s);
-            let vsdb_merged = test::take_from_sender<VSDB>(s);
-            let vsdb_merged_1 = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb_merged = test::take_from_sender<Vsdb>(s);
+            let vsdb_merged_1 = test::take_from_sender<Vsdb>(s);
             let id = object::id(&vsdb_merged);
             let id_1 = object::id(&vsdb_merged_1);
             let reg = test::take_shared<VSDBRegistry>(s);
@@ -153,7 +153,7 @@ module test::main{
             (id, id_1)
         };
         next_tx(s,a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
 
@@ -345,7 +345,7 @@ module test::main{
         add_time(clock, setup::week() * 1000 + setup::day() * 1000);
 
         next_tx(s,a);{ // LP holders withdraw LP fees when pool is empty
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
             assert!( i_bribe::reward_per_token<USDC, USDT, USDC>(&i_bribe, clock) == 0, 404);
             assert!( i_bribe::reward_per_token<USDC, USDT, USDT>(&i_bribe, clock) == 0, 404);
@@ -529,8 +529,8 @@ module test::main{
         add_time(clock, 122255982 * 1000);
 
         next_tx(s,a);{ // Decay the vsdb
-            let vsdb = test::take_from_sender<VSDB>(s);
-            let vsdb_1 = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb_1 = test::take_from_sender<Vsdb>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             assert!(vsdb::voting_weight(&vsdb, clock) == 0, 404);
             vsdb::total_VeSDB(&vsdb_reg, clock);

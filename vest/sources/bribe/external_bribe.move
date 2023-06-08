@@ -14,7 +14,7 @@ module suiDouBashi_vest::external_bribe{
     use std::vector as vec;
     use sui::dynamic_field as df;
 
-    use suiDouBashi_vsdb::vsdb::VSDB;
+    use suiDouBashi_vsdb::vsdb::Vsdb;
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vest::event;
     use suiDouBashi_vest::err;
@@ -38,7 +38,7 @@ module suiDouBashi_vest::external_bribe{
     }
 
     public fun total_voting_weight<X,Y>(self: &ExternalBribe<X,Y>):u64{ self.total_supply }
-    public fun get_balance_of<X,Y>(self: &ExternalBribe<X,Y>, vsdb: &VSDB):u64 {
+    public fun get_balance_of<X,Y>(self: &ExternalBribe<X,Y>, vsdb: &Vsdb):u64 {
         *table::borrow(&self.balance_of, object::id(vsdb))
     }
 
@@ -139,7 +139,7 @@ module suiDouBashi_vest::external_bribe{
 
     public fun get_prior_balance_index<X,Y>(
         self: & ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         ts:u64
     ):u64 {
         let id = object::id(vsdb);
@@ -216,7 +216,7 @@ module suiDouBashi_vest::external_bribe{
 
     fun write_checkpoint_<X,Y>(
         self: &mut ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         balance: u64,
         clock: &Clock,
     ){
@@ -264,7 +264,7 @@ module suiDouBashi_vest::external_bribe{
 
     public entry fun get_all_rewards<X,Y>(
         self: &mut ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -284,7 +284,7 @@ module suiDouBashi_vest::external_bribe{
     }
     public entry fun get_reward<X, Y, T>(
         self: &mut ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -311,7 +311,7 @@ module suiDouBashi_vest::external_bribe{
 
     public fun earned<X,Y,T>(
         self: &ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock
     ):u64{
         assert_generic_type<X,Y,T>();
@@ -387,7 +387,7 @@ module suiDouBashi_vest::external_bribe{
     //// [voter]: receive votintg
     public (friend) fun deposit<X,Y>(
         self: &mut ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         amount: u64,
         clock: &Clock,
         _ctx: &mut TxContext
@@ -408,7 +408,7 @@ module suiDouBashi_vest::external_bribe{
     //// [voter]: abstain votintg
     public (friend) fun withdraw<X,Y>(
         self: &mut ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         amount: u64,
         clock: &Clock,
         _ctx: &mut TxContext

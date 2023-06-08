@@ -6,7 +6,7 @@ module suiDouBashi_vsdb::test_whitelist{
     use sui::vec_map;
     use sui::transfer;
 
-    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
     struct VotingState has store{
         attachments: u64,
@@ -32,7 +32,7 @@ module suiDouBashi_vsdb::test_whitelist{
         transfer::share_object(foo);
     }
 
-    public fun add_pool_votes(self: &Foo, reg: &VSDBRegistry, vsdb: &mut VSDB){
+    public fun add_pool_votes(self: &Foo, reg: &VSDBRegistry, vsdb: &mut Vsdb){
         let value = VotingState{
             attachments: 1000,
             pool_votes: vec_map::empty(),
@@ -43,7 +43,7 @@ module suiDouBashi_vsdb::test_whitelist{
         vsdb::df_add(&self.witness, reg, vsdb, value);
     }
 
-    public fun update_pool_votes(self: &Foo, vsdb: &mut VSDB){
+    public fun update_pool_votes(self: &Foo, vsdb: &mut Vsdb){
         let voting_mut:&mut VotingState = vsdb::df_borrow_mut(vsdb, self.witness);
 
         vec_map::insert(&mut voting_mut.pool_votes, object::id(self), 1321321);

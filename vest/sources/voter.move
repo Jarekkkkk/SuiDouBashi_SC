@@ -14,7 +14,7 @@ module suiDouBashi_vest::voter{
 
     use suiDouBashi_amm::pool::Pool;
 
-    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
 
     use suiDouBashi_vest::gauge::{Self, Gauge};
@@ -31,7 +31,7 @@ module suiDouBashi_vest::voter{
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
-    /// Witness, stands for entry to VSDB fields
+    /// Witness, stands for entry to Vsdb fields
     struct VOTER_SDB has copy, store, drop {}
 
     struct Voter has key, store{
@@ -51,7 +51,7 @@ module suiDouBashi_vest::voter{
     #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
-    /// additional fields in VSDB vesting NFT
+    /// additional fields in Vsdb vesting NFT
     struct VotingState has store{
         pool_votes: VecMap<ID, u64>, // pool -> voting weight
         voted: bool,
@@ -59,11 +59,11 @@ module suiDouBashi_vest::voter{
         last_voted: u64 // ts
     }
 
-    // VSDB dynamic fields Standard
-    public fun is_initialized(vsdb: &VSDB): bool{
+    // Vsdb dynamic fields Standard
+    public fun is_initialized(vsdb: &Vsdb): bool{
         vsdb::df_exists(vsdb, VOTER_SDB {})
     }
-    public entry fun initialize(reg: &VSDBRegistry, vsdb: &mut VSDB){
+    public entry fun initialize(reg: &VSDBRegistry, vsdb: &mut Vsdb){
         let value = VotingState{
             pool_votes: vec_map::empty(),
             voted: false,
@@ -72,7 +72,7 @@ module suiDouBashi_vest::voter{
         };
         vsdb::df_add(&VOTER_SDB{}, reg, vsdb, value);
     }
-    public fun clear(vsdb: &mut VSDB){
+    public fun clear(vsdb: &mut Vsdb){
         let voting_state:VotingState = vsdb::df_remove( &VOTER_SDB{}, vsdb );
 
         let VotingState{
@@ -85,23 +85,23 @@ module suiDouBashi_vest::voter{
         assert!(!voted, E_NOT_RESET);
         vec_map::destroy_empty(pool_votes);
     }
-    public fun voting_state_borrow(vsdb: &VSDB):&VotingState{
+    public fun voting_state_borrow(vsdb: &Vsdb):&VotingState{
         vsdb::df_borrow(vsdb, VOTER_SDB {})
     }
-    fun voting_state_borrow_mut(vsdb: &mut VSDB):&mut VotingState{
+    fun voting_state_borrow_mut(vsdb: &mut Vsdb):&mut VotingState{
         vsdb::df_borrow_mut(vsdb, VOTER_SDB {})
     }
 
-    public fun pool_votes(vsdb: &VSDB):&VecMap<ID, u64>{ &voting_state_borrow(vsdb).pool_votes }
+    public fun pool_votes(vsdb: &Vsdb):&VecMap<ID, u64>{ &voting_state_borrow(vsdb).pool_votes }
 
-    public fun pool_votes_by_pool(vsdb: &VSDB, pool_id: &ID):u64 {
+    public fun pool_votes_by_pool(vsdb: &Vsdb, pool_id: &ID):u64 {
         let pool_votes = &voting_state_borrow(vsdb).pool_votes;
         *vec_map::get(pool_votes, pool_id)
     }
 
-    public fun used_weights(vsdb: &VSDB):u64 { voting_state_borrow(vsdb).used_weights }
+    public fun used_weights(vsdb: &Vsdb):u64 { voting_state_borrow(vsdb).used_weights }
 
-    public fun voted(vsdb: &VSDB):bool { voting_state_borrow(vsdb).voted }
+    public fun voted(vsdb: &Vsdb):bool { voting_state_borrow(vsdb).voted }
 
     // POTATO to realize one-time action for one-time action ( voting, reset, poke )
     struct Potato{
@@ -157,7 +157,7 @@ module suiDouBashi_vest::voter{
 
     /// Entrance for voting action
     public fun voting_entry(
-        vsdb: &mut VSDB,
+        vsdb: &mut Vsdb,
         clock: &Clock,
     ):Potato{
         let voting_state = voting_state_borrow_mut(vsdb);
@@ -182,7 +182,7 @@ module suiDouBashi_vest::voter{
     public fun reset_exit(
         potato: Potato,
         self: &mut Voter,
-        vsdb: &mut VSDB,
+        vsdb: &mut Vsdb,
     ){
         let voting_state = voting_state_borrow_mut(vsdb);
         let Potato {
@@ -203,7 +203,7 @@ module suiDouBashi_vest::voter{
     public fun poke_entry(
         potato: Potato,
         self: &mut Voter,
-        vsdb: &mut VSDB,
+        vsdb: &mut Vsdb,
     ):Potato{
         assert!(!potato.reset && potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
         let pool_votes_borrow = &voting_state_borrow(vsdb).pool_votes;
@@ -252,7 +252,7 @@ module suiDouBashi_vest::voter{
     public fun vote_exit(
         potato: Potato,
         self: &mut Voter,
-        vsdb: &mut VSDB,
+        vsdb: &mut Vsdb,
     ){
         let Potato {
             reset,
@@ -273,7 +273,7 @@ module suiDouBashi_vest::voter{
     public fun reset_<X,Y>(
         potato: Potato,
         self: &mut Voter,
-        vsdb: &mut VSDB,
+        vsdb: &mut Vsdb,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         external_bribe: &mut ExternalBribe<X,Y>,
@@ -305,7 +305,7 @@ module suiDouBashi_vest::voter{
     public fun vote_<X,Y>(
         potato: Potato,
         self: &mut Voter,
-        vsdb: &mut VSDB,
+        vsdb: &mut Vsdb,
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         external_bribe: &mut ExternalBribe<X,Y>,
@@ -396,7 +396,7 @@ module suiDouBashi_vest::voter{
     /// External Bribe --> voter
     public entry fun claim_bribes<X,Y>(
         external_bribe: &mut ExternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -406,7 +406,7 @@ module suiDouBashi_vest::voter{
     /// Internal Bribe --> voter
     public entry fun claim_fees<X,Y>(
         internal_bribe: &mut InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){

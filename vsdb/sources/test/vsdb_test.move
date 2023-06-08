@@ -5,7 +5,7 @@ module suiDouBashi_vsdb::vsdb_test{
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use suiDouBashi_vsdb::vsdb;
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_vsdb::vsdb::{ VSDBRegistry,VSDB};
+    use suiDouBashi_vsdb::vsdb::{ VSDBRegistry, Vsdb};
 
 
     #[test]
@@ -38,7 +38,7 @@ module suiDouBashi_vsdb::vsdb_test{
             test::return_shared(reg);
         };
         next_tx(s, a);{ // extend 2 weeks duration
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::increase_unlock_time(&mut reg, &mut vsdb, vsdb::max_time() + week(), &clock);
             test::return_shared(reg);
@@ -66,7 +66,7 @@ module suiDouBashi_vsdb::vsdb_test{
             test::return_shared(reg);
         };
         next_tx(s, a);{ // early unlock
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::unlock(&mut reg, vsdb, &clock, ctx(s));
             test::return_shared(reg);
@@ -88,7 +88,7 @@ module suiDouBashi_vsdb::vsdb_test{
             test::return_shared(reg);
         };
         next_tx(s, a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let slope = vsdb::calculate_slope(sui_100M());
             let end = vsdb::round_down_week(get_time(clock) / 1000 + week());
             let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock) / 1000);
@@ -99,14 +99,14 @@ module suiDouBashi_vsdb::vsdb_test{
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, a);{ // extend 2 weeks duration
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::increase_unlock_time(&mut reg, &mut vsdb, 2 * week(), clock);
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let slope = vsdb::calculate_slope(sui_100M()); // slope is unchanged
             let end = vsdb::round_down_week(get_time(clock)/1000 + 2 * week());
             let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock) / 1000);
@@ -117,14 +117,14 @@ module suiDouBashi_vsdb::vsdb_test{
             test::return_to_sender(s, vsdb);
         };
          next_tx(s, a);{ // extend amount
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::increase_unlock_amount(&mut reg, &mut vsdb, mint<SDB>(sui_1B(), ctx(s)), clock);
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s, a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let value = sui_1B() + sui_100M();
             let end = vsdb::round_down_week(get_time(clock) / 1000 + 2 * week());
             let slope = vsdb::calculate_slope(value);
@@ -137,7 +137,7 @@ module suiDouBashi_vsdb::vsdb_test{
         };
         add_time(clock, 3 * week() * 1000);
         next_tx(s, a);{ // unlock
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::unlock(&mut reg, vsdb, clock, ctx(s));
             let len_prev = sui::table_vec::length(vsdb::point_history(&reg));
@@ -151,7 +151,7 @@ module suiDouBashi_vsdb::vsdb_test{
             test::return_shared(reg);
         };
         next_tx(s, a);{ // vsdb been burnt
-            assert!(!test::has_most_recent_for_sender<VSDB>(s), 0);
+            assert!(!test::has_most_recent_for_sender< Vsdb>(s), 0);
         }
     }
 
@@ -181,7 +181,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let foo = test::take_shared<Foo>(s);
             let type = std::type_name::into_string(std::type_name::get<MOCK>());
             let reg = test::take_shared<VSDBRegistry>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
 
             white::add_pool_votes(&foo, &reg, &mut vsdb);
             let _registered = vsdb::module_exists(&vsdb, std::ascii::into_bytes(type));
@@ -192,7 +192,7 @@ module suiDouBashi_vsdb::vsdb_test{
         };
 
         next_tx(s,a) ;{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender< Vsdb>(s);
             let foo = test::take_shared<Foo>(s);
 
             white::update_pool_votes(&foo, &mut vsdb);

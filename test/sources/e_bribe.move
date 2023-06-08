@@ -9,7 +9,7 @@ module test::e_bribe_test{
     use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::voter::{Self, Voter};
-    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vest::minter::{ mint_sdb, Minter};
     use suiDouBashi_amm::pool::{LP};
     use suiDouBashi_amm::pool::Pool;
@@ -52,7 +52,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // LP holder A Voting
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -125,15 +125,15 @@ module test::e_bribe_test{
             burn(sdb);
         };
 
-        next_tx(s,a);{ // VSDB holder withdraw bribes & fees
+        next_tx(s,a);{ // Vsdb holder withdraw bribes & fees
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
             let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
 
             voter::claim_fees(&mut i_bribe, &vsdb, clock, ctx(s));
             voter::claim_bribes(&mut e_bribe, &vsdb, clock, ctx(s));
 
-            test::return_to_sender<VSDB>(s, vsdb);
+            test::return_to_sender<Vsdb>(s, vsdb);
             test::return_shared(i_bribe);
             test::return_shared(e_bribe);
         };
@@ -156,10 +156,10 @@ module test::e_bribe_test{
         };
 
         next_tx(s,a);
-        let prev_usdc = { // Action: unused VSDB can't withdraw
+        let prev_usdc = { // Action: unused Vsdb can't withdraw
             let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
-            let _vsdb = test::take_from_sender<VSDB>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let _vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
 
             let usdc = test::take_from_sender<Coin<USDC>>(s);
             let value = coin::value(&usdc);

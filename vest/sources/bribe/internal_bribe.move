@@ -15,7 +15,7 @@ module suiDouBashi_vest::internal_bribe{
     use sui::math;
     use suiDouBashi_amm::math_u128;
 
-    use suiDouBashi_vsdb::vsdb::VSDB;
+    use suiDouBashi_vsdb::vsdb::Vsdb;
     use suiDouBashi_vest::event;
     use suiDouBashi_vest::err;
     use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
@@ -32,11 +32,11 @@ module suiDouBashi_vest::internal_bribe{
         total_supply: u64,
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
-        checkpoints: Table<ID, vector<Checkpoint>>, // VSDB -> voting balance checkpoint
+        checkpoints: Table<ID, vector<Checkpoint>>, // Vsdb -> voting balance checkpoint
     }
 
     public fun total_voting_weight<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_supply }
-    public fun get_balance_of<X,Y>(self: &InternalBribe<X,Y>, vsdb: &VSDB):u64 {
+    public fun get_balance_of<X,Y>(self: &InternalBribe<X,Y>, vsdb: &Vsdb):u64 {
         *table::borrow(&self.balance_of, object::id(vsdb))
     }
 
@@ -128,7 +128,7 @@ module suiDouBashi_vest::internal_bribe{
 
     public fun get_prior_balance_index<X,Y>(
         self: & InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         ts:u64
     ):u64 {
         let id = object::id(vsdb);
@@ -245,7 +245,7 @@ module suiDouBashi_vest::internal_bribe{
 
      fun write_checkpoint_<X,Y>(
         self: &mut InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         balance: u64,
         clock: &Clock,
     ){
@@ -313,7 +313,7 @@ module suiDouBashi_vest::internal_bribe{
     /// allows a voter to claim reward for a internal bribe ( pool_fees )
     public entry fun get_all_rewards<X,Y>(
         self: &mut InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -322,7 +322,7 @@ module suiDouBashi_vest::internal_bribe{
     }
     public entry fun get_reward<X, Y, T>(
         self: &mut InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -522,7 +522,7 @@ module suiDouBashi_vest::internal_bribe{
 
     public fun earned<X,Y,T>(
         self: &InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         clock: &Clock
     ):u64{
         assert_generic_type<X,Y,T>();
@@ -577,7 +577,7 @@ module suiDouBashi_vest::internal_bribe{
 
     public (friend) fun deposit<X,Y>(
         self: &mut InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         amount: u64,
         clock: &Clock,
         _ctx: &mut TxContext
@@ -599,7 +599,7 @@ module suiDouBashi_vest::internal_bribe{
 
     public (friend) fun withdraw<X,Y>(
         self: &mut InternalBribe<X,Y>,
-        vsdb: &VSDB,
+        vsdb: &Vsdb,
         amount: u64,
         clock: &Clock,
         _ctx: &mut TxContext

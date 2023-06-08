@@ -18,14 +18,14 @@ module test::voter_test{
     use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::voter::{Self, Voter};
-    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
     public fun vote_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
 
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
 
             assert!(!voter::is_initialized(&vsdb), 404);
@@ -36,14 +36,14 @@ module test::voter_test{
             test::return_to_sender(s, vsdb);
         };
         next_tx(s,a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             assert!(voter::is_initialized(&vsdb), 404);
             test::return_to_sender(s, vsdb);
         };
 
         next_tx(s,a);{ //Action: VeSDB holder reset the votes
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
 
             { // pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -67,7 +67,7 @@ module test::voter_test{
         add_time(clock, setup::week()* 1000);
         next_tx(s,a);{ // Action: poke
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             { // pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
@@ -89,7 +89,7 @@ module test::voter_test{
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
         };
-        next_tx(s,a);{ // Action: create new VSDB
+        next_tx(s,a);{ // Action: create new Vsdb
             let reg = test::take_shared<VSDBRegistry>(s);
             let sdb = test::take_from_sender<Coin<SDB>>(s);
             vsdb::lock(&mut reg, coin::split(&mut sdb, setup::sui_1B(), ctx(s)), vsdb::max_time(), clock, ctx(s));
@@ -97,8 +97,8 @@ module test::voter_test{
             test::return_to_sender(s, sdb);
             test::return_shared(reg);
         };
-        next_tx(s,a);{ // Assertion: new VSDB & total supply
-            let vsdb = test::take_from_sender<VSDB>(s);
+        next_tx(s,a);{ // Assertion: new Vsdb & total supply
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             let voter = test::take_shared<Voter>(s);
@@ -113,9 +113,9 @@ module test::voter_test{
             test::return_shared(voter);
             test::return_shared(reg);
         };
-        next_tx(s,a);{ // Action: VSDB holder A voting
+        next_tx(s,a);{ // Action: Vsdb holder A voting
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let weights = 1;
             {// pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -139,7 +139,7 @@ module test::voter_test{
         };
         next_tx(s,a);{ // Assertion: voting successfully
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
@@ -176,7 +176,7 @@ module test::voter_test{
         add_time(clock, setup::week() * 1000);
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
@@ -195,7 +195,7 @@ module test::voter_test{
         };
         next_tx(s,a);{ // Assertion: clean voting state
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
@@ -230,9 +230,9 @@ module test::voter_test{
         };
 
         add_time(clock, setup::week()* 1000);
-        next_tx(s,a);{ // Action: VSDB holder A voting
+        next_tx(s,a);{ // Action: Vsdb holder A voting
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -270,9 +270,9 @@ module test::voter_test{
             test::return_to_sender(s, vsdb);
         };
 
-        next_tx(s,a);{ // Assertion: VSDB A holder voting successfully
+        next_tx(s,a);{ // Assertion: Vsdb A holder voting successfully
             let voter = test::take_shared<Voter>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let vsdb_voting = vsdb::voting_weight(&vsdb, clock);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
@@ -334,10 +334,10 @@ module test::voter_test{
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
         };
-        next_tx(s,a);{ // Action: VSDB holder B voting
+        next_tx(s,a);{ // Action: Vsdb holder B voting
             let voter = test::take_shared<Voter>(s);
-            let _vsdb = test::take_from_sender<VSDB>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let _vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -387,10 +387,10 @@ module test::voter_test{
             test::return_to_sender(s, vsdb);
             test::return_to_sender(s, _vsdb);
         };
-        next_tx(s,a);{ // Assertion: VSDB B  holder voting successfully
+        next_tx(s,a);{ // Assertion: Vsdb B  holder voting successfully
             let voter = test::take_shared<Voter>(s);
-            let _vsdb = test::take_from_sender<VSDB>(s);
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let _vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
 
             let vsdb_voting = vsdb::voting_weight(&vsdb, clock);
             {// pool_a

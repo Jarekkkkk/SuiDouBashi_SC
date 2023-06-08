@@ -41,7 +41,6 @@ module suiDouBashi_amm::pool{
         lp_supply: Supply<LP_TOKEN<X, Y>>,
         reserve_x: Balance<X>,
         reserve_y: Balance<Y>,
-        reserve_lp: Balance<LP_TOKEN<X, Y>>,
         decimal_x: u8,
         decimal_y: u8,
         last_block_timestamp: u64,
@@ -465,7 +464,6 @@ module suiDouBashi_amm::pool{
             lp_supply,
             reserve_x: balance::zero<X>(),
             reserve_y: balance::zero<Y>(),
-            reserve_lp: balance::zero<LP_TOKEN<X,Y>>(),
 
             decimal_x: coin::get_decimals(metadata_x),
             decimal_y: coin::get_decimals(metadata_y),
@@ -810,7 +808,6 @@ module suiDouBashi_amm::pool{
             cumulative = cumulative + *vec::borrow(&prices, i);
             i = i + 1 ;
         };
-std::debug::print(&len);
         cumulative / granularity
     }
     public fun prices<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64): vector<u64> {
