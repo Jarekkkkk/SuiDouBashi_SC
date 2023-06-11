@@ -40,7 +40,7 @@ module suiDouBashi_vsdb::test_whitelist{
             used_weights: 990,
             last_voted: 1230
         };
-        vsdb::df_add(&self.witness, reg, vsdb, value);
+        vsdb::df_add(self.witness, reg, vsdb, value);
     }
 
     public fun update_pool_votes(self: &Foo, vsdb: &mut Vsdb){

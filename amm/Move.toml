@@ -8,6 +8,8 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framew
 MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
+suiDouBashiVSDB = {local = "../vsdb"}
+
 [addresses]
 suiDouBashi_amm =  "0x425d2d2e0619086df362cd2ad9289d93de417f849dee4bdedccbd1fe4b3bd990"
 std = "0x1"

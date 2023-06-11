@@ -31,9 +31,6 @@ module suiDouBashi_vest::voter{
     const E_NOT_RESET: u64 = 1;
     const E_NOT_VOTE: u64 = 2;
 
-    /// Witness, stands for entry to Vsdb fields
-    struct VOTER_SDB has copy, store, drop {}
-
     struct Voter has key, store{
         id: UID,
         balance: Balance<SDB>,
@@ -51,6 +48,8 @@ module suiDouBashi_vest::voter{
     #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
+    /// Witness, stands for entry to Vsdb fields
+    struct VOTER_SDB has copy, store, drop {}
     /// additional fields in Vsdb vesting NFT
     struct VotingState has store{
         pool_votes: VecMap<ID, u64>, // pool -> voting weight
@@ -70,10 +69,10 @@ module suiDouBashi_vest::voter{
             used_weights: 0,
             last_voted: 0
         };
-        vsdb::df_add(&VOTER_SDB{}, reg, vsdb, value);
+        vsdb::df_add(VOTER_SDB{}, reg, vsdb, value);
     }
     public fun clear(vsdb: &mut Vsdb){
-        let voting_state:VotingState = vsdb::df_remove( &VOTER_SDB{}, vsdb );
+        let voting_state:VotingState = vsdb::df_remove( VOTER_SDB{}, vsdb );
 
         let VotingState{
             pool_votes,
@@ -163,7 +162,6 @@ module suiDouBashi_vest::voter{
         let voting_state = voting_state_borrow_mut(vsdb);
         assert!((clock::timestamp_ms(clock) / 1000 / DURATION) * DURATION > voting_state.last_voted, err::already_voted());
         voting_state.last_voted = clock::timestamp_ms(clock) / 1000;
-
         // copy and clear pool_votes fields
         let weights = voting_state.pool_votes;
         voting_state.pool_votes = vec_map::empty<ID, u64>();
@@ -260,8 +258,9 @@ module suiDouBashi_vest::voter{
             used_weight,
             total_weight: _
         } = potato;
-        assert!(reset && vec_map::size(&weights) == 0 , E_NOT_VOTE);
+        assert!(reset && vec_map::size(&weights) == 0, E_NOT_VOTE);
 
+        vsdb::earn_xp(VOTER_SDB{}, vsdb, 6);
         let voting_state_mut = voting_state_borrow_mut(vsdb);
 
         voting_state_mut.used_weights = used_weight;

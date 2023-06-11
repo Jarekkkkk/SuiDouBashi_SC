@@ -1,11 +1,12 @@
 #[test_only]
 module test::main{
-    use suiDouBashi_amm::pool::Pool;
-
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_vest::minter::{mint_sdb, Minter};
+
+    use suiDouBashi_amm::pool::Pool;
     use suiDouBashi_amm::usdc::USDC;
     use suiDouBashi_amm::usdt::USDT;
+
+    use suiDouBashi_vest::minter::{mint_sdb, Minter};
 
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
@@ -22,12 +23,14 @@ module test::main{
         let clock = clock::create_for_testing(ctx(&mut s));
 
         setup_(&mut clock, &mut s);
+        // VSDB
         vest_(&mut clock, &mut s);
 
+        // AMM
         test::pool_test::pool_(&mut clock, &mut s);
+        // VeModel
         setup::deploy_voter(&mut s);
         setup::deploy_gauge(&mut s);
-
         test::gauge_test::gauge_(&mut clock, &mut s);
         test::bribe_test::bribe_(&mut clock, &mut s);
         test::voter_test::vote_(&mut clock, &mut s);
