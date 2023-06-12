@@ -1,3 +1,4 @@
+/// Pool's governance interactinos, only PoolCap holder is able to invoke the below functions
 module suiDouBashi_amm::pool_reg{
     use sui::object::{UID, ID};
     use sui::table::{Self, Table};
@@ -12,18 +13,16 @@ module suiDouBashi_amm::pool_reg{
     use suiDouBashi_amm::event;
     use suiDouBashi_amm::pool::{Self, Pool};
 
-    const ERR_INVALD_GUARDIAN: u64 = 0;
+    const ERR_INVALD_GUARDIAN: u64 = 100;
     const ERR_INVALD_FEE: u64 = 0;
     const ERR_INVALD_PAIR: u64 = 0;
+
+    struct PoolCap has key { id: UID }
 
     struct PoolReg has key {
         id: UID,
         pools: Table<String, ID>,
         guardian: address
-    }
-
-    fun assert_guardian(self :&PoolReg, guardian: address){
-        assert!(self.guardian == guardian, ERR_INVALD_GUARDIAN);
     }
 
     fun assert_fee(stable: bool, fee: u8){
@@ -71,10 +70,17 @@ module suiDouBashi_amm::pool_reg{
         transfer::share_object(
             pool_gov
         );
+        transfer::transfer(
+            PoolCap{
+                id: object::new(ctx)
+            },
+            tx_context::sender(ctx)
+        );
     }
 
     /// Only Governor can create pool as stable argument has to be determined beforehand
     public entry fun create_pool<X,Y>(
+        _cap: &PoolCap,
         self: &mut PoolReg,
         stable: bool,
         metadata_x: &CoinMetadata<X>,
@@ -83,36 +89,35 @@ module suiDouBashi_amm::pool_reg{
         ctx: &mut TxContext
     ){
         assert_sorted<X, Y>();
-        assert_guardian(self, tx_context::sender(ctx));
         assert_fee(stable, fee_percentage);
-
         let pool_id = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
         let pool_name = get_pool_name<X,Y>();
         table::add(&mut self.pools, pool_name, pool_id);
-
         event::pool_created<X,Y>(pool_id, tx_context::sender(ctx))
     }
 
     entry fun lock_pool<X, Y>(
-        self: &PoolReg,
+        _cap: &PoolCap,
         pool: &mut Pool<X, Y>,
         locked: bool,
-        ctx: &mut TxContext
     ){
-        assert_guardian(self, tx_context::sender(ctx));
         pool::udpate_lock(pool, locked);
     }
 
-    entry fun update_fee<X,Y>(self: &PoolReg,pool: &mut Pool<X,Y>, fee: u8, ctx:&mut TxContext){
-        assert_guardian(self, tx_context::sender(ctx));
+    entry fun update_fee<X,Y>(
+        _cap: &PoolCap,
+        pool: &mut Pool<X,Y>,
+        fee: u8
+    ){
         assert_fee(pool::get_stable(pool), fee);
-
         pool::update_fee(pool, fee);
     }
 
-    entry fun update_stable<X,Y>(self: &PoolReg,pool: &mut Pool<X,Y>, stable: bool, ctx:&mut TxContext){
-        assert_guardian(self, tx_context::sender(ctx));
-
+    entry fun update_stable<X,Y>(
+        _cap: &PoolCap,
+        pool: &mut Pool<X,Y>,
+        stable: bool
+    ){
         pool::update_stable(pool, stable);
     }
 

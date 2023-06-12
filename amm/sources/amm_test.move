@@ -9,7 +9,7 @@ module suiDouBashi_amm::amm_test{
     use sui::transfer;
 
     use suiDouBashi_amm::pool::{Self, Pool, LP};
-    use suiDouBashi_amm::pool_reg::{Self, PoolReg};
+    use suiDouBashi_amm::pool_reg::{Self, PoolReg, PoolCap};
     use suiDouBashi_amm::usdt::{Self, USDT};
     use suiDouBashi_amm::usdc::{Self, USDC};
 
@@ -124,8 +124,10 @@ module suiDouBashi_amm::amm_test{
             let meta_x = test::take_immutable<CoinMetadata<X>>(test);
             let meta_y = test::take_immutable<CoinMetadata<Y>>(test);
             let pool_gov = test::take_shared<PoolReg>(test);
+            let pool_cap = test::take_from_sender<PoolCap>(test);
             pool_reg::create_pool<X, Y>(
                 &mut pool_gov,
+                &pool_cap,
                 true,
                 &meta_x,
                 &meta_y,
@@ -134,6 +136,7 @@ module suiDouBashi_amm::amm_test{
             );
 
             test::return_shared(pool_gov);
+            test::return_to_sender(test, pool_cap);
             test::return_immutable<CoinMetadata<X>>(meta_x);
             test::return_immutable<CoinMetadata<Y>>(meta_y);
         };
