@@ -9,7 +9,7 @@ module suiDouBashi_farm::farm_test{
     use suiDouBashi_amm::usdt::{USDT};
     use suiDouBashi_amm::usdc::{USDC};
     use suiDouBashi_vsdb::sdb::{SDB};
-    use suiDouBashi_vsdb::vsdb::{Self, VSDB, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_amm::pool::{Pool,LP};
 
 
@@ -343,7 +343,7 @@ module suiDouBashi_farm::farm_test{
         };
 
         next_tx(s,a);{
-            let vsdb = test::take_from_sender<VSDB>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
 
             let reward_a = ( 28 - 3 ) * 86400 * 258349867 * 2 / 10;
             let reward_b = ( 28 - 0 ) * 86400 * 258349867 * 3 / 10;

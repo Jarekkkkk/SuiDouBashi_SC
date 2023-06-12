@@ -80,8 +80,8 @@ module suiDouBashi_amm::pool_reg{
 
     /// Only Governor can create pool as stable argument has to be determined beforehand
     public entry fun create_pool<X,Y>(
-        _cap: &PoolCap,
         self: &mut PoolReg,
+        _cap: &PoolCap,
         stable: bool,
         metadata_x: &CoinMetadata<X>,
         metadata_y: &CoinMetadata<Y>,

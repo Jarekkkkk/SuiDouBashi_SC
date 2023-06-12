@@ -1,6 +1,6 @@
 /// VSDB Vesting NFT stands for membership of SuiDoBashi Ecosystem,
 /// Anyone holding VSDB can be verified project contributor as it retain our token value by holding SDB coins
-/// Whne holding VSDB, holder can enjooy all the features in the SuiDoBashi ecosystem
+/// Whne holding VSDB, holder can enjoy the features in the SuiDoBashi ecosystem
 module suiDouBashi_vsdb::vsdb{
     use sui::url::{Self, Url};
     use std::type_name::{Self, TypeName};

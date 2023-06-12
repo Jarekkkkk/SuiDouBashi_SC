@@ -216,8 +216,8 @@ module suiDouBashi_amm::pool{
         assert!(type_name::get<X>() == type || type_name::get<Y>() == type, ERR_INVALID_TYPE);
     }
 
-    public fun calculate_fee(value: u64, fee: u8): u64{
-        value * (fee as u64) / FEE_SCALING
+    public fun calculate_fee(value: u64, fee_percentage: u8): u64{
+        value * (fee_percentage as u64) / FEE_SCALING + 1
     }
 
     /// b' (optimzied_) = (Y/X) * a, subject to Y/X = b/a
@@ -412,7 +412,7 @@ module suiDouBashi_amm::pool{
             vsdb::earn_xp(AMM_SDB{}, vsdb, 2);
         };
         let fee_percentage = if(self.fee.fee_percentage < level / 3){
-            1_u8
+            1
         }else{
             self.fee.fee_percentage - level / 3
         };

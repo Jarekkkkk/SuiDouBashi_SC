@@ -109,6 +109,19 @@ module suiDouBashi_amm::amm_test{
         clock::destroy_for_testing(clock);
         test::end(scenario);
     }
+    #[test]
+    fun test_vsdb(){
+        let scenario = test::begin(@0x1);
+        let clock = clock::create_for_testing(ctx(&mut scenario));
+        usdt::deploy_coin(ctx(&mut scenario));
+        usdc::deploy_coin(ctx(&mut scenario));
+        zap_y_<USDC, USDT>(USDT_AMT, USDC_AMT, &mut clock, &mut scenario);
+
+        test_vsdb_<USDC, USDT>(&mut clock, &mut scenario);
+
+        clock::destroy_for_testing(clock);
+        test::end(scenario);
+    }
 
     public fun test_init_reg_(_: &mut Clock, test: &mut Scenario){
         let ( creator, _, _) = people();
@@ -353,7 +366,7 @@ module suiDouBashi_amm::amm_test{
         add_time(clock, ( 1800 + 1 )* 1000 );
 
         next_tx(test, creator);{// single zap
-            let pool = test::take_shared<Pool< X, Y>>(test);
+            let pool = test::take_shared<Pool<X, Y>>(test);
             let lp = test::take_from_sender<LP<X,Y>>(test);
             pool::zap_x(&mut pool, mint<X>(deposit_x, ctx(test)), &mut lp, 0, 0, clock, ctx(test));
 
@@ -401,5 +414,78 @@ module suiDouBashi_amm::amm_test{
         }
     }
 
+    use suiDouBashi_amm::pool::AMM_SDB;
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb,VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb_test;
+    fun test_vsdb_<X,Y>(clock: &mut Clock, s: &mut Scenario){
+        let (a, _, _) = people();
+        vsdb_test::test_create_lock_(clock, s);
+
+        next_tx(s,a);{
+            let cap = test::take_from_sender<vsdb::VSDBCap>(s);
+            let vsdb_reg = test::take_shared<VSDBRegistry>(s);
+            vsdb::register_module<AMM_SDB>(&cap, &mut vsdb_reg);
+
+            test::return_to_sender(s, cap);
+            test::return_shared(vsdb_reg);
+        };
+
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb_reg = test::take_shared<VSDBRegistry>(s);
+
+            pool::initialize(&vsdb_reg, &mut vsdb);
+
+            test::return_to_sender(s, vsdb);
+            test::return_shared(vsdb_reg);
+        };
+
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let pool = test::take_shared<Pool<X,Y>>(s);
+            assert!(pool::is_initialized(&vsdb), 404);
+
+            let output = pool::get_output<X,Y,Y>(&pool, 1000);
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            test::return_to_sender(s, vsdb);
+            test::return_shared(pool);
+        };
+
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let pool = test::take_shared<Pool<X,Y>>(s);
+            assert!(vsdb::experience(&vsdb) == 2, 404);
+
+            let output = pool::get_output<X,Y,Y>(&pool, 1000);
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            test::return_to_sender(s, vsdb);
+            test::return_shared(pool);
+        };
+        add_time(clock, 86400 * 7 * 1000);
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let pool = test::take_shared<Pool<X,Y>>(s);
+            assert!(vsdb::experience(&vsdb) == 6, 404);
+            let output = pool::get_output<X,Y,Y>(&pool, 1000);
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+
+            test::return_to_sender(s, vsdb);
+            test::return_shared(pool);
+        };
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let pool = test::take_shared<Pool<X,Y>>(s);
+            assert!(vsdb::experience(&vsdb) == 8, 404);
+            let output = pool::get_output<X,Y,Y>(&pool, 1000);
+            pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+
+            test::return_to_sender(s, vsdb);
+            test::return_shared(pool);
+        };
+    }
     public fun people(): (address, address, address) { (@0x000A, @0x000B, @0x000C ) }
 }

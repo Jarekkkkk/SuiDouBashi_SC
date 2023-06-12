@@ -40,11 +40,11 @@ module test::pool_test{
             assert!(pool::get_lp_balance(&lp_a) == 1999000, 0);
             assert!(pool::get_lp_balance(&lp_b) == 63244552, 0);
             // pool_a
-            assert!(pool::get_output<USDC, USDT, USDC>(&pool_a, setup::usdc_1()) == 944968, 0);
-            assert!(pool::get_output<USDC, USDT, USDT>(&pool_a, setup::usdc_1()) == 944968, 0);
+            assert!(pool::get_output<USDC, USDT, USDC>(&pool_a, setup::usdc_1()) == 944967, 0);
+            assert!(pool::get_output<USDC, USDT, USDT>(&pool_a, setup::usdc_1()) == 944967, 0);
             // pool_b
             assert!(pool::get_output<SDB, USDC, SDB>(&pool_b, setup::sui_1()) == 664440, 0);
-            assert!(pool::get_output<SDB, USDC, USDC>(&pool_b,setup::usdc_1()) == 664440734, 0);
+            assert!(pool::get_output<SDB, USDC, USDC>(&pool_b,setup::usdc_1()) == 664440288, 0);
 
             test::return_shared(pool_a);
             test::return_shared(pool_b);
@@ -90,9 +90,8 @@ module test::pool_test{
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
             let ctx = ctx(s);
-
-            assert!(pool::get_fee_x(&pool_a) == 300, 1);
-            assert!(pool::get_fee_x(&pool_b) == 5_000_000, 1);
+            assert!(pool::get_fee_x(&pool_a) == 301, 1);
+            assert!(pool::get_fee_x(&pool_b) == 5_000_001, 1);
 
             pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
             pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
@@ -118,8 +117,8 @@ module test::pool_test{
             assert!(pool::get_claimable_x(&lp_b) == 0, 0);
             assert!( pool_a_fee_x == 101, 1);
             assert!( pool_b_fee_x == 1666720, 1);
-            assert!(coin::value(&fee_usdc) == 199, 1);
-            assert!(coin::value(&fee_sdb) == 3333280, 1);
+            assert!(coin::value(&fee_usdc) == 200, 1);
+            assert!(coin::value(&fee_sdb) == 3333281, 1);
 
             test::return_shared(pool_a);
             test::return_shared(pool_b);
@@ -151,8 +150,8 @@ module test::pool_test{
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
             let ctx = ctx(s);
-            assert!(pool::get_fee_x(&pool_a) == 401, 1);
-            assert!(pool::get_fee_x(&pool_b) == 6_666_720, 1);
+            assert!(pool::get_fee_x(&pool_a) == 402, 1);
+            assert!(pool::get_fee_x(&pool_b) == 6_666_721, 1);
 
             pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
             pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
@@ -173,8 +172,8 @@ module test::pool_test{
 
             assert!(pool::get_claimable_x(&lp_a) == 0, 0);
             assert!(pool::get_claimable_x(&lp_b) == 0, 0);
-            assert!(pool::get_fee_x(&pool_a) == 201, 1);
-            assert!(pool::get_fee_x(&pool_b) == 3_333_387, 1);
+            assert!(pool::get_fee_x(&pool_a) == 202, 1);
+            assert!(pool::get_fee_x(&pool_b) == 3_333_388, 1);
             assert!(coin::value(&fee_usdc) == 200, 1);
             assert!(coin::value(&fee_sdb) == 3_333_333, 1);
 
@@ -213,8 +212,8 @@ module test::pool_test{
             assert!(pool::get_claimable_x(&lp_b) == 0, 0);
             assert!(pool::get_fee_x(&pool_a) == 2, 1);
             assert!(pool::get_fee_x(&pool_b) == 107, 1);
-            assert!(coin::value(&fee_usdc) == 199, 1);
-            assert!(coin::value(&fee_sdb) == 3333280, 1);
+            assert!(coin::value(&fee_usdc) == 200, 1);
+            assert!(coin::value(&fee_sdb) == 3333281, 1);
 
             test::return_shared(pool_a);
             test::return_shared(pool_b);
@@ -225,7 +224,7 @@ module test::pool_test{
         };
     }
 
-        use suiDouBashi_amm::pool_reg::{Self, PoolReg};
+        use suiDouBashi_amm::pool_reg::{Self, PoolReg, PoolCap};
         use sui::coin::CoinMetadata;
         use suiDouBashi_vest::minter::{mint_sdb, Minter};
         public fun deploy_pools(s: &mut Scenario, clock: &mut Clock){
@@ -237,10 +236,12 @@ module test::pool_test{
             let meta_usdc = test::take_immutable<CoinMetadata<USDC>>(s);
             let meta_usdt = test::take_immutable<CoinMetadata<USDT>>(s);
             let meta_sdb = test::take_immutable<CoinMetadata<SDB>>(s);
+            let pool_cap = test::take_from_sender<PoolCap>(s);
 
             let pool_gov = test::take_shared<PoolReg>(s);
             pool_reg::create_pool(
                 &mut pool_gov,
+                &pool_cap,
                 true,
                 &meta_usdc,
                 &meta_usdt,
@@ -249,6 +250,7 @@ module test::pool_test{
             );
             pool_reg::create_pool(
                 &mut pool_gov,
+                &pool_cap,
                 false,
                 &meta_sdb,
                 &meta_usdc,
@@ -256,6 +258,7 @@ module test::pool_test{
                 ctx(s)
             );
 
+            test::return_to_sender(s, pool_cap);
             test::return_shared(pool_gov);
             test::return_immutable(meta_usdc);
             test::return_immutable(meta_sdb);
@@ -299,15 +302,15 @@ module test::pool_test{
             assert!(pool::get_stable(&pool_a) == true, 0);
             assert! (res_lp_a == 1000000, 0);
             assert!(pool::get_lp_balance(&lp_a) == res_lp_a - 1000, 0);
-            assert!(pool::get_output<USDC, USDT, USDC>(&pool_a, setup::usdc_1()) == 753_627, 0);
-            assert!(pool::get_output<USDC, USDT, USDT>(&pool_a, setup::usdc_1()) == 753_627, 0);
+            assert!(pool::get_output<USDC, USDT, USDC>(&pool_a, setup::usdc_1()) == 753_626, 0);
+            assert!(pool::get_output<USDC, USDT, USDT>(&pool_a, setup::usdc_1()) == 753_626, 0);
 
             // pool_b
             assert!(pool::get_stable(&pool_b) == false, 0);
             assert!(res_lp_b == 31622776, 0);
             assert!(pool::get_lp_balance(&lp_b) == res_lp_b - 1000, 0);
             assert!(pool::get_output<SDB, USDC, SDB>(&pool_b, setup::sui_1()) == 498_746, 0);
-            assert!(pool::get_output<SDB, USDC, USDC>(&pool_b, setup::usdc_1()) == 498_746_867, 0);
+            assert!(pool::get_output<SDB, USDC, USDC>(&pool_b, setup::usdc_1()) == 498746615, 0);
 
             test::return_shared(pool_gov);
             test::return_shared(pool_a);

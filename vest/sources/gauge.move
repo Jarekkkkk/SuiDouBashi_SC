@@ -174,7 +174,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let (coin_x, coin_y) = pool::claim_fees_gauge(pool, &mut self.total_supply, ctx);
+        let (coin_x, coin_y) = pool::claim_fees_dev(pool, &mut self.total_supply, ctx);
         let value_x = if(option::is_some(&coin_x)){
             let coin_x = option::extract(&mut coin_x);
             let value_x = coin::value(&coin_x);

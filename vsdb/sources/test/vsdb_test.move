@@ -59,7 +59,9 @@ module suiDouBashi_vsdb::vsdb_test{
         add_time(&mut clock, 1672531200 * 1000);
 
         // main
-        vsdb::init_for_testing(ctx(s));
+        next_tx(s,a);{
+            vsdb::init_for_testing(ctx(s));
+        };
         next_tx(s, a);{
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::lock(&mut reg, mint<SDB>(sui_100M(), ctx(s)), week(), &clock, ctx(s));
@@ -76,10 +78,12 @@ module suiDouBashi_vsdb::vsdb_test{
         test::end(scenario);
     }
 
-    fun test_create_lock_(clock: &mut Clock, s: &mut Scenario){
+    public fun test_create_lock_(clock: &mut Clock, s: &mut Scenario){
         let (a, _, _) = people();
 
-        vsdb::init_for_testing(ctx(s));
+        next_tx(s,a);{
+            vsdb::init_for_testing(ctx(s));
+        };
 
          next_tx(s, a);
         {
@@ -152,7 +156,12 @@ module suiDouBashi_vsdb::vsdb_test{
         };
         next_tx(s, a);{ // vsdb been burnt
             assert!(!test::has_most_recent_for_sender< Vsdb>(s), 0);
-        }
+        };
+        next_tx(s,a);{
+            let reg = test::take_shared<VSDBRegistry>(s);
+            vsdb::lock(&mut reg, mint<SDB>(sui_100M(), ctx(s)), vsdb::max_time(), clock, ctx(s));
+            test::return_shared(reg);
+        };
     }
 
     use suiDouBashi_vsdb::test_whitelist::{Self as white, MOCK, Foo};
