@@ -208,7 +208,29 @@ module suiDouBashi_vsdb::vsdb_test{
 
             test::return_to_sender(s, vsdb);
             test::return_shared(foo);
-        }
+        };
+
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender< Vsdb>(s);
+            white::add_experience(&mut vsdb);
+            test::return_to_sender(s, vsdb);
+        };
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender< Vsdb>(s);
+            assert!(vsdb::experience(&vsdb) ==25, 404);
+            let level = vsdb::level(&vsdb);
+            assert!(vsdb::required_xp(level + 1, level) == 25, 404);
+            vsdb::upgrade(&mut vsdb);
+            test::return_to_sender(s, vsdb);
+        };
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender< Vsdb>(s);
+            let level = vsdb::level(&vsdb);
+            assert!(vsdb::required_xp(level + 1, level) == 75, 404);
+            assert!(vsdb::experience(&vsdb) == 0, 404);
+            assert!(vsdb::level(&vsdb)== 1, 404);
+            test::return_to_sender(s, vsdb);
+        };
     }
     use sui::math;
 

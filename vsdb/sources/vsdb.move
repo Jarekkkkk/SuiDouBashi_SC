@@ -349,7 +349,6 @@ module suiDouBashi_vsdb::vsdb{
         };
         return ((i128::as_u128(&last_point_bias))as u64)
     }
-
     // - point
     public fun get_player_epoch(self: &Vsdb): u64 { self.player_epoch }
 

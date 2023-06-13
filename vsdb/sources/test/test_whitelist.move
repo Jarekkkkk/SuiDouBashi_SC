@@ -54,5 +54,9 @@ module suiDouBashi_vsdb::test_whitelist{
         voting_mut.last_voted = 131312;
     }
 
+    public fun add_experience(vsdb: &mut Vsdb){
+        vsdb::earn_xp(MOCK{}, vsdb, 25);
+    }
+
     #[test_only] public fun init_for_testing(ctx: &mut TxContext){ init(ctx) }
 }
