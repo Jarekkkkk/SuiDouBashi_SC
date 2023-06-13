@@ -1,6 +1,6 @@
 // External Bribes represent coin brbies from protocol
 module suiDouBashi_vest::external_bribe{
-    use std::type_name::{Self, TypeName};
+    use std::type_name;
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
@@ -17,8 +17,8 @@ module suiDouBashi_vest::external_bribe{
     use suiDouBashi_vsdb::vsdb::Vsdb;
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vest::event;
-    use suiDouBashi_vest::err;
     use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
+    use suiDouBashi_vest::minter::package_version;
 
     friend suiDouBashi_vest::gauge;
     friend suiDouBashi_vest::voter;
@@ -28,8 +28,16 @@ module suiDouBashi_vest::external_bribe{
     const MAX_REWARD_TOKENS: u64 = 16;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
+    const E_WRONG_VERSION: u64 = 001;
+    const E_INVALID_TYPE: u64 = 100;
+    const E_INVALID_VOTER: u64 = 101;
+    const E_INSUFFICIENT_VOTES: u64 = 103;
+    const E_INSUFFICENT_BALANCE: u64 = 103;
+    const E_EMPTY_VALUE: u64 = 104;
+
     struct ExternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
+        version: u64,
         total_supply: u64,
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
@@ -43,8 +51,7 @@ module suiDouBashi_vest::external_bribe{
     }
 
     // 4 coins at most are allowed to bribe, [coin pair of pool, SDB, SUI]
-    struct Reward<phantom X, phantom Y, phantom T> has key, store{
-        id: UID,
+    struct Reward<phantom X, phantom Y, phantom T> has store{
         balance: Balance<T>,
         token_rewards_per_epoch: Table<u64, u64>,
         period_finish: u64,
@@ -54,7 +61,6 @@ module suiDouBashi_vest::external_bribe{
     // - Reward
     fun create_reward<X,Y,T>(self: &mut ExternalBribe<X,Y>, ctx: &mut TxContext){
         let reward =  Reward<X,Y,T>{
-            id: object::new(ctx),
             balance: balance::zero<T>(),
             token_rewards_per_epoch: table::new<u64, u64>(ctx),
             period_finish: 0,
@@ -63,14 +69,12 @@ module suiDouBashi_vest::external_bribe{
         df::add(&mut self.id, type_name::get<T>(), reward);
     }
     public fun borrow_reward<X,Y,T>(self: &ExternalBribe<X,Y>):&Reward<X, Y, T>{
-        let type_name = type_name::get<T>();
-        assert_reward_created<X,Y,T>(self, type_name);
-        df::borrow(&self.id, type_name)
+        assert_generic_type<X,Y,T>();
+        df::borrow(&self.id, type_name::get<T>())
     }
     fun borrow_reward_mut<X,Y,T>(self: &mut ExternalBribe<X,Y>):&mut Reward<X, Y, T>{
-        let type_name = type_name::get<T>();
-        assert_reward_created<X,Y,T>(self, type_name);
-        df::borrow_mut(&mut self.id, type_name)
+        assert_generic_type<X,Y,T>();
+        df::borrow_mut(&mut self.id, type_name::get<T>())
     }
 
     public fun get_reward_balance<X,Y,T>(self: &ExternalBribe<X,Y>):u64 {
@@ -85,10 +89,7 @@ module suiDouBashi_vest::external_bribe{
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
         let type_t = type_name::get<T>();
-        assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>() || type_t == type_name::get<SUI>() || type_t == type_name::get<SDB>(), err::invalid_type_argument());
-    }
-    public fun assert_reward_created<X,Y,T>(self: &ExternalBribe<X,Y>, type_name: TypeName){
-        assert!(df::exists_(&self.id, type_name), err::reward_not_exist());
+        assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>() || type_t == type_name::get<SUI>() || type_t == type_name::get<SDB>(), E_INVALID_TYPE);
     }
     // called in gauge constructor
     public (friend )fun create_bribe<X,Y>(
@@ -96,6 +97,7 @@ module suiDouBashi_vest::external_bribe{
     ):ID {
         let bribe = ExternalBribe<X,Y>{
             id: object::new(ctx),
+            version: package_version(),
             total_supply:0,
             balance_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
@@ -119,7 +121,6 @@ module suiDouBashi_vest::external_bribe{
             create_reward<X,Y,SDB>(&mut bribe, ctx);
         };
         transfer::share_object(bribe);
-
         id
     }
 
@@ -268,6 +269,7 @@ module suiDouBashi_vest::external_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let type_x = type_name::get<X>();
         let type_y = type_name::get<Y>();
         let type_sdb = type_name::get<SDB>();
@@ -288,6 +290,7 @@ module suiDouBashi_vest::external_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         assert_generic_type<X,Y,T>();
 
         let id = object::id(vsdb);
@@ -341,7 +344,7 @@ module suiDouBashi_vest::external_bribe{
             while( i <= end_idx - 1){
                 let cp_0 = vec::borrow(bps_borrow, i);
                 let _next_epoch_start = bribe_start(checkpoints::balance_ts(cp_0));
-                 // check that you've earned it
+                // check that you've earned it
                 // this won't happen until a week has passed
                 if(_next_epoch_start > pre_reward_ts){
                     earned_reward = earned_reward + pre_reward_bal;
@@ -381,9 +384,6 @@ module suiDouBashi_vest::external_bribe{
         return (earned_reward as u64)
     }
 
-
-    // ===== Setter =====
-
     //// [voter]: receive votintg
     public (friend) fun deposit<X,Y>(
         self: &mut ExternalBribe<X,Y>,
@@ -392,6 +392,7 @@ module suiDouBashi_vest::external_bribe{
         clock: &Clock,
         _ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let id = object::id(vsdb);
         self.total_supply = self.total_supply + amount;
 
@@ -413,9 +414,13 @@ module suiDouBashi_vest::external_bribe{
         clock: &Clock,
         _ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let id = object::id(vsdb);
-        assert!(table::contains(&self.balance_of, id), err::invalid_voter());
-        assert!(self.total_supply >= amount, err::insufficient_voting());
+        assert!(table::contains(&self.balance_of, id), E_INVALID_VOTER);
+        let supply = self.total_supply;
+        let balance = *table::borrow(& self.balance_of, id);
+        assert!(supply >= amount, E_INSUFFICENT_BALANCE);
+        assert!(balance >= amount, E_INSUFFICIENT_VOTES);
         self.total_supply = self.total_supply - amount;
         *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(& self.balance_of, id) - amount;
         write_checkpoint_(self, vsdb, amount, clock);
@@ -438,11 +443,12 @@ module suiDouBashi_vest::external_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         assert_generic_type<X,Y,T>();
 
         let value = coin::value(&coin);
         let reward = borrow_reward_mut<X,Y,T>(self);
-        assert!(value > 0, err::empty_coin());
+        assert!(value > 0, E_EMPTY_VALUE);
 
         // bribes kick in at the start of next bribe period
         let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock) / 1000);

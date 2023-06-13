@@ -92,9 +92,7 @@ module suiDouBashi_vest::gauge{
     #[test_only]
     public fun total_supply_borrow<X,Y>(self: &Gauge<X,Y>):&LP<X,Y>{ &self.total_supply }
 
-    struct Reward<phantom X, phantom Y > has key, store{
-        id: UID,
-
+    struct Reward<phantom X, phantom Y > has store{
         balance: Balance<SDB>,
 
         reward_rate: u64, // reward_amount / 7 days
@@ -162,7 +160,6 @@ module suiDouBashi_vest::gauge{
         };
         // SDB emission rewards
         let reward =  Reward<X,Y>{
-            id: object::new(ctx),
             balance: balance::zero<SDB>(),
             reward_rate: 0,
             period_finish: 0,

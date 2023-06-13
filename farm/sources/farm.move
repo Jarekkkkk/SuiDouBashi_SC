@@ -16,7 +16,6 @@ module suiDouBashi_farm::farm{
     use sui::clock::{Self, Clock};
 
     const TOTAL_ALLOC_POINT: u64 = 100;
-    const LOCK: u64 = { 36 * 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     // ERROR

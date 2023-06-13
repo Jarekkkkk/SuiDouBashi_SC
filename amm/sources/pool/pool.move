@@ -197,9 +197,31 @@ module suiDouBashi_amm::pool{
 
     public fun get_lp_balance<X,Y>(claim: &LP<X,Y>):u64{ balance::value(&claim.lp_balance) }
 
-    public fun get_claimable_x<X,Y>(lp: &LP<X,Y>):u64{ lp.claimable_x }
+    public fun get_claimable_x<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):u64{
+        let lp_balance = get_lp_balance(lp);
+        let claimable_x = lp.claimable_x;
+        if(lp_balance > 0){
+            let delta = self.fee.index_x - lp.index_x;
+            if(delta > 0){
+                let share = (lp_balance as u256) * delta / SCALE_FACTOR;
+                claimable_x = claimable_x + (share as u64);
+            };
+        };
+        claimable_x
+    }
 
-    public fun get_claimable_y<X,Y>(lp: &LP<X,Y>):u64{ lp.claimable_y }
+    public fun get_claimable_y<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):u64{
+        let lp_balance = get_lp_balance(lp);
+        let claimable_y = lp.claimable_y;
+        if(lp_balance > 0){
+            let delta = self.fee.index_y - lp.index_y;
+            if(delta > 0){
+                let share = (lp_balance as u256) * delta / SCALE_FACTOR;
+                claimable_y = claimable_y + (share as u64);
+            };
+        };
+        claimable_y
+    }
 
     // Flash Loan
     struct Receipt<phantom X, phantom Y, phantom T> {

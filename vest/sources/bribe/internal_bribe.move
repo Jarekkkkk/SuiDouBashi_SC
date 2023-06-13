@@ -51,9 +51,7 @@ module suiDouBashi_vest::internal_bribe{
         *table::borrow(&self.balance_of, object::id(vsdb))
     }
 
-    struct Reward<phantom X, phantom Y, phantom T> has key, store{
-        id: UID,
-        /// Reward
+    struct Reward<phantom X, phantom Y, phantom T> has store{
         balance: Balance<T>,
         reward_rate: u64, // bribe_amount/ 7 days
         period_finish: u64,
@@ -105,7 +103,6 @@ module suiDouBashi_vest::internal_bribe{
         let id = object::id(&bribe);
 
         let reward_x = Reward<X,Y,X>{
-            id: object::new(ctx),
             balance: balance::zero<X>(),
             reward_rate: 0,
             period_finish: 0,
@@ -117,7 +114,6 @@ module suiDouBashi_vest::internal_bribe{
             last_earn: table::new<ID, u64>(ctx),
         };
         let reward_y = Reward<X,Y,Y>{
-            id: object::new(ctx),
             balance: balance::zero<Y>(),
             reward_rate: 0,
             period_finish: 0,
@@ -328,6 +324,7 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         get_reward<X,Y,X>(self, vsdb, clock, ctx);
         get_reward<X,Y,Y>(self, vsdb, clock, ctx);
     }
@@ -337,6 +334,7 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         assert_generic_type<X,Y,T>();
 
         let id = object::id(vsdb);
@@ -390,6 +388,7 @@ module suiDouBashi_vest::internal_bribe{
         max_run:u64,
         clock: &Clock,
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let ( reward_per_token_stored, last_update_time ) = batch_reward_per_token_<X,Y,Y>(self, max_run, clock);
         let reward = borrow_reward_mut<X,Y,Y>(self);
         reward.reward_per_token_stored = reward_per_token_stored;
@@ -460,6 +459,7 @@ module suiDouBashi_vest::internal_bribe{
         reward.reward_per_token_stored = reward_per_token_stored;
         reward.last_update_time = last_update_time;
     }
+
     fun update_reward_for_all_tokens_<X,Y>(
         self: &mut InternalBribe<X,Y>,
         clock: &Clock,
@@ -593,6 +593,7 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock,
         _ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let id = object::id(vsdb);
         update_reward_for_all_tokens_(self, clock);
 
@@ -615,6 +616,7 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock,
         _ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         update_reward_for_all_tokens_(self, clock);
 
         let id = object::id(vsdb);
@@ -645,6 +647,7 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         assert_generic_type<X,Y,T>();
 
         let value = coin::value(&coin);
