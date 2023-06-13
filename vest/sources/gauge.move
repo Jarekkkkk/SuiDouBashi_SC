@@ -14,24 +14,35 @@ module suiDouBashi_vest::gauge{
     use sui::table::{Self, Table};
 
     use suiDouBashi_amm::math_u128;
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
 
-    use suiDouBashi_vest::event;
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_vest::err;
+    use suiDouBashi_vest::event;
     use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
     use suiDouBashi_vest::internal_bribe::{Self, InternalBribe};
     use suiDouBashi_vest::external_bribe::{Self};
-
-    use suiDouBashi_amm::pool::{Self, Pool, LP};
+    use suiDouBashi_vest::minter::package_version;
 
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u128 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
+    const E_WRONG_VERSION: u64 = 001;
+
+    const E_ALREADY_STAKE: u64 = 100;
+    const E_INVALID_STAKER: u64 = 101;
+    const E_EMPTY_VALUE: u64 = 102;
+    const E_INSUFFICENT_BALANCE: u64 = 103;
+    const E_DEAD_GAUGE: u64 = 104;
+    const E_INSUFFICENT_BRIBES: u64 = 105;
+    const E_INVALID_REWARD_RATE: u64 = 106;
+    const E_MAX_REWARD: u64 = 107;
+
     friend suiDouBashi_vest::voter;
 
     struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,
+        version: u64,
         is_alive:bool,
         pool: ID,
         total_supply: LP<X,Y>,
@@ -52,13 +63,20 @@ module suiDouBashi_vest::gauge{
 
     public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
 
-    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){ self.supply_index = v; }
+    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        self.supply_index = v;
+    }
 
-    public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){ self.claimable = v; }
+    public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        self.claimable = v;
+    }
 
-    public (friend) fun kill_gauge_<X,Y>(self: &mut Gauge<X,Y> ){ self.is_alive = false }
-
-    public (friend) fun revive_gauge_<X,Y>(self: &mut Gauge<X,Y>){ self.is_alive = true }
+    public (friend) fun update_gauge<X,Y>(self: &mut Gauge<X,Y>, alive: bool ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        self.is_alive = alive
+     }
 
     public fun get_balance_of<X,Y>(self: &Gauge<X,Y>, staker: address):u64{
         *table::borrow(&self.balance_of, staker)
@@ -93,7 +111,8 @@ module suiDouBashi_vest::gauge{
     public fun borrow_reward<X,Y>(self: &Gauge<X,Y>):&Reward<X, Y>{
         df::borrow(&self.id, type_name::get<SDB>())
     }
-    fun borrow_reward_mut<X,Y>(self: &mut Gauge<X,Y>):&mut Reward<X, Y >{
+    fun borrow_reward_mut<X,Y>(self: &mut Gauge<X,Y>):&mut Reward<X,Y>{
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         df::borrow_mut(&mut self.id, type_name::get<SDB>())
     }
     #[test_only]
@@ -129,21 +148,15 @@ module suiDouBashi_vest::gauge{
         let id = object::new(ctx);
         let gauge = Gauge<X,Y>{
             id,
-
+            version: package_version(),
             is_alive: true,
-
             pool: object::id(pool),
-
             total_supply: pool::create_lp(pool, ctx),
             balance_of: table::new<address, u64>(ctx),
-
             fees_x: balance::zero<X>(),
             fees_y: balance::zero<Y>(),
-
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
-
             checkpoints: table::new<address, TableVec<Checkpoint>>(ctx),
-
             supply_index: 0,
             claimable: 0
         };
@@ -174,6 +187,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let (coin_x, coin_y) = pool::claim_fees_dev(pool, &mut self.total_supply, ctx);
         let value_x = if(option::is_some(&coin_x)){
             let coin_x = option::extract(&mut coin_x);
@@ -391,8 +405,9 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
+        assert!(table::contains(&self.balance_of, staker), E_INVALID_STAKER);
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
         {
@@ -464,6 +479,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
     ):(u128, u64) // ( reward_per_token_stored, last_update_time)
     {
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let ts = clock::timestamp_ms(clock) / 1000;
         let reward = borrow_reward<X,Y>(self);
         let start_timestamp = reward.last_update_time;
@@ -505,7 +521,8 @@ module suiDouBashi_vest::gauge{
         max_run:u64,
         clock: &Clock,
     ){
-         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, max_run, false, clock);
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, max_run, false, clock);
 
         borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
         borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
@@ -628,6 +645,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let balance = pool::get_lp_balance(lp_position);
         stake(self, pool, lp_position, balance, clock, ctx);
     }
@@ -639,6 +657,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
 
         borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
@@ -646,7 +665,7 @@ module suiDouBashi_vest::gauge{
 
         let staker = tx_context::sender(ctx);
         let lp_value = pool::get_lp_balance(lp_position);
-        assert!(lp_value > 0, err::empty_lp());
+        assert!(lp_value > 0, E_EMPTY_VALUE);
 
         pool::join_lp(pool, &mut self.total_supply, lp_position, value);
 
@@ -670,6 +689,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let bal = get_balance_of(self, tx_context::sender(ctx));
         unstake(self, pool, lp_position, bal, clock, ctx);
     }
@@ -681,10 +701,11 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.balance_of, staker), err::invalid_staker());
+        assert!(table::contains(&self.balance_of, staker), E_INVALID_STAKER);
         let bal = get_balance_of(self, staker);
-        assert!(value <= bal, err::insufficient_lp());
+        assert!(value <= bal, E_INSUFFICENT_BALANCE);
 
         let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
 
@@ -721,9 +742,10 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let value = coin::value(&coin);
         let reward = borrow_reward<X,Y>(self);
-        assert!(value > 0, err::zero_input());
+        assert!(value > 0, E_EMPTY_VALUE);
         let ts = clock::timestamp_ms(clock) / 1000;
         if(reward.reward_rate == 0){
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), 0, ts);
@@ -743,13 +765,13 @@ module suiDouBashi_vest::gauge{
         }else{
             let _remaining = reward.period_finish - ts;
             let _left = _remaining * reward.reward_rate;
-            assert!(value > _left, err::insufficient_bribes());
+            assert!(value > _left, E_INSUFFICENT_BRIBES);
             coin::put(&mut reward.balance, coin);
             reward.reward_rate = ( value + _left ) / DURATION;
         };
 
-        assert!(reward.reward_rate > 0, err::invalid_reward_rate());
-        assert!( reward.reward_rate <= balance::value(&reward.balance) / DURATION, err::max_reward());
+        assert!(reward.reward_rate > 0, E_INVALID_REWARD_RATE);
+        assert!( reward.reward_rate <= balance::value(&reward.balance) / DURATION, E_MAX_REWARD);
 
         reward.period_finish = ts + DURATION;
 

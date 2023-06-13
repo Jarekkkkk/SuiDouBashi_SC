@@ -188,12 +188,11 @@ module suiDouBashi_vsdb::vsdb_test{
 
         next_tx(s,a);{
             let foo = test::take_shared<Foo>(s);
-            let type = std::type_name::into_string(std::type_name::get<MOCK>());
             let reg = test::take_shared<VSDBRegistry>(s);
             let vsdb = test::take_from_sender< Vsdb>(s);
 
             white::add_pool_votes(&foo, &reg, &mut vsdb);
-            let _registered = vsdb::module_exists(&vsdb, std::ascii::into_bytes(type));
+            let _registered = vsdb::module_exists<MOCK>(&vsdb);
 
             test::return_shared(foo);
             test::return_shared(reg);

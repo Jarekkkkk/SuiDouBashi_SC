@@ -190,8 +190,8 @@ module test::main{
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
             voter::notify_reward_amount_(&mut voter, mint<SDB>(setup::stake_1(), ctx(s)));
-            voter::update_for_(&voter, &mut gauge_a);
-            voter::update_for_(&voter, &mut gauge_b);
+            voter::update_for(&voter, &mut gauge_a);
+            voter::update_for(&voter, &mut gauge_b);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);

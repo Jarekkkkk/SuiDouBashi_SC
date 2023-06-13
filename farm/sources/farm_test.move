@@ -344,15 +344,12 @@ module suiDouBashi_farm::farm_test{
 
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
-
             let reward_a = ( 28 - 3 ) * 86400 * 258349867 * 2 / 10;
             let reward_b = ( 28 - 0 ) * 86400 * 258349867 * 3 / 10;
             let reward_c = ( 28 - 0 ) * 86400 * 258349867 * 5 / 10;
             assert!(vsdb::locked_balance(&vsdb) == reward_a + reward_b + reward_c, 404);
             let time = vsdb::round_down_week(get_time(clock) / 1000 + vsdb::max_time());
             assert!(vsdb::locked_end(&vsdb) == time, 404);
-           std::debug::print(&vsdb);
-
             test::return_to_sender(s, vsdb);
         }
 

@@ -16,8 +16,9 @@ module suiDouBashi_vest::internal_bribe{
     use suiDouBashi_amm::math_u128;
 
     use suiDouBashi_vsdb::vsdb::Vsdb;
+
+    use suiDouBashi_vest::minter::package_version;
     use suiDouBashi_vest::event;
-    use suiDouBashi_vest::err;
     use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
 
     friend suiDouBashi_vest::gauge;
@@ -27,8 +28,18 @@ module suiDouBashi_vest::internal_bribe{
     const PRECISION: u128 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
+    const E_WRONG_VERSION: u64 = 001;
+    const E_INVALID_TYPE: u64 = 100;
+    const E_INVALID_VOTER: u64 = 100;
+    const E_INSUFFICIENT_VOTES: u64 = 100;
+    const E_EMPTY_VALUE: u64 = 100;
+    const E_INSUFFICENT_BRIBES: u64 = 105;
+    const E_INVALID_REWARD_RATE: u64 = 106;
+    const E_MAX_REWARD: u64 = 107;
+
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
+        version: u64,
         total_supply: u64,
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
@@ -77,7 +88,7 @@ module suiDouBashi_vest::internal_bribe{
     // ===== Assertion =====
     public fun assert_generic_type<X,Y,T>(){
         let type_t = type_name::get<T>();
-        assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>(), err::invalid_type_argument());
+        assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>(), E_INVALID_TYPE);
     }
 
     public (friend )fun create_bribe<X,Y>(
@@ -85,10 +96,10 @@ module suiDouBashi_vest::internal_bribe{
     ):ID {
         let bribe = InternalBribe<X,Y>{
             id: object::new(ctx),
+            version: package_version(),
             total_supply:0,
             balance_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
-
             checkpoints: table::new<ID, vector<Checkpoint>>(ctx),
         };
         let id = object::id(&bribe);
@@ -607,10 +618,13 @@ module suiDouBashi_vest::internal_bribe{
         update_reward_for_all_tokens_(self, clock);
 
         let id = object::id(vsdb);
-        assert!(table::contains(&self.balance_of, id), err::invalid_voter());
-        assert!(self.total_supply >= amount, err::insufficient_voting());
-        self.total_supply = self.total_supply - amount;
-        *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(& self.balance_of, id) - amount;
+        assert!(table::contains(&self.balance_of, id), E_INVALID_VOTER);
+        let supply = self.total_supply;
+        let balance = *table::borrow(& self.balance_of, id);
+        assert!(supply >= amount, E_INSUFFICIENT_VOTES);
+        assert!(balance >= amount, E_INSUFFICIENT_VOTES);
+        self.total_supply = supply - amount;
+        *table::borrow_mut(&mut self.balance_of, id) = balance - amount;
 
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
@@ -635,7 +649,7 @@ module suiDouBashi_vest::internal_bribe{
 
         let value = coin::value(&coin);
         let reward = borrow_reward<X,Y,T>(self);
-        assert!(value > 0, err::empty_coin());
+        assert!(value > 0, E_EMPTY_VALUE);
 
         let ts = clock::timestamp_ms(clock) / 1000;
         if(reward.reward_rate == 0){
@@ -654,13 +668,13 @@ module suiDouBashi_vest::internal_bribe{
         }else{
             let _remaining = reward.period_finish - ts;
             let _left = _remaining * reward.reward_rate;
-            assert!(value > _left, err::insufficient_bribes());
+            assert!(value > _left, E_INSUFFICENT_BRIBES);
             coin::put(&mut reward.balance, coin);
             reward.reward_rate = ( value + _left ) / DURATION;
         };
 
-        assert!(reward.reward_rate > 0, err::invalid_reward_rate());
-        assert!( reward.reward_rate <= balance::value(&reward.balance) / DURATION, err::max_reward());
+        assert!(reward.reward_rate > 0, E_INVALID_REWARD_RATE);
+        assert!( reward.reward_rate <= balance::value(&reward.balance) / DURATION, E_MAX_REWARD);
 
         reward.period_finish = ts + DURATION;
 

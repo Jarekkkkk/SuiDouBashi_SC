@@ -1,4 +1,7 @@
 module suiDouBashi_vest::minter{
+    const VERSION: u64 = 1;
+    public fun package_version(): u64 { VERSION }
+
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Supply, Balance};
     use sui::clock::{Self, Clock};
@@ -11,15 +14,17 @@ module suiDouBashi_vest::minter{
 
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
-    use suiDouBashi_vest::err;
     use suiDouBashi_vest::event;
 
     const WEEK: u64 = { 7 * 86400 };
     const EMISSION: u64 = 990; // linearly decrease 1 %
     const PRECISION: u64 = 1000;
-    const TAIL_EMISSION: u64 = 2; // minium 0.2n%
-    const WEEKLY: u256 = 15_000_000 ; // 15M
+    const TAIL_EMISSION: u64 = 2; // minimum 0.2%
     const MAX_TEAM_RATE: u64 = 50; // 50 bps = 5%
+
+    const E_WRONG_VERSION: u64 = 001;
+    const E_INVALID_TEAM: u64 = 100;
+    const ERR_MAX_RATE:u64 = 101;
 
     friend suiDouBashi_vest::voter;
 
@@ -27,6 +32,7 @@ module suiDouBashi_vest::minter{
 
     struct Minter has key{
         id: UID,
+        verison: u64,
         supply: Supply<SDB>,
         balance: Balance<SDB>,
         team: address,
@@ -36,6 +42,7 @@ module suiDouBashi_vest::minter{
     }
 
     public fun balance(self: &Minter): u64 { balance::value(&self.balance) }
+
     public fun total_sypply(self: &Minter): u64 { balance::supply_value(&self.supply) }
 
     fun init(ctx: &mut TxContext){
@@ -57,6 +64,7 @@ module suiDouBashi_vest::minter{
     ){
         let minter = Minter{
             id: object::new(ctx),
+            verison: VERSION,
             supply: coin::treasury_into_supply(treasury),
             balance: balance::zero<SDB>(),
             team: tx_context::sender(ctx),
@@ -80,13 +88,15 @@ module suiDouBashi_vest::minter{
     }
 
     public entry fun set_team(self: &mut Minter, team: address, ctx: &mut TxContext){
-        assert!(tx_context::sender(ctx) == self.team, err::invalid_team());
+        assert!(self.verison == VERSION, E_WRONG_VERSION);
+        assert!(tx_context::sender(ctx) == self.team, E_INVALID_TEAM);
         self.team = team;
     }
 
     public entry fun set_team_rate(self: &mut Minter, rate: u64, ctx: &mut TxContext){
-        assert!(tx_context::sender(ctx) == self.team, err::invalid_team());
-        assert!( rate < MAX_TEAM_RATE, err::max_rate());
+        assert!(self.verison == VERSION, E_WRONG_VERSION);
+        assert!(tx_context::sender(ctx) == self.team, E_INVALID_TEAM);
+        assert!( rate < MAX_TEAM_RATE, ERR_MAX_RATE);
         self.team_rate = rate;
     }
 
@@ -114,7 +124,6 @@ module suiDouBashi_vest::minter{
         (((((minted as u128) * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2) as u64 )
     }
 
-    // TODO: add firned module
     /// update period can only be called once per epoch (1 week)
     public (friend) fun update_period (
         self: &mut Minter,
@@ -123,6 +132,7 @@ module suiDouBashi_vest::minter{
         clock: &Clock,
         ctx: &mut TxContext
     ):  Option<Coin<SDB>>{
+        assert!(self.verison == VERSION, E_WRONG_VERSION);
         let period = self.active_period;
         // new week
         if(clock::timestamp_ms(clock) / 1000 >= period + WEEK){
@@ -152,6 +162,7 @@ module suiDouBashi_vest::minter{
     }
 
     public fun buyback(_cap: &MinterCap, self: &mut Minter, sdb: Coin<SDB>){
+        assert!(self.verison == VERSION, E_WRONG_VERSION);
         balance::decrease_supply(&mut self.supply, coin::into_balance(sdb));
     }
 

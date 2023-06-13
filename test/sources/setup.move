@@ -108,8 +108,6 @@ module test::setup{
             let voter = test::take_shared<Voter>(s);
 
             assert!(voter::get_registry_length(&voter) == 0, 0);
-            assert!(voter::get_governor(&voter) == a, 0);
-            assert!(voter::get_emergency(&voter) == a, 0);
             assert!(voter::get_total_weight(&voter) == 0, 0);
 
             test::return_shared(voter);
@@ -133,6 +131,7 @@ module test::setup{
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::internal_bribe::{Self as i_bribe, InternalBribe};
     use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
+    use suiDouBashi_vest::voter::VoterCap;
     public fun deploy_gauge(s: &mut Scenario){
         let ( a, _, _ ) = people();
 
@@ -140,10 +139,12 @@ module test::setup{
             let voter = test::take_shared<Voter>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
+            let voter_cap = test::take_from_sender<VoterCap>(s);
 
-            voter::create_gauge(&mut voter, &pool_a, ctx(s));
-            voter::create_gauge(&mut voter, &pool_b, ctx(s));
+            voter::create_gauge(&mut voter, &voter_cap, &pool_a, ctx(s));
+            voter::create_gauge(&mut voter, &voter_cap, &pool_b, ctx(s));
 
+            test::return_to_sender(s, voter_cap);
             test::return_shared(voter);
             test::return_shared(pool_a);
             test::return_shared(pool_b);

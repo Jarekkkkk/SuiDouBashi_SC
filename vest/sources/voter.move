@@ -19,38 +19,37 @@ module suiDouBashi_vest::voter{
 
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::event;
-    use suiDouBashi_vest::err;
-    use suiDouBashi_vest::minter::{Self, Minter};
+    use suiDouBashi_vest::minter::{Self, Minter, package_version};
     use suiDouBashi_vest::internal_bribe::{Self, InternalBribe};
     use suiDouBashi_vest::external_bribe::{Self, ExternalBribe};
 
     const DURATION: u64 = { 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 1e18
 
-    const E_EMPTY_VALUE: u64 = 0;
-    const E_NOT_RESET: u64 = 1;
-    const E_NOT_VOTE: u64 = 2;
+    const E_WRONG_VERSION: u64 = 001;
+
+    const E_EMPTY_VALUE: u64 = 100;
+    const E_VOTED: u64 = 101;
+    const E_NOT_RESET: u64 = 102;
+    const E_NOT_VOTE: u64 = 103;
+
+    struct VoterCap has key { id: UID }
 
     struct Voter has key, store{
         id: UID,
+        version: u64,
         balance: Balance<SDB>,
-
-        governor: address,
-        emergency: address,
-
         total_weight: u64,
         weights: Table<ID, u64>, // pool -> distributed weights
-        registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]: for front_end fetching
-
+        registry: Table<ID, VecSet<ID>>, // pool -> [gauge, i_bribe, e_bribe]
         index: u256 // distributed_sdb per voting weights ( 1e18 exntension )
     }
 
     #[test_only] public fun get_index(self: &Voter): u256 { self.index }
     #[test_only] public fun get_balance(self: &Voter): u64 { balance::value(&self.balance)}
 
-    /// Witness, stands for entry to Vsdb fields
     struct VOTER_SDB has copy, store, drop {}
-    /// additional fields in Vsdb vesting NFT
+
     struct VotingState has store{
         pool_votes: VecMap<ID, u64>, // pool -> voting weight
         voted: bool,
@@ -110,24 +109,14 @@ module suiDouBashi_vest::voter{
         total_weight: u64
     }
 
-    // assertion
-    fun assert_governor(self: &Voter, ctx: &mut TxContext){
-        assert!(self.governor == tx_context::sender(ctx), err::invalid_governor());
-    }
-    fun assert_emergency(self: &Voter, ctx: &mut TxContext){
-        assert!(self.emergency == tx_context::sender(ctx), err::invalid_emergency());
-    }
-
     // - Getter
-    public fun get_governor(self: &Voter): address { self.governor }
-    public fun get_emergency(self: &Voter): address { self.emergency}
     public fun get_total_weight(self: &Voter): u64 { self.total_weight }
     public fun get_weights_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>): u64{
         *table::borrow(&self.weights, object::id(pool))
     }
 
     // TODO: remove
-    public fun get_gauge_and_bribes_by_pool<X,Y>(self:&Voter, pool: &Pool<X,Y>):vector<ID>{
+    public fun get_members<X,Y>(self:&Voter, pool: &Pool<X,Y>):vector<ID>{
         let vec_set = *table::borrow(&self.registry, object::id(pool));
         vec_set::into_keys(vec_set)
     }
@@ -140,18 +129,22 @@ module suiDouBashi_vest::voter{
 
     // ===== Entry =====
     fun init(ctx: &mut TxContext){
-        let sender = tx_context::sender(ctx);
         let voter = Voter{
             id: object::new(ctx),
+            version: package_version(),
             balance: balance::zero<SDB>(),
-            governor: sender,
-            emergency: sender,
             total_weight: 0,
             registry: table::new<ID, VecSet<ID>>(ctx),// pool -> (gauge, internal_bribe, external_bribe)
             weights: table::new<ID, u64>(ctx), // pool -> voting_weight
             index: 0
         };
         transfer::share_object(voter);
+        transfer::transfer(
+            VoterCap{
+                id: object::new(ctx),
+            },
+            tx_context::sender(ctx)
+        )
     }
 
     /// Entrance for voting action
@@ -160,7 +153,7 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
     ):Potato{
         let voting_state = voting_state_borrow_mut(vsdb);
-        assert!((clock::timestamp_ms(clock) / 1000 / DURATION) * DURATION > voting_state.last_voted, err::already_voted());
+        assert!((clock::timestamp_ms(clock) / 1000 / DURATION) * DURATION > voting_state.last_voted, E_VOTED);
         voting_state.last_voted = clock::timestamp_ms(clock) / 1000;
         // copy and clear pool_votes fields
         let weights = voting_state.pool_votes;
@@ -279,6 +272,7 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ):Potato{
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         assert!(!potato.reset, E_NOT_RESET);
         let pool_id = gauge::pool_id(gauge);
         if(vec_map::contains(&potato.weights, &pool_id) && potato.total_weight == 0){
@@ -286,7 +280,7 @@ module suiDouBashi_vest::voter{
 
             assert!(pool_weight > 0, E_NOT_RESET);
 
-            update_for_(self, gauge);
+            update_for(self, gauge);
 
             *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) - pool_weight;
 
@@ -311,6 +305,7 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ): Potato{
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         assert!(potato.reset, E_NOT_VOTE);
         let pool_id = gauge::pool_id(gauge);
 
@@ -320,8 +315,8 @@ module suiDouBashi_vest::voter{
             assert!(weights > 0, E_NOT_VOTE);
             let player_weight = vsdb::voting_weight(vsdb, clock);
             let pool_weight = ((weights as u128) * (player_weight as u128) / (potato.total_weight as u128) as u64);
-            assert!(pool_weight > 0, err::invalid_weight());
-            update_for_(self, gauge);
+            assert!(pool_weight > 0, E_EMPTY_VALUE);
+            update_for(self, gauge);
 
             let voting_state_mut = voting_state_borrow_mut(vsdb);
             vec_map::insert(&mut voting_state_mut.pool_votes, pool_id, pool_weight);
@@ -338,9 +333,13 @@ module suiDouBashi_vest::voter{
     }
 
     // - Gauge
-    public entry fun create_gauge<X,Y>(self: &mut Voter, pool: &Pool<X,Y>, ctx: &mut TxContext){
-        assert_governor(self, ctx);
-
+    public entry fun create_gauge<X,Y>(
+        self: &mut Voter,
+        _cap: &VoterCap,
+        pool: &Pool<X,Y>,
+        ctx: &mut TxContext
+    ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let (gauge, in_bribe, ex_bribe) = gauge::new(pool, ctx);
         let gauge_id = object::id(&gauge);
         let created = vec_set::singleton(gauge_id);
@@ -350,30 +349,19 @@ module suiDouBashi_vest::voter{
         table::add(&mut self.registry, object::id(pool), created);
         table::add(&mut self.weights, object::id(pool), 0);
 
-        update_for_(self, &mut gauge);
+        update_for(self, &mut gauge);
 
         transfer::public_share_object(gauge);
 
         event::gauge_created<X,Y>(object::id(pool), gauge_id, in_bribe, ex_bribe);
     }
-    entry fun kill_gauge<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>, ctx: &mut TxContext){
-        assert_emergency(self, ctx);
-        assert!(gauge::is_alive(gauge), err::dead_gauge());
-        gauge::kill_gauge_(gauge);
-    }
-    entry fun revive_gauge<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>, ctx: &mut TxContext){
-        assert_emergency(self, ctx);
-        gauge::revive_gauge_(gauge);
-    }
 
-    // - Governor
-    entry fun set_governor(self: &mut Voter, new_gov: address, ctx: &mut TxContext){
-        assert_governor(self, ctx);
-        self.governor = new_gov;
-    }
-    entry fun set_emergency(self: &mut Voter, new_emergency: address, ctx: &mut TxContext){
-        assert_emergency(self, ctx);
-        self.emergency = new_emergency;
+    entry fun update_gauge<X,Y>(
+        _cap: &VoterCap,
+        gauge: &mut Gauge<X,Y>,
+        is_alive: bool
+    ){
+        gauge::update_gauge(gauge, is_alive);
     }
 
     // - Rewards
@@ -388,6 +376,7 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         distribute_(self, minter, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
         gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
@@ -425,7 +414,6 @@ module suiDouBashi_vest::voter{
     }
 
     //amount of distributed SDB towards every pool is proportional to the voting power received from the voters every epoc
-    // ALl the pool have to
     public fun distribute_<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
@@ -436,16 +424,17 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let coin_option = minter::update_period(minter, vsdb_reg, clock, ctx);
         if(option::is_some(&coin_option)){
             notify_reward_amount_(self , option::extract(&mut coin_option))
         };
         option::destroy_none(coin_option);
 
-        update_for_(self, gauge);
+        update_for(self, gauge);
 
         let claimable = gauge::get_claimable(gauge);
-        if( claimable > gauge::left(gauge::borrow_reward<X,Y>(gauge), clock) && claimable / DURATION > 0 ){
+        if(claimable > gauge::left(gauge::borrow_reward<X,Y>(gauge), clock) && claimable / DURATION > 0){
             gauge::update_claimable(gauge, 0);
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
 
@@ -455,9 +444,8 @@ module suiDouBashi_vest::voter{
         }
     }
 
-    // ===== Internal =====
-    // TODO: remove public
-    public fun update_for_<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
+    public fun update_for<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let gauge_weights = *table::borrow(&self.weights, gauge::pool_id(gauge));
         if(gauge_weights > 0){
             let s_idx = gauge::get_supply_index(gauge);
@@ -476,6 +464,7 @@ module suiDouBashi_vest::voter{
     }
 
     public fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
         let value = coin::value(&sdb);
         let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
         if(ratio > 0){

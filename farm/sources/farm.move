@@ -16,8 +16,6 @@ module suiDouBashi_farm::farm{
     use sui::clock::{Self, Clock};
 
     const TOTAL_ALLOC_POINT: u64 = 100;
-    /// 625K SDB distribution for 4 weeks duration
-    const SDB_PER_SECOND: u64 = 258349867;
     const LOCK: u64 = { 36 * 7 * 86400 };
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
@@ -110,8 +108,8 @@ module suiDouBashi_farm::farm{
 
     public fun initialize(
         reg: &mut FarmReg,
-        start_time: u64,
-        duration: u64,
+        start_time: u64, // ts
+        duration: u64, // ts
         sdb: Coin<SDB>,
         clock: &Clock,
         ctx: &mut TxContext
@@ -224,15 +222,13 @@ module suiDouBashi_farm::farm{
         let staked = player_info.amount;
         if(staked > 0){
             let delta = self.index - player_info.index;
-            player_info.index = self.index;
 
             if(delta > 0){
                 let share = (staked as u256) * delta / SCALE_FACTOR;
                 player_info.pending_reward = player_info.pending_reward + (share as u64);
             };
-        }else{
-            player_info.index = self.index;
         };
+        player_info.index = self.index;
     }
 
     public fun stake<X,Y>(

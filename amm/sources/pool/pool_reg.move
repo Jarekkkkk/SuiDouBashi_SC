@@ -1,4 +1,4 @@
-/// Pool's governance interactinos, only PoolCap holder is able to invoke the below functions
+/// Pool's governance interactinos, only PoolCap holder is allowed to invoke below functions
 module suiDouBashi_amm::pool_reg{
     use sui::object::{UID, ID};
     use sui::table::{Self, Table};
@@ -90,7 +90,7 @@ module suiDouBashi_amm::pool_reg{
     ){
         assert_sorted<X, Y>();
         assert_fee(stable, fee_percentage);
-        let pool_id = pool::new<X, Y>( stable, metadata_x, metadata_y, fee_percentage, ctx );
+        let pool_id = pool::new<X,Y>(stable, metadata_x, metadata_y, fee_percentage, ctx);
         let pool_name = get_pool_name<X,Y>();
         table::add(&mut self.pools, pool_name, pool_id);
         event::pool_created<X,Y>(pool_id, tx_context::sender(ctx))
