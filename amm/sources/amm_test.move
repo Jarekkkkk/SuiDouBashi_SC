@@ -417,7 +417,7 @@ module suiDouBashi_amm::amm_test{
     use suiDouBashi_amm::pool::AMM_SDB;
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb,VSDBRegistry};
     use suiDouBashi_vsdb::vsdb_test;
-    fun test_vsdb_<X,Y>(clock: &mut Clock, s: &mut Scenario){
+    public fun test_vsdb_<X,Y>(clock: &mut Clock, s: &mut Scenario){
         let (a, _, _) = people();
         vsdb_test::test_create_lock_(clock, s);
 
@@ -465,7 +465,9 @@ module suiDouBashi_amm::amm_test{
             test::return_to_sender(s, vsdb);
             test::return_shared(pool);
         };
+
         add_time(clock, 86400 * 7 * 1000);
+
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
             let pool = test::take_shared<Pool<X,Y>>(s);
@@ -476,6 +478,7 @@ module suiDouBashi_amm::amm_test{
             test::return_to_sender(s, vsdb);
             test::return_shared(pool);
         };
+
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
             let pool = test::take_shared<Pool<X,Y>>(s);

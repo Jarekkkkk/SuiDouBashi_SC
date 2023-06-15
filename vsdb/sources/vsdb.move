@@ -144,16 +144,14 @@ module suiDouBashi_vsdb::vsdb{
         // display
         let publisher = package::claim(otw, ctx);
         let keys = vector[
-            utf8(b"level"),
             utf8(b"link"),
             utf8(b"image_url"),
             utf8(b"description"),
             utf8(b"project_url"),
         ];
         let values = vector[
+            utf8(b"https://suidobashi.io/vsdb"),
             utf8(b"https://suidobashi.io/vsdb/{level}"),
-            utf8(b"https://suidobashi.io/vsdb/{id}"),
-            utf8(b"ipfs://{img_url}"),
             utf8(b"A SuiDouBashi Ecosystem Member !"),
             utf8(b"https://suidobashi.io"),
         ];
