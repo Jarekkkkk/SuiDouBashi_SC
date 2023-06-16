@@ -13,10 +13,8 @@ module suiDouBashi_vest::voter{
     use sui::table::{Self, Table};
 
     use suiDouBashi_amm::pool::Pool;
-
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
-
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::event;
     use suiDouBashi_vest::minter::{Self, Minter, package_version};
@@ -57,7 +55,6 @@ module suiDouBashi_vest::voter{
         last_voted: u64 // ts
     }
 
-    // Vsdb dynamic fields Standard
     public fun is_initialized(vsdb: &Vsdb): bool{
         vsdb::df_exists(vsdb, VOTER_SDB {})
     }
@@ -159,9 +156,6 @@ module suiDouBashi_vest::voter{
         let weights = voting_state.pool_votes;
         voting_state.pool_votes = vec_map::empty<ID, u64>();
 
-        // successfully clean the vec_map in vsdb
-        assert!(vec_map::size(&voting_state.pool_votes) == 0, E_NOT_RESET);
-
         Potato{
             reset: false,
             weights,
@@ -219,7 +213,7 @@ module suiDouBashi_vest::voter{
         pools: vector<address>,
         weights: vector<u64>,
     ):Potato{
-        assert!(potato.total_weight == 0 && vec_map::size(&potato.weights) == 0 , E_NOT_RESET);
+        assert!(potato.total_weight == 0 && vec_map::size(&potato.weights) == 0, E_NOT_RESET);
         assert!(vec::length(&pools) == vec::length(&weights), E_NOT_VOTE );
         self.total_weight = self.total_weight - potato.used_weight;
         let total_weight = 0;
@@ -356,7 +350,7 @@ module suiDouBashi_vest::voter{
         event::gauge_created<X,Y>(object::id(pool), gauge_id, in_bribe, ex_bribe);
     }
 
-    entry fun update_gauge<X,Y>(
+    entry fun update_gauge_is_alive<X,Y>(
         _cap: &VoterCap,
         gauge: &mut Gauge<X,Y>,
         is_alive: bool
@@ -364,7 +358,6 @@ module suiDouBashi_vest::voter{
         gauge::update_gauge(gauge, is_alive);
     }
 
-    // - Rewards
     /// weekly minted SDB to incentivize pools --> LP_Staker
     public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
@@ -377,7 +370,7 @@ module suiDouBashi_vest::voter{
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        distribute_(self, minter, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
+        distribute(self, minter, gauge, internal_bribe, pool, vsdb_reg, clock, ctx);
         gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
 
@@ -413,8 +406,8 @@ module suiDouBashi_vest::voter{
         gauge::claim_fee(gauge, internal_bribe, pool, clock, ctx);
     }
 
-    //amount of distributed SDB towards every pool is proportional to the voting power received from the voters every epoc
-    public fun distribute_<X,Y>(
+    /// Voted Gauge
+    public fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
         gauge: &mut Gauge<X,Y>,

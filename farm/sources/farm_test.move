@@ -8,10 +8,9 @@ module suiDouBashi_farm::farm_test{
     use suiDouBashi_amm::amm_test;
     use suiDouBashi_amm::usdt::{USDT};
     use suiDouBashi_amm::usdc::{USDC};
+    use suiDouBashi_amm::pool::{Self, Pool,LP, AMM_SDB};
     use suiDouBashi_vsdb::sdb::{SDB};
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
-    use suiDouBashi_amm::pool::{Self, Pool,LP, AMM_SDB};
-
 
     use test::setup;
     use suiDouBashi_farm::farm::{Self, FarmReg, Farm, FARM_SDB};
@@ -64,7 +63,6 @@ module suiDouBashi_farm::farm_test{
             test::return_to_sender(s, cap);
             test::return_shared(vsdb_reg);
         };
-
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);

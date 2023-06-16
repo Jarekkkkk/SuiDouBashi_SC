@@ -1,4 +1,3 @@
-// copied from https://github.com/velodrome-finance/contracts/blob/afed728d26f693c4e05785d3dbb1b7772f231a76/contracts/VotingEscrow.sol
 module suiDouBashi_vsdb::i128 {
 
     // Error

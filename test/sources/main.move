@@ -234,7 +234,7 @@ module test::main{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
 
-            voter::distribute_(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+            voter::distribute(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
             test::return_shared(minter);
@@ -383,7 +383,7 @@ module test::main{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
 
-            voter::distribute_(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+            voter::distribute(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
             test::return_shared(minter);

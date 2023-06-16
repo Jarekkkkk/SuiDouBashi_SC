@@ -1,4 +1,4 @@
-/// VSDB Vesting NFT stands for membership of SuiDoBashi Ecosystem,
+/// VSDB Vesting NFT represent membership of SuiDoBashi Ecosystem,
 /// Anyone holding VSDB can be verified project contributor as it retain our token value by holding SDB coins
 /// Whne holding VSDB, holder can enjoy the features in the SuiDoBashi ecosystem
 module suiDouBashi_vsdb::vsdb{
@@ -40,8 +40,14 @@ module suiDouBashi_vsdb::vsdb{
     const E_NOT_PURE: u64 = 106;
     const E_INVALID_LEVEL: u64 = 107;
 
+    /// one-time witness for this module
     struct VSDB has drop {}
 
+    /// Vesting NFT of SuiDoBashi ecosystem. Any SDB holder can lock up their coins for specific duration and receive Vsdb NFT in exchange to become SuiDoBashi contributor
+    /// Additional coins can be added to NFT anytime
+    /// The lock period can be up to 24 weeks
+    /// The logner the vesting time, the higher the governance power( voting weight ) you are granted
+    /// As a VSDB holder, you can earn some experiences by interacting with DAPPs on SuiDoBashi to enjoy the benefits in SuiDoBashi like fee deduction, or voting bonus
     struct Vsdb has key, store{
         id: UID,
         level: u8,
@@ -59,6 +65,8 @@ module suiDouBashi_vsdb::vsdb{
 
     struct VSDBCap has key, store { id: UID }
 
+    /// Global Registry object to record down global voting weight of all Vesting NFT
+    /// whitelist modules can write the state or data in Vsdb to join SuiDoBashi ecosystem
     struct VSDBRegistry has key {
         id: UID,
         version: u64,

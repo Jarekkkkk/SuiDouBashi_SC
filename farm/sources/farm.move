@@ -5,7 +5,6 @@ module suiDouBashi_farm::farm{
     use suiDouBashi_vsdb::sdb::SDB;
     use std::string::String;
     use std::option;
-    use std::vector as vec;
     use sui::event::emit;
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
@@ -31,6 +30,7 @@ module suiDouBashi_farm::farm{
     const ERR_INVALID_POINT: u64 = 007;
     const ERR_NOT_SETUP: u64 = 008;
     const E_ALREADY_CLAIMED: u64 = 009;
+    const E_INVALID_PERIOD: u64 = 010;
 
     // EVENT
     struct Stake<phantom X, phantom Y> has copy, drop{
@@ -67,7 +67,7 @@ module suiDouBashi_farm::farm{
         sdb_per_second: u64,
         farms: VecMap<String, ID>,
         total_pending: Table<address, u64>,
-        claimed_vsdb: vector<address>
+        claimed_vsdb: Table<address, ID>
     }
 
     public fun get_sdb_balance(reg: &FarmReg):u64{ balance::value(&reg.sdb_balance)}
@@ -105,7 +105,7 @@ module suiDouBashi_farm::farm{
             sdb_per_second: 0,
             farms: vec_map::empty<String, ID>(),
             total_pending: table::new<address, u64>(ctx),
-            claimed_vsdb: vec::empty()
+            claimed_vsdb: table::new<address, ID>(ctx)
         };
         transfer::share_object(reg);
     }
@@ -235,6 +235,18 @@ module suiDouBashi_farm::farm{
         player_info.index = self.index;
     }
 
+    public fun stake_all<X,Y>(
+        reg: &FarmReg,
+        self: &mut Farm<X,Y>,
+        pool: &Pool<X,Y>,
+        lp: &mut LP<X,Y>,
+        clock: &Clock,
+        ctx:&mut TxContext
+    ){
+        let lp_balance = pool::get_lp_balance(lp);
+        stake(reg, self, pool, lp, lp_balance, clock, ctx);
+    }
+
     public fun stake<X,Y>(
         reg: &FarmReg,
         self: &mut Farm<X,Y>,
@@ -245,6 +257,9 @@ module suiDouBashi_farm::farm{
         ctx:&mut TxContext
     ){
         assert_setup(reg);
+        let lp_balance = pool::get_lp_balance(lp);
+        assert!(lp_balance >= value, ERR_INSUFFICIENT_LP);
+
         let player = tx_context::sender(ctx);
         if(!table::contains(&self.player_infos, player)){
             let player_info = PlayerInfo{
@@ -298,6 +313,19 @@ module suiDouBashi_farm::farm{
         );
     }
 
+    public fun unstake_all<X,Y>(
+        reg: &FarmReg,
+        self: &mut Farm<X,Y>,
+        pool: &Pool<X,Y>,
+        lp: &mut LP<X,Y>,
+        clock:&Clock,
+        ctx:&mut TxContext
+    ){
+        let player = tx_context::sender(ctx);
+        let player_info = table::borrow(&mut self.player_infos, player);
+        unstake(reg, self, pool, lp, player_info.amount, clock, ctx);
+    }
+
     public fun harvest<X,Y>(
         reg: &mut FarmReg,
         self: &mut Farm<X,Y>,
@@ -348,10 +376,10 @@ module suiDouBashi_farm::farm{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let vsdb_ads = object::id_address(vsdb);
-        assert!(!vec::contains(&reg.claimed_vsdb, &vsdb_ads), E_ALREADY_CLAIMED);
+        let player = tx_context::sender(ctx);
+        assert!(!table::contains(&reg.claimed_vsdb, player), E_ALREADY_CLAIMED);
         let ts = clock::timestamp_ms(clock) / 1000;
-        assert!(ts >= reg.end_time && ts <= reg.end_time * WEEK, ERR_NOT_FINISH);
+        assert!(ts >= reg.end_time && ts <= reg.end_time * WEEK, E_INVALID_PERIOD);
         let sdb = claim_(reg, ctx);
         vsdb::increase_unlock_amount(vsdb_reg, vsdb, sdb, clock);
 
@@ -364,7 +392,7 @@ module suiDouBashi_farm::farm{
             earn_xp_(vsdb_reg, vsdb, 5);
         };
 
-        vec::push_back(&mut reg.claimed_vsdb, vsdb_ads);
+        table::add(&mut reg.claimed_vsdb, player, object::id(vsdb));
     }
 
     fun claim_(
@@ -388,7 +416,7 @@ module suiDouBashi_farm::farm{
         vsdb::df_remove<FARM_SDB, bool>(FARM_SDB{}, vsdb);
     }
 
-    /// Claim the accumulated fees during farming campaing and deposit it into pool
+    /// Claim the accumulated fees during farming campaign and deposit it into pool
     public entry fun claim_pool_fees<X,Y>(
         reg: &FarmReg,
         self: &mut Farm<X,Y>,
@@ -412,7 +440,6 @@ module suiDouBashi_farm::farm{
         option::destroy_none(coin_x);
         option::destroy_none(coin_y);
     }
-
 
     #[test_only] public fun init_for_testing( ctx: &mut TxContext) { init(ctx) }
 }

@@ -381,7 +381,6 @@ module suiDouBashi_amm::amm_test{
 
     fun oracle_<X,Y>(amt_x: u64, amt_y:u64, clock: &mut Clock, test: &mut Scenario){
         let (_, trader, _) = people();
-
         let amount = 1_000_000_000;
 
         add_time(clock, ( 1800 + 1 )* 1000 );

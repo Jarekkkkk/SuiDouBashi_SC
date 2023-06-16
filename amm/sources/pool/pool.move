@@ -38,6 +38,12 @@ module suiDouBashi_amm::pool{
     const E_INSUFFICIENT_LOAN: u64 = 106;
     const E_INVALID_REPAY: u64 = 107;
 
+
+    /// `Liquidity Pools`
+    /// to provide access to the best rates, we define 2 types of pools: correlated/ uncorrelated
+    /// correlated, for example stablecoins
+    /// uncorrelated, for example SUI and USDC
+    /// to achieve the lower price slippage and attain efficient capital usage
     struct Pool<phantom X, phantom Y> has key {
         id: UID,
         version: u64,
@@ -54,7 +60,7 @@ module suiDouBashi_amm::pool{
         observations: TableVec<Observation>,
         fee:Fee<X,Y>,
     }
-    /// Seperate fees from pool reserves
+    /// Accrued Fees,charged from trader when swapping, will retuen to Liquidity Provider who provides the liquidity in the pool
     struct Fee<phantom X, phantom Y> has store{
         fee_x:  Balance<X>,
         fee_y:  Balance<Y>,
@@ -63,7 +69,7 @@ module suiDouBashi_amm::pool{
         fee_percentage: u8,
     }
 
-    public fun get_version<X,Y>(self: &Pool<X,Y>):u64 { self.version }
+    public fun get_stable<X,Y>(self: &Pool<X,Y>):bool { self.stable }
 
     public fun get_reserves<X,Y>(self: &Pool<X,Y>): (u64, u64, u64) {
         (
@@ -72,8 +78,6 @@ module suiDouBashi_amm::pool{
             balance::supply_value(&self.lp_supply)
         )
     }
-
-    public fun get_stable<X,Y>(self: &Pool<X,Y>):bool { self.stable }
 
     public fun get_decimals_x<X, Y>(self: &Pool<X,Y>): u8 { self.decimal_x }
 
@@ -100,8 +104,9 @@ module suiDouBashi_amm::pool{
         self.locked = locked;
     }
 
+    /// Entry of dynamic fields/ object dynamic fields of Vsdb Vesting NFT
     struct AMM_SDB has copy, store, drop {}
-
+    /// The state we are going to write on Vsdb
     struct AMMState has store{
         last_swap: u64,
         earneed_times: u8
@@ -147,9 +152,9 @@ module suiDouBashi_amm::pool{
         get_observation(self, table_vec::length(&self.observations) - 1)
     }
 
-    /// - LP Position
+    /// LP token stands for verification of your deposited liquidity position in the pools
     struct LP_TOKEN<phantom X, phantom Y> has drop {}
-
+    /// LP position NFT, liquidity provider needs to own the LP NFT to deposit/ withdraw liquidity
     struct LP<phantom X, phantom Y> has key, store{
         id: UID,
         lp_balance: Balance<LP_TOKEN<X,Y>>,
@@ -223,14 +228,7 @@ module suiDouBashi_amm::pool{
         claimable_y
     }
 
-    // Flash Loan
-    struct Receipt<phantom X, phantom Y, phantom T> {
-        amount: u64,
-        fee: u64
-    }
-
-    fun assert_pool_unlocked<X, Y>(self: &Pool<X, Y>){
-        assert!(self.locked == false, E_POOL_LOCK);
+    fun assert_pool_unlocked<X, Y>(self: &Pool<X, Y>){ assert!(self.locked == false, E_POOL_LOCK);
     }
     fun assert_valid_type<X,Y,T>(){
         let type = type_name::get<T>();
@@ -301,8 +299,8 @@ module suiDouBashi_amm::pool{
 
     // ===== Entry =====
 
-    public entry fun add_liquidity<X, Y>(
-        self: &mut Pool<X, Y>,
+    public entry fun add_liquidity<X,Y>(
+        self: &mut Pool<X,Y>,
         coin_x: Coin<X>,
         coin_y: Coin<Y>,
         lp: &mut LP<X,Y>,
@@ -324,7 +322,7 @@ module suiDouBashi_amm::pool{
         event::liquidity_added<X,Y>(deposit_x, deposit_y, lP_value)
     }
 
-    public entry fun remove_liquidity<X, Y>(
+    public entry fun remove_liquidity<X,Y>(
         self:&mut Pool<X, Y>,
         lp: &mut LP<X,Y>,
         value: u64,
@@ -357,7 +355,7 @@ module suiDouBashi_amm::pool{
     }
 
     public entry fun swap_for_y_vsdb<X,Y>(
-        self: &mut Pool<X, Y>,
+        self: &mut Pool<X,Y>,
         coin_x: Coin<X>,
         output_y_min: u64,
         vsdb: &mut Vsdb,
@@ -376,18 +374,23 @@ module suiDouBashi_amm::pool{
             amm_state.earneed_times = amm_state.earneed_times + 1;
             vsdb::earn_xp(AMM_SDB{}, vsdb, 2);
         };
-        let fee_percentage = if(self.fee.fee_percentage < level / 3){
-            1_u8
+        let fee_deduction = if(self.stable){
+            level / 3
         }else{
-            self.fee.fee_percentage - level / 3
+            level
+        };
+        let fee_percentage = if(self.fee.fee_percentage <= fee_deduction){
+            1
+        }else{
+            self.fee.fee_percentage - fee_deduction
         };
 
         let coin_y = swap_for_y_(self, option::some(fee_percentage), coin_x, output_y_min, clock, ctx);
 
         transfer::public_transfer(coin_y, tx_context::sender(ctx));
     }
-    public entry fun swap_for_y<X, Y>(
-        self: &mut Pool<X, Y>,
+    public entry fun swap_for_y<X,Y>(
+        self: &mut Pool<X,Y>,
         coin_x: Coin<X>,
         output_y_min: u64,
         clock: &Clock,
@@ -399,8 +402,8 @@ module suiDouBashi_amm::pool{
         let coin_y = swap_for_y_(self, option::none<u8>(), coin_x, output_y_min, clock, ctx);
         transfer::public_transfer(coin_y, tx_context::sender(ctx));
     }
-    public fun swap_for_y_dev<X, Y>(
-        self: &mut Pool<X, Y>,
+    public fun swap_for_y_dev<X,Y>(
+        self: &mut Pool<X,Y>,
         coin_x: Coin<X>,
         output_y_min: u64,
         clock: &Clock,
@@ -432,18 +435,23 @@ module suiDouBashi_amm::pool{
             amm_state.earneed_times = amm_state.earneed_times + 1;
             vsdb::earn_xp(AMM_SDB{}, vsdb, 2);
         };
-        let fee_percentage = if(self.fee.fee_percentage < level / 3){
+        let fee_deduction = if(self.stable){
+            level / 3
+        }else{
+            level
+        };
+        let fee_percentage = if(self.fee.fee_percentage <= fee_deduction){
             1
         }else{
-            self.fee.fee_percentage - level / 3
+            self.fee.fee_percentage - fee_deduction
         };
 
         let coin_y = swap_for_x_(self, option::some(fee_percentage), coin_x, output_x_min, clock, ctx);
 
         transfer::public_transfer(coin_y, tx_context::sender(ctx));
     }
-    public entry fun swap_for_x<X, Y>(
-        self: &mut Pool<X, Y>,
+    public entry fun swap_for_x<X,Y>(
+        self: &mut Pool<X,Y>,
         coin_y: Coin<Y>,
         output_x_min: u64,
         clock: &Clock,
@@ -525,6 +533,13 @@ module suiDouBashi_amm::pool{
         let coin_x = swap_for_x_<X,Y>(self, option::none<u8>(),coin_y_split, output_min, clock, ctx);
         add_liquidity<X,Y>(self, coin_x, coin_y, lp, deposit_x_min, deposit_y_min,  clock, ctx);
     }
+
+    // Flash Loan
+    struct Receipt<phantom X, phantom Y, phantom T> {
+        amount: u64,
+        fee: u64
+    }
+
     /// FlashLoan's fee revenue goes to LP holder
     public fun loan_x<X, Y>(
         self: &mut Pool<X,Y>,
@@ -1044,14 +1059,12 @@ module suiDouBashi_amm::pool{
         update_lp_(self, lp_position);
 
         let coin_x = if(lp_position.claimable_x > 0){
-            let coin_x = coin::take(&mut self.fee.fee_x, lp_position.claimable_x, ctx);
-            option::some(coin_x)
+            option::some(coin::take(&mut self.fee.fee_x, lp_position.claimable_x, ctx))
         }else{
             option::none<Coin<X>>()
         };
         let coin_y = if(lp_position.claimable_y > 0){
-            let coin_y = coin::take(&mut self.fee.fee_y, lp_position.claimable_y, ctx);
-            option::some(coin_y)
+            option::some(coin::take(&mut self.fee.fee_y, lp_position.claimable_y, ctx))
         }else{
             option::none<Coin<Y>>()
         };
