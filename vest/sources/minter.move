@@ -17,7 +17,6 @@ module suiDouBashi_vest::minter{
     use suiDouBashi_vest::event;
 
     const WEEK: u64 = { 7 * 86400 };
-    const EMISSION: u64 = 990; // linearly decrease 1 %
     const PRECISION: u64 = 1000;
     const TAIL_EMISSION: u64 = 2; // minimum 0.2%
     const MAX_TEAM_RATE: u64 = 50; // 50 bps = 5%
@@ -25,6 +24,7 @@ module suiDouBashi_vest::minter{
     const E_WRONG_VERSION: u64 = 001;
     const E_INVALID_TEAM: u64 = 100;
     const ERR_MAX_RATE:u64 = 101;
+    const E_NOT_MATCH_LENGTH: u64 = 102;
 
     friend suiDouBashi_vest::voter;
 
@@ -38,7 +38,9 @@ module suiDouBashi_vest::minter{
         team: address,
         team_rate: u64,
         active_period: u64,
-        weekly: u64
+        weekly: u64,
+        emission: u16,
+        epoch: u32
     }
 
     public fun balance(self: &Minter): u64 { balance::value(&self.balance) }
@@ -62,6 +64,7 @@ module suiDouBashi_vest::minter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(vec::length(&claim_amounts) == vec::length(&claimants), E_NOT_MATCH_LENGTH);
         let minter = Minter{
             id: object::new(ctx),
             verison: VERSION,
@@ -70,7 +73,9 @@ module suiDouBashi_vest::minter{
             team: tx_context::sender(ctx),
             team_rate: 30,
             active_period: tx_context::epoch_timestamp_ms(ctx) / 1000 / WEEK * WEEK,
-            weekly: 50_000 * (math::pow(10, 9)) // 15M
+            weekly: 75_000 * (math::pow(10, 9)),
+            emission: 980,
+            epoch: 0
         };
         let sdb_balance = balance::increase_supply(&mut minter.supply, initial_amount);
 
@@ -107,7 +112,7 @@ module suiDouBashi_vest::minter{
 
     /// decay at 1% per week
     public fun calculate_emission(self: &Minter):u64{
-        (( (self.weekly as u128) * (EMISSION as u128) ) / (PRECISION as u128) as u64)
+        (( (self.weekly as u128) * (self.emission as u128) ) / (PRECISION as u128) as u64)
     }
     /// ( SDB_supply - VSDB_supply ) * 0.2%
     public fun circulating_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
@@ -116,12 +121,6 @@ module suiDouBashi_vest::minter{
 
     public fun weekly_emission(self: &Minter, vsdb_reg: &VSDBRegistry, clock: &Clock):u64{
         math::max(calculate_emission(self), circulating_emission(self, vsdb_reg, clock))
-    }
-    /// (veVELO.totalSupply / VELO.totalsupply)^3 * 0.5 * Emissions
-    public fun calculate_growth(self: &Minter, vsdb_reg: &VSDBRegistry, minted: u64, clock: &Clock): u64{
-        let ve_total = (vsdb::total_VeSDB(vsdb_reg, clock) as u128);
-        let sdb_total = (balance::supply_value(&self.supply) as u128);
-        (((((minted as u128) * ve_total) / sdb_total ) * ve_total / sdb_total * ve_total / sdb_total / 2) as u64 )
     }
 
     /// update period can only be called once per epoch (1 week)
@@ -154,6 +153,11 @@ module suiDouBashi_vest::minter{
 
             let team_coin = coin::take(&mut self.balance, team_emission, ctx);
             transfer::public_transfer(team_coin, self.team);
+
+            self.epoch = self.epoch + 1;
+
+            if(self.epoch < 96 && self.epoch % 24 == 0) self.emission = self.emission + 5 ;
+            if(self.epoch == 96) self.emission = 999;
 
             event::mint(tx_context::sender(ctx), self.weekly, circulating_supply(self, vsdb_reg, clock), circulating_emission(self, vsdb_reg, clock));
             return option::some(coin::take(&mut self.balance, self.weekly, ctx))

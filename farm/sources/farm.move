@@ -85,13 +85,16 @@ module suiDouBashi_farm::farm{
         player_infos: Table<address, PlayerInfo>,
     }
 
-    struct PlayerInfo has copy, store{
+    struct PlayerInfo has store{
         amount: u64,
         index: u256,
         pending_reward: u64
     }
 
     public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::get_lp_balance(&self.lp_balance)}
+    public fun get_player_info<X,Y>(self: &Farm<X,Y>, player: address): &PlayerInfo {
+        table::borrow(&self.player_infos, player)
+    }
 
     fun init(ctx: &mut TxContext){
         let reg = FarmReg{
