@@ -259,7 +259,7 @@ module suiDouBashi_vest::internal_bribe{
         let vsdb = object::id(vsdb);
         let ts = clock::timestamp_ms(clock) / 1000;
 
-        if( !table::contains(&self.checkpoints, vsdb)){
+        if(!table::contains(&self.checkpoints, vsdb)){
             let checkpoints = vec::empty();
             table::add(&mut self.checkpoints, vsdb, checkpoints);
         };

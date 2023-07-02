@@ -3,8 +3,8 @@ module test::gauge_test{
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_amm::usdc::USDC;
-    use suiDouBashi_amm::usdt::USDT;
+    use coin_list::mock_usdt::{MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{MOCK_USDC as USDC};
     use suiDouBashi_vest::checkpoints;
     use sui::clock::{timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::table_vec;

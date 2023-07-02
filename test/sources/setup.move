@@ -1,12 +1,12 @@
 #[test_only]
 module test::setup{
-    use suiDouBashi_amm::usdc::{Self, USDC};
-    use suiDouBashi_amm::usdt::{Self, USDT};
+    use coin_list::mock_usdt::{Self as usdt, MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{Self as usdc, MOCK_USDC as USDC};
     use suiDouBashi_amm::pool::{Pool};
     use suiDouBashi_vsdb::sdb::{Self, SDB};
 
     use sui::math;
-    use sui::clock::{Self, Clock};
+    use sui::clock::{Clock};
     use sui::transfer;
     use sui::coin::{Self, TreasuryCap};
     use std::vector as vec;
@@ -32,19 +32,6 @@ module test::setup{
     public fun start_time(): u64 { 1672531200 }
     public fun week(): u64 { 7 * 86400 }
     public fun day(): u64 { 86400 }
-
-    fun test_setup(){
-        let (a,_,_) = people();
-        let scenario = test::begin(a);
-        let clock = clock::create_for_testing(ctx(&mut scenario));
-
-        deploy_coins(&mut scenario);
-        mint_stable(&mut scenario);
-        deploy_minter(&mut clock, &mut scenario);
-
-        clock::destroy_for_testing(clock);
-        test::end(scenario);
-    }
 
     public fun deploy_coins(s: &mut Scenario){
         usdc::deploy_coin(ctx(s));

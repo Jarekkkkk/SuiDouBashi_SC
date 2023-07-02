@@ -6,8 +6,8 @@ module suiDouBashi_farm::farm_test{
     use sui::math;
 
     use suiDouBashi_amm::amm_test;
-    use suiDouBashi_amm::usdt::{USDT};
-    use suiDouBashi_amm::usdc::{USDC};
+    use coin_list::mock_usdt::{MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{MOCK_USDC as USDC};
     use suiDouBashi_amm::pool::{Self, Pool,LP, AMM_SDB};
     use suiDouBashi_vsdb::sdb::{SDB};
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};

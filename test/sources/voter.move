@@ -3,8 +3,8 @@ module test::voter_test{
     use suiDouBashi_amm::pool::Pool;
 
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_amm::usdc::USDC;
-    use suiDouBashi_amm::usdt::USDT;
+    use coin_list::mock_usdt::{MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{MOCK_USDC as USDC};
 
     use test::setup;
     use sui::coin::{ Self, Coin};

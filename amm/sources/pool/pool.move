@@ -228,8 +228,8 @@ module suiDouBashi_amm::pool{
         claimable_y
     }
 
-    fun assert_pool_unlocked<X, Y>(self: &Pool<X, Y>){ assert!(self.locked == false, E_POOL_LOCK);
-    }
+    fun assert_pool_unlocked<X, Y>(self: &Pool<X, Y>){ assert!(self.locked == false, E_POOL_LOCK); }
+
     fun assert_valid_type<X,Y,T>(){
         let type = type_name::get<T>();
         assert!(type_name::get<X>() == type || type_name::get<Y>() == type, E_INVALID_TYPE);
@@ -298,7 +298,6 @@ module suiDouBashi_amm::pool{
     }
 
     // ===== Entry =====
-
     public entry fun add_liquidity<X,Y>(
         self: &mut Pool<X,Y>,
         coin_x: Coin<X>,

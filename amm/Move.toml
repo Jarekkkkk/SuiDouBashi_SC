@@ -9,6 +9,7 @@ MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
 suiDouBashiVSDB = {local = "../vsdb"}
+coin_list = {local = "../coin_list"}
 
 [addresses]
 suiDouBashi_amm =  "0x425d2d2e0619086df362cd2ad9289d93de417f849dee4bdedccbd1fe4b3bd990"

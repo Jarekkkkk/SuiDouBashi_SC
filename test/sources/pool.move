@@ -4,8 +4,8 @@ module test::pool_test{
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
 
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_amm::usdc::USDC;
-    use suiDouBashi_amm::usdt::USDT;
+    use coin_list::mock_usdt::{MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{MOCK_USDC as USDC};
     use sui::clock::{Clock};
     use sui::transfer;
 

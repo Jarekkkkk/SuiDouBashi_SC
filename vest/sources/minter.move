@@ -173,4 +173,8 @@ module suiDouBashi_vest::minter{
     #[test_only] public fun mint_sdb(self: &mut Minter, value: u64, ctx: &mut TxContext):Coin<SDB>{
         coin::from_balance(balance::increase_supply(&mut self.supply, value), ctx)
     }
+    #[test_only]
+    public fun init_for_testing(ctx: &mut TxContext) {
+        init(ctx)
+    }
 }

@@ -10,8 +10,8 @@ module suiDouBashi_amm::amm_test{
 
     use suiDouBashi_amm::pool::{Self, Pool, LP};
     use suiDouBashi_amm::pool_reg::{Self, PoolReg, PoolCap};
-    use suiDouBashi_amm::usdt::{Self, USDT};
-    use suiDouBashi_amm::usdc::{Self, USDC};
+    use coin_list::mock_usdt::{Self as usdc, MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{Self as usdt, MOCK_USDC as USDC};
 
     const MINIMUM_LIQUIDITY: u64 = 1000;
     const USDT_AMT:u64 = 9_000_000_000_000;
