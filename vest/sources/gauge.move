@@ -13,7 +13,7 @@ module suiDouBashi_vest::gauge{
     use sui::table_vec::{Self, TableVec};
     use sui::table::{Self, Table};
 
-    use suiDouBashi_amm::math_u128;
+    use suiDouBashi_amm::amm_math;
     use suiDouBashi_amm::pool::{Self, Pool, LP};
 
     use suiDouBashi_vsdb::sdb::SDB;
@@ -24,7 +24,7 @@ module suiDouBashi_vest::gauge{
     use suiDouBashi_vest::minter::package_version;
 
     const DURATION: u64 = { 7 * 86400 };
-    const PRECISION: u128 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     const E_WRONG_VERSION: u64 = 001;
@@ -99,8 +99,8 @@ module suiDouBashi_vest::gauge{
         period_finish: u64,
 
         last_update_time: u64,
-        reward_per_token_stored: u128,
-        user_reward_per_token_stored: Table<address, u128>,
+        reward_per_token_stored: u256,
+        user_reward_per_token_stored: Table<address, u256>,
         last_earn: Table<address, u64>,
 
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
@@ -122,9 +122,9 @@ module suiDouBashi_vest::gauge{
     #[test_only]
     public fun get_last_update_time<X,Y>(reward: &Reward<X,Y>): u64{ reward.last_update_time }
     #[test_only]
-    public fun get_reward_per_token_stored<X,Y>(reward: &Reward<X,Y>): u128{ reward.reward_per_token_stored }
+    public fun get_reward_per_token_stored<X,Y>(reward: &Reward<X,Y>): u256{ reward.reward_per_token_stored }
     #[test_only]
-    public fun user_reward_per_token_stored_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u128>{
+    public fun user_reward_per_token_stored_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u256>{
         &reward.user_reward_per_token_stored
     }
     #[test_only]
@@ -167,7 +167,7 @@ module suiDouBashi_vest::gauge{
             reward_per_token_stored: 0,
             reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
 
-            user_reward_per_token_stored: table::new<address, u128>(ctx),
+            user_reward_per_token_stored: table::new<address, u256>(ctx),
             last_earn: table::new<address, u64>(ctx),
         };
 
@@ -299,7 +299,7 @@ module suiDouBashi_vest::gauge{
     public fun get_prior_reward_per_token<X, Y>(
         reward: &Reward<X, Y>,
         ts:u64
-    ):(u64, u128) // ( ts, reward_per_token )
+    ):(u64, u256) // ( ts, reward_per_token )
     {
         let checkpoints = &reward.reward_per_token_checkpoints;
         let len = table_vec::length(checkpoints);
@@ -351,7 +351,7 @@ module suiDouBashi_vest::gauge{
         let player_checkpoint = table::borrow_mut(&mut self.checkpoints, staker);
         let len = table_vec::length(player_checkpoint);
 
-        if( len > 0 && checkpoints::balance_ts(table_vec::borrow(player_checkpoint, len - 1)) == ts){
+        if(len > 0 && checkpoints::balance_ts(table_vec::borrow(player_checkpoint, len - 1)) == ts){
             let cp_mut = table_vec::borrow_mut(player_checkpoint, len - 1 );
             checkpoints::update_balance(cp_mut, balance);
         }else{
@@ -362,7 +362,7 @@ module suiDouBashi_vest::gauge{
 
     fun write_reward_per_token_checkpoint_<X, Y>(
         reward: &mut Reward<X, Y>,
-        reward_per_token: u128,
+        reward_per_token: u256,
         timestamp: u64,
     ){
         let rp_s = &mut reward.reward_per_token_checkpoints;
@@ -440,7 +440,7 @@ module suiDouBashi_vest::gauge{
     public fun reward_per_token<X, Y>(
         self: &Gauge<X,Y>,
         clock: &Clock
-    ): u128{
+    ): u256{
         let reward = borrow_reward<X,Y>(self);
         let reward_per_token_stored = reward.reward_per_token_stored;
         let total_supply = pool::get_lp_balance(&self.total_supply);
@@ -452,8 +452,8 @@ module suiDouBashi_vest::gauge{
         let last_update = reward.last_update_time;
         let period_finish = reward.period_finish;
         let reward_rate = reward.reward_rate;
-        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(last_update, period_finish)) as u128);
-        return reward_per_token_stored + (reward_rate as u128) * PRECISION / (total_supply as u128) * elapsed
+        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(last_update, period_finish)) as u256);
+        return reward_per_token_stored + (reward_rate as u256) * PRECISION / (total_supply as u256) * elapsed
     }
 
     fun calc_reward_per_token<X, Y>(
@@ -462,10 +462,10 @@ module suiDouBashi_vest::gauge{
         timestamp_0: u64,
         supply: u64,
         start_timestamp: u64
-    ):(u128, u64){
+    ):(u256, u64){
         let end_time = math::max(timestamp_1, start_timestamp);
         let start_time = math::max(timestamp_0, start_timestamp);
-        let reward =  ((math::min(end_time, reward.period_finish) - math::min(start_time, reward.period_finish)) as u128) * (reward.reward_rate as u128) * PRECISION / (supply as u128);
+        let reward =  ((math::min(end_time, reward.period_finish) - math::min(start_time, reward.period_finish)) as u256) * (reward.reward_rate as u256) * PRECISION / (supply as u256);
 
         (reward, end_time)
     }
@@ -474,7 +474,7 @@ module suiDouBashi_vest::gauge{
         self: &mut Gauge<X,Y>,
         max_run:u64,
         clock: &Clock,
-    ):(u128, u64) // ( reward_per_token_stored, last_update_time)
+    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
     {
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let ts = clock::timestamp_ms(clock) / 1000;
@@ -530,7 +530,7 @@ module suiDouBashi_vest::gauge{
         max_run:u64,
         actual_last: bool,
         clock: &Clock
-    ):(u128, u64) // ( reward_per_token_stored, last_update_time)
+    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
     {
         let ts = clock::timestamp_ms(clock) / 1000;
         let reward = borrow_reward<X,Y>(self);
@@ -542,7 +542,7 @@ module suiDouBashi_vest::gauge{
         };
 
         if(reward.reward_rate == 0){
-            return ( reward_token_stored, clock::timestamp_ms(clock) / 1000)
+            return ( reward_token_stored, ts)
         };
 
         let start_idx = get_prior_supply_index(self, start_timestamp);
@@ -614,7 +614,7 @@ module suiDouBashi_vest::gauge{
                 let cp_1 = table_vec::borrow(bps_borrow, i + 1);
                 let ( _, reward_per_token_0) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_0));
                 let ( _, reward_per_token_1 ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_1));
-                let acc = (checkpoints::balance(cp_0) as u128) * ((reward_per_token_1 - reward_per_token_0) as u128) / PRECISION;
+                let acc = (checkpoints::balance(cp_0) as u256) * ((reward_per_token_1 - reward_per_token_0) as u256) / PRECISION;
                 earned_reward = earned_reward + (acc as u64);
                 i = i + 1;
             }
@@ -629,7 +629,7 @@ module suiDouBashi_vest::gauge{
             0
         };
         // current slope
-        let acc = (checkpoints::balance(cp) as u128) * (reward_per_token<X,Y>(self, clock) - math_u128::max(reward_stored, user_reward_per_token_stored)) / PRECISION;
+        let acc = (checkpoints::balance(cp) as u256) * (reward_per_token<X,Y>(self, clock) - amm_math::max_u256(reward_stored, user_reward_per_token_stored)) / PRECISION;
         earned_reward = earned_reward + (acc as u64);
         return earned_reward
     }

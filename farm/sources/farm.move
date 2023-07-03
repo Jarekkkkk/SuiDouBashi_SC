@@ -1,6 +1,5 @@
 module suiDouBashi_farm::farm{
     use suiDouBashi_amm::pool::{Self, Pool, LP};
-    use suiDouBashi_amm::pool_reg;
     use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry, Vsdb};
     use suiDouBashi_vsdb::sdb::SDB;
     use std::string::String;
@@ -164,7 +163,7 @@ module suiDouBashi_farm::farm{
             player_infos: table::new<address, PlayerInfo>(ctx),
         };
 
-        let pool_name = pool_reg::get_pool_name<X,Y>();
+        let pool_name = pool::get_pool_name<X,Y>(pool);
         vec_map::insert(&mut reg.farms, pool_name, object::id(&farm));
         reg.total_acc_points = reg.total_acc_points + alloc_point;
         assert!(reg.total_acc_points <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);

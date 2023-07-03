@@ -2,6 +2,7 @@
 module suiDouBashi_amm::pool_reg{
     use sui::object::{UID, ID};
     use sui::table::{Self, Table};
+    use sui::coin;
     use std::string::{Self, String};
     use sui::tx_context::{Self,TxContext};
     use sui::object;
@@ -9,7 +10,6 @@ module suiDouBashi_amm::pool_reg{
     use sui::transfer;
     use std::vector;
 
-    use suiDouBashi_amm::type;
     use suiDouBashi_amm::event;
     use suiDouBashi_amm::pool::{Self, Pool};
 
@@ -31,33 +31,6 @@ module suiDouBashi_amm::pool_reg{
         }else{
             assert!(fee >= 10 && fee <= 50, ERR_INVALD_FEE);
         }
-    }
-
-    fun assert_sorted<X, Y>() {
-        let (_,_,coin_x_symbol) = type::get_package_module_type<X>();
-        let (_,_,coin_y_symbol) = type::get_package_module_type<Y>();
-
-        assert!(coin_x_symbol != coin_y_symbol, ERR_INVALD_PAIR);
-
-        let coin_x_bytes = std::string::bytes(&coin_x_symbol);
-        let coin_y_bytes = std::string::bytes(&coin_y_symbol);
-
-        assert!(vector::length<u8>(coin_x_bytes) <= vector::length<u8>(coin_y_bytes), ERR_INVALD_PAIR);
-
-        if (vector::length<u8>(coin_x_bytes) == vector::length<u8>(coin_y_bytes)) {
-            let length = vector::length<u8>(coin_x_bytes);
-            let i = 0;
-            while (i < length) {
-                let str_x = *vector::borrow<u8>(coin_x_bytes, i);
-                let str_y = *vector::borrow<u8>(coin_y_bytes, i);
-
-                assert!(str_x <= str_y, ERR_INVALD_PAIR);
-                if(str_x < str_y){
-                    break
-                };
-                i = i + 1;
-            }
-        };
     }
 
     // ===== entry =====
@@ -88,18 +61,17 @@ module suiDouBashi_amm::pool_reg{
         fee_percentage: u8,
         ctx: &mut TxContext
     ){
-        assert_sorted<X, Y>();
         assert_fee(stable, fee_percentage);
-        let pool_id = pool::new<X,Y>(stable, metadata_x, metadata_y, fee_percentage, ctx);
-        let pool_name = get_pool_name<X,Y>();
-        table::add(&mut self.pools, pool_name, pool_id);
+        let name = get_pool_name<X,Y>(metadata_x, metadata_y);
+        let pool_id = pool::new<X,Y>(name, stable, metadata_x, metadata_y, fee_percentage, ctx);
+        table::add(&mut self.pools, name, pool_id);
         event::pool_created<X,Y>(pool_id, tx_context::sender(ctx))
     }
 
-    entry fun lock_pool<X, Y>(
+    entry fun lock_pool<X,Y>(
         _cap: &PoolCap,
         pool: &mut Pool<X, Y>,
-        locked: bool,
+        locked: bool
     ){
         pool::udpate_lock(pool, locked);
     }
@@ -122,10 +94,34 @@ module suiDouBashi_amm::pool_reg{
     }
 
     // ===== Utils =====
-    public fun get_pool_name<X,Y>():String{
-        let (_, _, symbol_x) = type::get_package_module_type<X>();
-        let (_, _, symbol_y) = type::get_package_module_type<Y>();
+    public fun get_pool_name<X,Y>(metadata_x: &CoinMetadata<X>, metadata_y: &CoinMetadata<Y>):String{
+        let coin_x_symbol = coin::get_symbol(metadata_x);
+        let coin_y_symbol = coin::get_symbol(metadata_y);
 
+        // sort the type_name
+        assert!(coin_x_symbol != coin_y_symbol, ERR_INVALD_PAIR);
+
+        let coin_x_bytes = std::ascii::as_bytes(&coin_x_symbol);
+        let coin_y_bytes = std::ascii::as_bytes(&coin_y_symbol);
+
+        assert!(vector::length<u8>(coin_x_bytes) <= vector::length<u8>(coin_y_bytes), ERR_INVALD_PAIR);
+
+        if (vector::length<u8>(coin_x_bytes) == vector::length<u8>(coin_y_bytes)) {
+            let length = vector::length<u8>(coin_x_bytes);
+            let i = 0;
+            while (i < length) {
+                let str_x = *vector::borrow<u8>(coin_x_bytes, i);
+                let str_y = *vector::borrow<u8>(coin_y_bytes, i);
+
+                assert!(str_x <= str_y, ERR_INVALD_PAIR);
+                if(str_x < str_y){
+                    break
+                };
+                i = i + 1;
+            }
+        };
+        let symbol_x = string::from_ascii(coin_x_symbol);
+        let symbol_y = string::from_ascii(coin_y_symbol);
         string::append(&mut symbol_x, string::utf8(b"-"));
         string::append(&mut symbol_x, symbol_y);
         symbol_x

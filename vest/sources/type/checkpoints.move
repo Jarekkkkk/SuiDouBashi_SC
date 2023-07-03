@@ -3,7 +3,7 @@ module suiDouBashi_vest::checkpoints{
     ///checkpoint for marking reward rate
     struct RewardPerTokenCheckpoint has store {
         timestamp: u64,
-        reward_per_token: u128
+        reward_per_token: u256
     }
 
     ///checkpoint for marking supply
@@ -18,14 +18,14 @@ module suiDouBashi_vest::checkpoints{
         balance: u64
     }
 
-    public fun new_rp(timestamp: u64, reward_per_token: u128):RewardPerTokenCheckpoint{
+    public fun new_rp(timestamp: u64, reward_per_token: u256):RewardPerTokenCheckpoint{
         RewardPerTokenCheckpoint{
             timestamp,
             reward_per_token
         }
     }
     public fun reward_ts(r: &RewardPerTokenCheckpoint):u64 { r.timestamp }
-    public fun reward(r: &RewardPerTokenCheckpoint):u128 { r.reward_per_token }
+    public fun reward(r: &RewardPerTokenCheckpoint):u256 { r.reward_per_token }
 
 
 
@@ -51,7 +51,7 @@ module suiDouBashi_vest::checkpoints{
 
 
     // ===== Setter =====
-    public fun update_reward(r: &mut RewardPerTokenCheckpoint, v: u128){
+    public fun update_reward(r: &mut RewardPerTokenCheckpoint, v: u256){
         r.reward_per_token = v;
     }
 

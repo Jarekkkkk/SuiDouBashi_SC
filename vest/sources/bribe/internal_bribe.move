@@ -13,8 +13,8 @@ module suiDouBashi_vest::internal_bribe{
 
     use sui::dynamic_field as df;
     use sui::math;
-    use suiDouBashi_amm::math_u128;
 
+    use suiDouBashi_amm::amm_math;
     use suiDouBashi_vsdb::vsdb::Vsdb;
 
     use suiDouBashi_vest::minter::package_version;
@@ -25,7 +25,7 @@ module suiDouBashi_vest::internal_bribe{
     friend suiDouBashi_vest::voter;
 
     const DURATION: u64 = { 7 * 86400 };
-    const PRECISION: u128 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     const E_WRONG_VERSION: u64 = 001;
@@ -56,9 +56,9 @@ module suiDouBashi_vest::internal_bribe{
         reward_rate: u64, // bribe_amount/ 7 days
         period_finish: u64,
         last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
-        reward_per_token_stored: u128,
+        reward_per_token_stored: u256,
 
-        user_reward_per_token_stored: Table<ID, u128>,
+        user_reward_per_token_stored: Table<ID, u256>,
 
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
         last_earn: Table<ID, u64>,
@@ -110,7 +110,7 @@ module suiDouBashi_vest::internal_bribe{
             reward_per_token_stored: 0,
             reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
 
-            user_reward_per_token_stored: table::new<ID, u128>(ctx),
+            user_reward_per_token_stored: table::new<ID, u256>(ctx),
             last_earn: table::new<ID, u64>(ctx),
         };
         let reward_y = Reward<X,Y,Y>{
@@ -121,7 +121,7 @@ module suiDouBashi_vest::internal_bribe{
             reward_per_token_stored: 0,
             reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
 
-            user_reward_per_token_stored: table::new<ID, u128>(ctx),
+            user_reward_per_token_stored: table::new<ID, u256>(ctx),
             last_earn: table::new<ID, u64>(ctx),
         };
 
@@ -213,7 +213,7 @@ module suiDouBashi_vest::internal_bribe{
     public fun get_prior_reward_per_token<X, Y, T>(
         reward: &Reward<X, Y, T>,
         ts:u64
-    ):(u64, u128) // ( ts, reward_per_token )
+    ):(u64, u256) // ( ts, reward_per_token )
     {
         assert_generic_type<X,Y,T>();
         let checkpoints = &reward.reward_per_token_checkpoints;
@@ -278,7 +278,7 @@ module suiDouBashi_vest::internal_bribe{
 
     fun write_reward_per_token_checkpoint_<X, Y, T>(
         reward: &mut Reward<X, Y, T>,
-        reward_per_token: u128,
+        reward_per_token: u256,
         timestamp: u64,
     ){
         let rp_s = &mut reward.reward_per_token_checkpoints;
@@ -371,15 +371,15 @@ module suiDouBashi_vest::internal_bribe{
     public fun reward_per_token<X, Y, T>(
         self: &InternalBribe<X,Y>,
         clock: &Clock
-    ): u128{
+    ): u256{
         let reward = borrow_reward<X,Y,T>(self);
         let reward_stored = reward.reward_per_token_stored;
 
         if(self.total_supply == 0){
             return reward_stored
         };
-        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(reward.last_update_time, reward.period_finish)) as u128);
-        return reward_stored + elapsed * (reward.reward_rate as u128) * PRECISION / (self.total_supply as u128)
+        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(reward.last_update_time, reward.period_finish)) as u256);
+        return reward_stored + elapsed * (reward.reward_rate as u256) * PRECISION / (self.total_supply as u256)
     }
 
     /// update obsolete reward per token data
@@ -398,7 +398,7 @@ module suiDouBashi_vest::internal_bribe{
         self: &mut InternalBribe<X,Y>,
         max_run:u64, // useful when tx might be out of gas
         clock: &Clock,
-    ):(u128, u64) // ( reward_per_token_stored, last_update_time)
+    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
     {
         assert_generic_type<X,Y,T>();
 
@@ -442,10 +442,10 @@ module suiDouBashi_vest::internal_bribe{
         timestamp_0: u64,
         supply: u64,
         start_timestamp: u64
-    ):(u128, u64){
+    ):(u256, u64){
         let end_time = math::max(timestamp_1, start_timestamp);
         let start_time = math::max(timestamp_0, start_timestamp);
-        let reward =  ((math::min(end_time, reward.period_finish) - math::min(start_time, reward.period_finish)) as u128) * (reward.reward_rate as u128) * PRECISION / (supply as u128) ;
+        let reward =  ((math::min(end_time, reward.period_finish) - math::min(start_time, reward.period_finish)) as u256) * (reward.reward_rate as u256) * PRECISION / (supply as u256) ;
         (reward, end_time)
     }
 
@@ -481,7 +481,7 @@ module suiDouBashi_vest::internal_bribe{
         max_run:u64, // useful when tx might be out of gas
         actual_last: bool,
         clock: &Clock,
-    ):(u128, u64) // ( reward_per_token_stored, last_update_time)
+    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
     {
         assert_generic_type<X,Y,T>();
 
@@ -565,7 +565,7 @@ module suiDouBashi_vest::internal_bribe{
                 let cp_1 = vec::borrow(bps_borrow, i + 1);
                 let (_, reward_per_token_0) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_0));
                 let (_, reward_per_token_1) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_1));
-                let acc = (checkpoints::balance(cp_0) as u128) * ((reward_per_token_1 - reward_per_token_0) as u128) / PRECISION;
+                let acc = (checkpoints::balance(cp_0) as u256) * ((reward_per_token_1 - reward_per_token_0) as u256) / PRECISION;
                 earned_reward = earned_reward + (acc as u64);
                 i = i + 1;
             }
@@ -580,7 +580,7 @@ module suiDouBashi_vest::internal_bribe{
         }else{
             0
         };
-        let acc = (checkpoints::balance(cp) as u128) * ((reward_per_token<X,Y,T>(self, clock) - math_u128::max(perior_reward, user_reward_per_token_stored)) as u128) / PRECISION;
+        let acc = (checkpoints::balance(cp) as u256) * ((reward_per_token<X,Y,T>(self, clock) - amm_math::max_u256(perior_reward, user_reward_per_token_stored)) as u256) / PRECISION;
         earned_reward = earned_reward + (acc as u64);
 
         return earned_reward

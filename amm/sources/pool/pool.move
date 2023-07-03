@@ -1,6 +1,10 @@
 module suiDouBashi_amm::pool{
     const VERSION: u64 = 1;
 
+    use std::option::{Self, Option};
+    use std::type_name;
+    use std::string::String;
+    use std::vector as vec;
     use sui::object::{Self,UID, ID};
     use sui::balance::{Self,Supply, Balance};
     use sui::coin::{Self,Coin, CoinMetadata};
@@ -9,14 +13,9 @@ module suiDouBashi_amm::pool{
     use sui::table_vec::{Self,TableVec};
     use sui::math;
     use sui::clock::{Self, Clock};
-    use std::option::{Self, Option};
-    use std::type_name;
-    use std::vector as vec;
 
     use suiDouBashi_amm::event;
     use suiDouBashi_amm::amm_math;
-    use suiDouBashi_amm::formula;
-
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
     friend suiDouBashi_amm::pool_reg;
@@ -38,14 +37,13 @@ module suiDouBashi_amm::pool{
     const E_INSUFFICIENT_LOAN: u64 = 106;
     const E_INVALID_REPAY: u64 = 107;
 
-
     /// `Liquidity Pools`
     /// to provide access to the best rates, we define 2 types of pools: correlated/ uncorrelated
     /// correlated, for example stablecoins
     /// uncorrelated, for example SUI and USDC
-    /// to achieve the lower price slippage and attain efficient capital usage
     struct Pool<phantom X, phantom Y> has key {
         id: UID,
+        name: String,
         version: u64,
         stable:bool,
         locked: bool,
@@ -62,12 +60,14 @@ module suiDouBashi_amm::pool{
     }
     /// Accrued Fees,charged from trader when swapping, will retuen to Liquidity Provider who provides the liquidity in the pool
     struct Fee<phantom X, phantom Y> has store{
-        fee_x:  Balance<X>,
-        fee_y:  Balance<Y>,
+        fee_x: Balance<X>,
+        fee_y: Balance<Y>,
         index_x: u256,
         index_y: u256,
         fee_percentage: u8,
     }
+
+    public fun get_pool_name<X, Y>(self: &Pool<X,Y>):String{ self.name }
 
     public fun get_stable<X,Y>(self: &Pool<X,Y>):bool { self.stable }
 
@@ -95,16 +95,18 @@ module suiDouBashi_amm::pool{
         assert!(self.version == VERSION, E_WRONG_VERSION);
         self.fee.fee_percentage = fee;
     }
+
     public (friend) fun update_stable<X,Y>(self: &mut Pool<X,Y>, stable: bool){
         assert!(self.version == VERSION, E_WRONG_VERSION);
         self.stable = stable;
     }
+
     public (friend) fun udpate_lock<X,Y>(self: &mut Pool<X,Y>, locked: bool){
         assert!(self.version == VERSION, E_WRONG_VERSION);
         self.locked = locked;
     }
 
-    /// Entry of dynamic fields/ object dynamic fields of Vsdb Vesting NFT
+    /// Entry of dynamic fields/ dynamic object fields of Vsdb Vesting NFT
     struct AMM_SDB has copy, store, drop {}
     /// The state we are going to write on Vsdb
     struct AMMState has store{
@@ -254,47 +256,42 @@ module suiDouBashi_amm::pool{
     ):u64{
         assert_valid_type<X,Y,T>();
         let (res_x, res_y, _) = get_reserves(self);
-        get_output_<X,Y,T>(self.stable, input_x - calculate_fee(input_x, self.fee.fee_percentage), res_x, res_y, self.decimal_x, self.decimal_y)
+        amm_math::get_output_<X,Y,T>(self.stable, input_x - calculate_fee(input_x, self.fee.fee_percentage), res_x, res_y, self.decimal_x, self.decimal_y)
     }
 
-    fun get_output_<X,Y,T>(
-        stable: bool,
-        dx: u64,
-        reserve_x: u64,
-        reserve_y: u64,
-        decimal_x: u8,
-        decimal_y: u8
-    ):u64{
-        let type_input = type_name::get<T>();
-        let type_x = type_name::get<X>();
-        let type_y = type_name::get<Y>();
-        assert!( type_input == type_x || type_input == type_y, E_INVALID_TYPE);
-
-        if(type_x == type_input){
-            if(stable){
-            (formula::stable_swap_output(
-                    dx,
-                    reserve_x,
-                    reserve_y,
-                    math::pow(10, decimal_x),
-                    math::pow(10, decimal_y)
-                ) as u64)
-            }else{
-                (formula::variable_swap_output( dx, reserve_x, reserve_y) as u64)
-            }
+    public fun quote_add_liquidity<X,Y>(
+        self: &Pool<X,Y>,
+        value_x: u64,
+        value_y: u64,
+    ):(u64, u64, u64){
+        let (reserve_x, reserve_y, lp_supply) = get_reserves(self);
+        if(reserve_x == 0 && reserve_y == 0){
+            return (value_x, value_y, (amm_math::mul_sqrt(value_x, value_y) - MINIMUM_LIQUIDITY))
         }else{
-            if(stable){
-            (formula::stable_swap_output(
-                    dx,
-                    reserve_y,
-                    reserve_x,
-                    math::pow(10, decimal_y),
-                    math::pow(10, decimal_x)
-                ) as u64)
+            let opt_y  = quote(reserve_x, reserve_y, value_x);
+            let (deposit_x, deposit_y) = if (opt_y <= value_y){
+                (value_x, opt_y)
             }else{
-                (formula::variable_swap_output( dx, reserve_y, reserve_x) as u64)
-            }
+                let opt_x = quote(reserve_y, reserve_x, value_y);
+                (opt_x, value_y)
+            };
+            return (
+                deposit_x,
+                deposit_y,
+                math::min(
+                    (( deposit_x as u128 ) * ( lp_supply as u128) / ( reserve_x as u128) as u64 ),
+                    (( deposit_y as u128 ) * ( lp_supply as u128) / ( reserve_y as u128) as u64 )
+                )
+            )
         }
+    }
+
+    public fun quote_remove_liquidity<X,Y>(
+        self: &Pool<X,Y>,
+        value_lp: u64
+    ):(u64, u64){
+        let (reserve_x, reserve_y, lp_supply) = get_reserves(self);
+        (quote(lp_supply, reserve_x, value_lp), quote(lp_supply, reserve_y, value_lp))
     }
 
     // ===== Entry =====
@@ -401,18 +398,21 @@ module suiDouBashi_amm::pool{
         let coin_y = swap_for_y_(self, option::none<u8>(), coin_x, output_y_min, clock, ctx);
         transfer::public_transfer(coin_y, tx_context::sender(ctx));
     }
+    /// For smart routering
     public fun swap_for_y_dev<X,Y>(
         self: &mut Pool<X,Y>,
         coin_x: Coin<X>,
         output_y_min: u64,
         clock: &Clock,
         ctx: &mut TxContext
-    ):Coin<Y>{
+    ):(Coin<Y>, u64){
         assert_pool_unlocked(self);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
         let coin_y = swap_for_y_(self, option::none<u8>(), coin_x, output_y_min, clock, ctx);
-        coin_y
+        let value_y = coin::value(&coin_y);
+
+        (coin_y, value_y)
     }
     public entry fun swap_for_x_vsdb<X,Y>(
         self: &mut Pool<X,Y>,
@@ -472,13 +472,14 @@ module suiDouBashi_amm::pool{
         output_y_min: u64,
         clock: &Clock,
         ctx: &mut TxContext
-    ):Coin<X>{
+    ):(Coin<X>, u64){
         assert_pool_unlocked(self);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
         let coin_x = swap_for_x_(self, option::none<u8>(),coin_x, output_y_min, clock, ctx,);
+        let value_x = coin::value(&coin_x);
 
-        coin_x
+        (coin_x, value_x)
     }
 
     // - zap
@@ -501,7 +502,7 @@ module suiDouBashi_amm::pool{
         value_x = if(self.stable){
             value_x / 2
         }else{
-            formula::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage)
+            amm_math::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage)
         };
         let coin_x_split = coin::split<X>(&mut coin_x, value_x, ctx);
         let output_min = get_output<X,Y,X>(self, value_x);
@@ -525,7 +526,7 @@ module suiDouBashi_amm::pool{
         value_y = if(self.stable){
             value_y / 2
         }else{
-            formula::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage)
+            amm_math::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage)
         };
         let coin_y_split = coin::split<Y>(&mut coin_y, value_y, ctx);
         let output_min = get_output<X,Y,Y>(self, value_y);
@@ -614,6 +615,7 @@ module suiDouBashi_amm::pool{
 
     // ====== MAIN_LOGIC ======
     public (friend) fun new<X, Y>(
+        name: String,
         stable: bool,
         metadata_x: &CoinMetadata<X>,
         metadata_y: &CoinMetadata<Y>,
@@ -636,6 +638,7 @@ module suiDouBashi_amm::pool{
         };
         let pool = Pool<X,Y>{
             id: object::new(ctx),
+            name,
             version: VERSION,
             stable,
             locked: false,
@@ -649,7 +652,7 @@ module suiDouBashi_amm::pool{
             last_block_timestamp: ts,
             last_price_x_cumulative: 0,
             last_price_y_cumulative: 0,
-            observations: table_vec::singleton( observation, ctx),
+            observations: table_vec::singleton(observation, ctx),
             fee,
         };
         let pool_id = object::id(&pool);
@@ -658,7 +661,7 @@ module suiDouBashi_amm::pool{
         );
         pool_id
     }
-    fun add_liquidity_<X, Y>(
+    fun add_liquidity_<X,Y>(
         self: &mut Pool<X, Y>,
         coin_x: Coin<X>,
         coin_y: Coin<Y>,
@@ -684,7 +687,7 @@ module suiDouBashi_amm::pool{
                 let take = if(coin::value(&coin_y) == opt_y){ // Optimized input
                     coin_y
                 }else{
-                    let take = coin::take<Y>(coin::balance_mut<Y>(&mut coin_y), opt_y, ctx);
+                    let take = coin::split<Y>(&mut coin_y, opt_y, ctx);
                     transfer::public_transfer(coin_y, tx_context::sender(ctx));
                     take
                 };
@@ -696,7 +699,7 @@ module suiDouBashi_amm::pool{
                 let take = if(coin::value(&coin_x) == opt_y){ // Optimized input
                     coin_x
                 }else{
-                    let take = coin::take<X>(coin::balance_mut<X>(&mut coin_x), opt_x, ctx);
+                    let take = coin::split(&mut coin_x, opt_x, ctx);
                     transfer::public_transfer(coin_x, tx_context::sender(ctx));
                     take
                 };
@@ -765,7 +768,7 @@ module suiDouBashi_amm::pool{
         )
     }
 
-    fun swap_for_y_<X, Y>(
+    fun swap_for_y_<X,Y>(
         self: &mut Pool<X, Y>,
         fee_percentage: Option<u8>,
         coin_x: Coin<X>,
@@ -788,7 +791,7 @@ module suiDouBashi_amm::pool{
         let fee_x = calculate_fee(value_x, _fee_percentage);
         let dx = value_x - fee_x;
 
-        let output_y =  get_output_<X,Y,X>(self.stable, dx, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
+        let output_y =  amm_math::get_output_<X,Y,X>(self.stable, dx, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
         assert!(output_y >= output_y_min, E_INSIFFICIENT_INPUT);
         let _res_x = balance::value(&self.reserve_x);
         let _res_y = balance::value(&self.reserve_y);
@@ -803,7 +806,7 @@ module suiDouBashi_amm::pool{
 
         if(self.stable){
             let (scale_x, scale_y) = ( math::pow(10, self.decimal_x), math::pow(10, self.decimal_y) );
-            assert!(formula::k_(_res_x + value_x, _res_y, scale_x, scale_y) >= formula::k_(_res_x, _res_y, scale_x, scale_y), E_K);
+            assert!(amm_math::k_(_res_x + value_x, _res_y, scale_x, scale_y) >= amm_math::k_(_res_x, _res_y, scale_x, scale_y), E_K);
         }else{
             assert!(((_res_x + value_x) as u128 ) * (_res_y as u128) >= (_res_x as u128) * (_res_y as u128), E_K);
         };
@@ -836,7 +839,7 @@ module suiDouBashi_amm::pool{
         option::destroy_none(fee_percentage);
         let fee_y = calculate_fee(value_y, _fee_percentage);
         let dy = value_y - fee_y;
-        let output_x =  get_output_<X,Y,Y>(self.stable, dy, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
+        let output_x =  amm_math::get_output_<X,Y,Y>(self.stable, dy, reserve_x, reserve_y, self.decimal_x, self.decimal_y);
 
         assert!(output_x >= output_x_min, E_INSIFFICIENT_INPUT);
         let _res_x = balance::value(&self.reserve_x);
@@ -855,7 +858,7 @@ module suiDouBashi_amm::pool{
 
         if(self.stable){
             let (scale_x, scale_y) = ( math::pow(10, self.decimal_x), math::pow(10, self.decimal_y) );
-            assert!(formula::k_(_res_x, _res_y + value_y, scale_x, scale_y) >= formula::k_(_res_x, _res_y, scale_x, scale_y), E_K);
+            assert!(amm_math::k_(_res_x, _res_y + value_y, scale_x, scale_y) >= amm_math::k_(_res_x, _res_y, scale_x, scale_y), E_K);
         }else{
             assert!(((_res_x) as u128 ) * ((_res_y + value_y) as u128) >= (_res_x as u128) * (_res_y as u128), E_K);
         };
@@ -864,7 +867,7 @@ module suiDouBashi_amm::pool{
         coin_x
     }
 
-     /// Update cumulative reserves & oracle observations
+    /// Update cumulative reserves & oracle observations
     fun update_timestamp_<X,Y>(self: &mut Pool<X,Y>, clock: &Clock){
         let res_x = (balance::value<X>(&self.reserve_x) as u256);
         let res_y = (balance::value<Y>(&self.reserve_y) as u256);
@@ -940,31 +943,14 @@ module suiDouBashi_amm::pool{
         (reserve_x_cumulative, reserve_y_cumulative)
     }
 
-    public fun current_x<X,Y>(
-        self: &Pool<X,Y>,
-        dy: u64,
-        clock: &Clock
-    ):u64{
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let observation = get_latest_observation(self);
-        let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
-        let len = table_vec::length(&self.observations);
-        if(len == 1){
-            return 0
-        }else if(ts == observation.timestamp){
-            observation = table_vec::borrow(&self.observations, len - 2 );
-        };
-
-        let elapsed = ts - observation.timestamp;
-        let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
-        let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
-        get_output_<X,Y,Y>(self.stable, dy, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
-    }
-    public fun current_y<X,Y>(
+    /// <T>, Input Type
+    /// dx, Input Amount
+    public fun current<X,Y,T>(
         self: &Pool<X,Y>,
         dx: u64,
         clock: &Clock
     ):u64{
+        assert_valid_type<X,Y,T>();
         let ts = clock::timestamp_ms(clock) / 1000;
         let observation = get_latest_observation(self);
         let ( reserve_x_cumulative, reserve_y_cumulative ) = current_cumulative_prices(self, clock);
@@ -978,7 +964,7 @@ module suiDouBashi_amm::pool{
         let elapsed = ts - observation.timestamp;
         let res_x = (reserve_x_cumulative - observation.reserve_x_cumulative) / (elapsed as u256);
         let res_y = (reserve_y_cumulative - observation.reserve_y_cumulative) / (elapsed as u256);
-        get_output_<X,Y,X>(self.stable, dx, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
+        amm_math::get_output_<X,Y,T>(self.stable, dx, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y)
     }
 
     public fun quote_TWAP<X,Y,T>(self: &Pool<X,Y>, input: u64, granularity: u64): u64{
@@ -992,10 +978,12 @@ module suiDouBashi_amm::pool{
         };
         cumulative / granularity
     }
+
     public fun prices<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64): vector<u64> {
         assert_valid_type<X,Y,T>();
         smaple<X,Y,T>(self, input, points, 1)
     }
+
     public fun smaple<X,Y,T>(self: &Pool<X,Y>, input: u64, points: u64, size: u64):vector<u64>{
         assert_valid_type<X,Y,T>();
         let prices = vec::empty<u64>();
@@ -1012,7 +1000,7 @@ module suiDouBashi_amm::pool{
             let elapsed = next_observation.timestamp - start_observation.timestamp;
             let res_x = (next_observation.reserve_x_cumulative - start_observation.reserve_x_cumulative) / (elapsed as u256);
             let res_y = (next_observation.reserve_y_cumulative - start_observation.reserve_y_cumulative) / (elapsed as u256);
-            vec::push_back(&mut prices, get_output_<X,Y,T>(self.stable, input, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y));
+            vec::push_back(&mut prices, amm_math::get_output_<X,Y,T>(self.stable, input, (res_x as u64), (res_y as u64), self.decimal_x, self.decimal_y));
 
             start_idx = start_idx + size ;
         };

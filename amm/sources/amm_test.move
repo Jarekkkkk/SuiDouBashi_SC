@@ -5,13 +5,12 @@ module suiDouBashi_amm::amm_test{
     use sui::clock::{Self, Clock, increment_for_testing as add_time};
     use suiDouBashi_amm::amm_math;
     use sui::math;
-    use suiDouBashi_amm::formula;
     use sui::transfer;
 
     use suiDouBashi_amm::pool::{Self, Pool, LP};
     use suiDouBashi_amm::pool_reg::{Self, PoolReg, PoolCap};
-    use coin_list::mock_usdt::{Self as usdc, MOCK_USDT as USDT};
-    use coin_list::mock_usdc::{Self as usdt, MOCK_USDC as USDC};
+    use coin_list::mock_usdt::{Self as usdt, MOCK_USDT as USDT};
+    use coin_list::mock_usdc::{Self as usdc, MOCK_USDC as USDC};
 
     const MINIMUM_LIQUIDITY: u64 = 1000;
     const USDT_AMT:u64 = 9_000_000_000_000;
@@ -227,9 +226,9 @@ module suiDouBashi_amm::amm_test{
             let dx = input_x - pool::calculate_fee(input_x, 3);
 
             let desired_y = if(pool::get_stable<X,Y>(&pool)){
-             (formula::stable_swap_output(dx, res_x, res_y, scale_x, scale_y) as u64)
+             (amm_math::stable_swap_output(dx, res_x, res_y, scale_x, scale_y) as u64)
             }else{
-                (formula::variable_swap_output(dx, res_x, res_y) as u64)
+                (amm_math::variable_swap_output(dx, res_x, res_y) as u64)
             };
 
             pool::swap_for_y< X, Y>(&mut pool, coin_x, 0 , clock, ctx(test));
@@ -261,9 +260,9 @@ module suiDouBashi_amm::amm_test{
             let dy = input_y - pool::calculate_fee(input_y, 3);
 
             let desired_x = if(pool::get_stable<X,Y>(&pool)){
-             (formula::stable_swap_output(dy, res_y, res_x, scale_y, scale_x) as u64)
+             (amm_math::stable_swap_output(dy, res_y, res_x, scale_y, scale_x) as u64)
             }else{
-                (formula::variable_swap_output(dy, res_y, res_x) as u64)
+                (amm_math::variable_swap_output(dy, res_y, res_x) as u64)
             };
 
             pool::swap_for_x< X, Y>(&mut pool, coin_y, 0 , clock, ctx(test));
@@ -405,8 +404,8 @@ module suiDouBashi_amm::amm_test{
         next_tx(test, trader);{
             let pool = test::take_shared<Pool<X,Y>>(test);
             let input = 1_000_000_000;
-            assert!(pool::current_x(&pool, input, clock) == 999711070, 404);
-            assert!(pool::current_y(&pool, input, clock) == 1000287277, 404);
+            assert!(pool::current<X,Y,Y>(&pool, input, clock) == 999711070, 404);
+            assert!(pool::current<X,Y,X>(&pool, input, clock) == 1000287277, 404);
             assert!(pool::quote_TWAP<X,Y,X>(&pool, input, 1) == 1000290756, 404);
             assert!(pool::quote_TWAP<X,Y,Y>(&pool, input, 1) == 999707579, 404);
             test::return_shared(pool);
