@@ -733,7 +733,7 @@ module suiDouBashi_vest::gauge{
     // distribute pool fees
     public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,
-        bribe: &mut InternalBribe<X,Y>,
+        i_bribe: &mut InternalBribe<X,Y>,
         pool: &mut Pool<X,Y>,
         coin: Coin<SDB>,
         clock: &Clock,
@@ -752,7 +752,7 @@ module suiDouBashi_vest::gauge{
         borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
         borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
 
-        claim_fee(self, bribe, pool, clock, ctx);
+        claim_fee(self, i_bribe, pool, clock, ctx);
 
         let reward = borrow_reward_mut<X,Y>(self);
 

@@ -167,7 +167,7 @@ module suiDouBashi_vest::external_bribe{
 
         let lower = 0;
         let upper = len - 1;
-        while ( lower < upper){
+        while (lower < upper){
             let center = upper - (upper - lower) / 2;
             let cp_ts = checkpoints::balance_ts(vec::borrow(checkpoints, center));
             if(cp_ts == ts ){
@@ -297,10 +297,12 @@ module suiDouBashi_vest::external_bribe{
 
         let _reward = earned<X,Y,T>(self, vsdb, clock);
         let reward = borrow_reward_mut<X,Y,T>(self);
+
         if(!table::contains(&reward.last_earn, id)){
             table::add(&mut reward.last_earn, id, 0);
         };
         *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock) / 1000;
+
         if(_reward > 0){
             let coin = coin::take(&mut reward.balance, _reward, ctx);
             let value_x = coin::value(&coin);
@@ -324,64 +326,45 @@ module suiDouBashi_vest::external_bribe{
             return 0
         };
 
+        let bps_borrow = table::borrow(&self.checkpoints, id);
+        if(vec::length(bps_borrow) == 0) return 0;
+
         let start_timestamp = if(table::contains(&reward.last_earn, id)){
-            *table::borrow(&reward.last_earn, id)
+            bribe_start(*table::borrow(&reward.last_earn, id))
         }else{
             0
         };
 
-        let bps_borrow = table::borrow(&self.checkpoints, id);
-        if(vec::length(bps_borrow) == 0) return 0;
-
         let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
-        let end_idx = vec::length(bps_borrow) - 1;
-        let earned_reward = 0;
-        let pre_reward_bal = 0;
-        let pre_reward_ts = bribe_start(start_timestamp);
-        let _pre_supply = 1;
-        if(end_idx > 0){
-            let i = start_idx;
-            while( i <= end_idx - 1){
-                let cp_0 = vec::borrow(bps_borrow, i);
-                let _next_epoch_start = bribe_start(checkpoints::balance_ts(cp_0));
-                // check that you've earned it
-                // this won't happen until a week has passed
-                if(_next_epoch_start > pre_reward_ts){
-                    earned_reward = earned_reward + pre_reward_bal;
-                };
+        let bp = vec::borrow(bps_borrow, start_idx);
+        let ts = checkpoints::balance_ts(bp);
 
-                pre_reward_ts = _next_epoch_start;
-                _pre_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, _next_epoch_start + DURATION)));
+        start_timestamp = sui::math::max(bribe_start(ts), start_timestamp);
+        let _ts = clock::timestamp_ms(clock) / 1000;
 
-                let rewards =  if(table::contains(&reward.token_rewards_per_epoch, _next_epoch_start)){
-                    *table::borrow(&reward.token_rewards_per_epoch, _next_epoch_start)
-                }else{
-                    0
-                };
+        let epochs = ( bribe_start(_ts) - start_timestamp ) / DURATION;
+        let rewards = 0;
+        let i = 0;
+        while(i < epochs){
+            let idx = get_prior_balance_index(self, vsdb, start_timestamp + DURATION);
+            let bp = vec::borrow(bps_borrow, idx);
+            let balance = checkpoints::balance(bp);
 
-                pre_reward_bal = (checkpoints::balance(cp_0) as u128) * (rewards as u128) / ((_pre_supply + 1 ) as u128);
-
-                i = i + 1;
-            }
-        };
-
-        let cp = vec::borrow(bps_borrow, end_idx);
-        let last_epoch_start = bribe_start(checkpoints::balance_ts(cp));
-        let last_epoch_end = last_epoch_start + DURATION;
-
-        if(clock::timestamp_ms(clock) / 1000 > last_epoch_end){
-            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
-
-            let rewards =  if(table::contains(&reward.token_rewards_per_epoch, last_epoch_start)){
-                *table::borrow(&reward.token_rewards_per_epoch, last_epoch_start)
+            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, start_timestamp + DURATION)));
+            let acc = if(table::contains(&reward.token_rewards_per_epoch, start_timestamp)){
+                *table::borrow(&reward.token_rewards_per_epoch, start_timestamp)
             }else{
                 0
             };
 
-            earned_reward = earned_reward + (checkpoints::balance(cp) as u128) * (rewards as u128) / (supply as u128);
+            let pre_reward_bal = (balance as u128) * (acc as u128) / ((supply + 1) as u128);
+            rewards = rewards + pre_reward_bal;
+            start_timestamp = start_timestamp + DURATION;
+
+            i = i + 1;
         };
 
-        return (earned_reward as u64)
+        (rewards as u64)
     }
 
     //// [voter]: receive votintg

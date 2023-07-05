@@ -391,8 +391,7 @@ module suiDouBashi_vest::voter{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        internal_bribe::get_reward<X,Y,X>(internal_bribe, vsdb, clock, ctx);
-        internal_bribe::get_reward<X,Y,Y>(internal_bribe, vsdb, clock, ctx);
+        internal_bribe::get_all_rewards<X,Y>(internal_bribe, vsdb, clock, ctx);
     }
 
     // collect Fees from Pool

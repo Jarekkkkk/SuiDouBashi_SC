@@ -1,11 +1,12 @@
 module test::e_bribe_test{
     use sui::clock::{increment_for_testing as add_time, Clock};
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
+    use sui::sui::SUI;
     use test::setup;
     use sui::object;
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use std::vector as vec;
-    use suiDouBashi_vest::internal_bribe::{InternalBribe};
+    use suiDouBashi_vest::internal_bribe::{Self as i_bribe, InternalBribe};
     use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
     use suiDouBashi_vest::gauge::{Self, Gauge};
     use suiDouBashi_vest::voter::{Self, Voter};
@@ -127,14 +128,57 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // Vsdb holder withdraw bribes & fees
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
 
+            assert!(i_bribe::earned<USDC, USDT, USDC>(&i_bribe, &vsdb, clock) == 911851118, 404);
+            assert!(i_bribe::earned<USDC, USDT, USDT>(&i_bribe, &vsdb, clock) == 911851118, 404);
             voter::claim_fees(&mut i_bribe, &vsdb, clock, ctx(s));
+
+            test::return_to_sender<Vsdb>(s, vsdb);
+            test::return_shared(i_bribe);
+        };
+
+        next_tx(s,a);{
+            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let usdc = test::take_from_sender<Coin<USDC>>(s);
+            let usdt = test::take_from_sender<Coin<USDT>>(s);
+
+            assert!(coin::value(&usdc) == 911851118, 404);
+            assert!(coin::value(&usdt) == 911851118, 404);
+            assert!(i_bribe::earned<USDC, USDT, USDC>(&i_bribe, &vsdb, clock) == 0, 404);
+            assert!(i_bribe::earned<USDC, USDT, USDT>(&i_bribe, &vsdb, clock) == 0, 404);
+
+            burn(usdc);
+            burn(usdt);
+            test::return_shared(i_bribe);
+            test::return_to_sender<Vsdb>(s, vsdb);
+        };
+
+        next_tx(s,a);{ // Vsdb holder withdraw bribes & fees
+            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
+           assert!(e_bribe::earned<USDC, USDT, USDC>(&e_bribe, &vsdb, clock) == 7878411871, 404);
+           assert!(e_bribe::earned<USDC, USDT, USDT>(&e_bribe, &vsdb, clock) == 7878411871, 404);
+           assert!(e_bribe::earned<USDC, USDT, SUI>(&e_bribe, &vsdb, clock) == 7878411871378, 404);
+           assert!(e_bribe::earned<USDC, USDT, SDB>(&e_bribe, &vsdb, clock) == 7878411871378, 404);
+
             voter::claim_bribes(&mut e_bribe, &vsdb, clock, ctx(s));
 
             test::return_to_sender<Vsdb>(s, vsdb);
             test::return_shared(i_bribe);
+            test::return_shared(e_bribe);
+        };
+        next_tx(s,a);{
+            let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            assert!(e_bribe::earned<USDC, USDT, USDC>(&e_bribe, &vsdb, clock) == 0, 404);
+            assert!(e_bribe::earned<USDC, USDT, USDT>(&e_bribe, &vsdb, clock) == 0, 404);
+            assert!(e_bribe::earned<USDC, USDT, SDB>(&e_bribe, &vsdb, clock) == 0, 404);
+            assert!(e_bribe::earned<USDC, USDT, SUI>(&e_bribe, &vsdb, clock) == 0, 404);
+
+            test::return_to_sender<Vsdb>(s, vsdb);
             test::return_shared(e_bribe);
         };
         next_tx(s,a);{ // succesfully receive the bribes
@@ -177,6 +221,8 @@ module test::e_bribe_test{
         next_tx(s,a);{
             let usdc = test::take_from_sender<Coin<USDC>>(s);
             let value = coin::value(&usdc);
+           std::debug::print(&value);
+           std::debug::print(&prev_usdc);
             assert!(value == prev_usdc, 404);
             test::return_to_sender(s, usdc);
         }

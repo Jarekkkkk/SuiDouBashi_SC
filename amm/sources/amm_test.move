@@ -180,23 +180,15 @@ module suiDouBashi_amm::amm_test{
         next_tx(test, creator);
         let minted_lp ={
             let pool = test::take_shared<Pool< X, Y>>(test);
-            let (res_x, res_y, lp_supply) = pool::get_reserves< X, Y>(&mut pool);
             let lp = pool::create_lp(&pool, ctx(test));
 
+            let (_, _, lp_supply) = pool::quote_add_liquidity(&pool, deposit_x, deposit_y);
             pool::add_liquidity(&mut pool, mint<X>(deposit_x, ctx(test)), mint<Y>(deposit_y, ctx(test)), &mut lp, 0, 0 , clock , ctx(test));
-
 
             transfer::public_transfer(lp, creator);
             test::return_shared(pool);
 
-            if(lp_supply == 0){
-                (amm_math::mul_sqrt(deposit_x, deposit_y) - MINIMUM_LIQUIDITY)
-            }else{
-                math::min(
-                (( deposit_x as u128 ) * ( lp_supply as u128) / ( res_x as u128) as u64 ),
-                (( deposit_y as u128 ) * ( lp_supply as u128) / ( res_y as u128) as u64 )
-                )
-            }
+            lp_supply
         };
         next_tx(test, creator);{
             let pool = test::take_shared<Pool< X, Y>>(test);
@@ -289,14 +281,10 @@ module suiDouBashi_amm::amm_test{
         next_tx(test, creator);
         let (withdraw_x, withdraw_y) = {
             let pool = test::take_shared<Pool< X, Y>>(test);
-
-            let (res_x, res_y, lp_supply) = pool::get_reserves(&mut pool);
             let lp_position = test::take_from_sender<LP<X,Y>>(test);
             let lp_value = pool::get_lp_balance(&lp_position);
 
-            let withdraw_x = pool::quote(lp_supply, res_x, lp_value);
-            let withdraw_y = pool::quote(lp_supply, res_y, lp_value);
-
+            let (withdraw_x, withdraw_y) = pool::quote_remove_liquidity(&pool, lp_value);
             pool::remove_liquidity<X,Y>(&mut pool, &mut lp_position, lp_value, 0, 0, clock, ctx(test));
             test::return_to_sender(test, lp_position);
             test::return_shared(pool);

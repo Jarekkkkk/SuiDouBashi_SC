@@ -356,7 +356,6 @@ module suiDouBashi_vest::internal_bribe{
 
         *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock) / 1000;
         *table::borrow_mut(&mut reward.user_reward_per_token_stored, id) = reward_per_token_stored;
-
         if(_reward > 0){
             let coin_x = coin::take(&mut reward.balance, _reward, ctx);
             let value_x = coin::value(&coin_x);
@@ -394,6 +393,7 @@ module suiDouBashi_vest::internal_bribe{
         reward.reward_per_token_stored = reward_per_token_stored;
         reward.last_update_time = last_update_time;
     }
+
     fun batch_reward_per_token_<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         max_run:u64, // useful when tx might be out of gas

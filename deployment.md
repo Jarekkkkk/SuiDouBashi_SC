@@ -36,13 +36,12 @@
 
    - start Ve(3,3) model
 
-// curl -X POST https: //fullnode.mainnet.sui.io:443
--H 'Content-Type: application/json'
--d '{
-"jsonrpc": "2.0",
-"method": "suix_getCoinMetadata",
-"id": "1",
-"params": [
-"0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN"
-]
-}'
+5. Voter:
+
+   - voting campaign start
+
+## After deployment
+
+1. SuiDouBashi - update the gauge & distribute fees after every epoch
+   - calling `voter::distribute` for every gauge to distribute weekly emissions & fees
+   -

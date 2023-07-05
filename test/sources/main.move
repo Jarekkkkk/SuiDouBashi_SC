@@ -357,6 +357,17 @@ module test::main{
             test::return_to_sender(s, vsdb);
             test::return_shared(i_bribe);
         };
+
+        // next_tx(s, a);{
+        //     let usdc = test::take_from_sender<Coin<USDC>>(s);
+        //     let usdt = test::take_from_sender<Coin<USDT>>(s);
+
+        //     assert!(coin::value(&usdc) == 911851118, 404);
+        //     assert!(coin::value(&usdt) == 911851118, 404);
+
+        //     test::return_to_sender(s, usdc);
+        //     test::return_to_sender(s, usdt);
+        // };
         next_tx(s,a);{ // distribute fees
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -390,6 +401,15 @@ module test::main{
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
+            test::return_shared(i_bribe);
+        };
+        next_tx(s,a);{ // LP holders withdraw LP fees when pool is empty
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            assert!( i_bribe::reward_per_token<USDC, USDT, USDC>(&i_bribe, clock) == 0, 404);
+            assert!( i_bribe::reward_per_token<USDC, USDT, USDT>(&i_bribe, clock) == 0, 404);
+
+            test::return_to_sender(s, vsdb);
             test::return_shared(i_bribe);
         };
         next_tx(s,a);{
@@ -508,7 +528,6 @@ module test::main{
                 test::return_to_sender(s, sdb);
                 id
             };
-
 
             test::return_shared(voter);
             test::return_shared(minter);

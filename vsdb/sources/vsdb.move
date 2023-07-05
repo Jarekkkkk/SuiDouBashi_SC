@@ -286,10 +286,8 @@ module suiDouBashi_vsdb::vsdb{
         let level_ = level(&vsdb);
         let ts = clock::timestamp_ms(clock)/ 1000;
 
-        assert!(locked_end_ >= ts , E_LOCK);
-        assert!(locked_bal_ > 0, E_EMPTY_BALANCE);
-        assert!(locked_end_ >= ts , E_LOCK);
-        assert!(locked_bal_ > 0, E_EMPTY_BALANCE);
+        assert!(locked_end_ >= ts && locked_end >= ts, E_LOCK);
+        assert!(locked_bal_ > 0 && locked_bal > 0, E_EMPTY_BALANCE);
 
         let (level, exp) = if(level > level_){
             (level, self.experience)
