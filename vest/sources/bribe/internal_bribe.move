@@ -148,10 +148,6 @@ module suiDouBashi_vest::internal_bribe{
             return 0
         };
 
-        if(!table::contains(&self.checkpoints, id)){
-            return 0
-        };
-
         if( checkpoints::balance_ts(vec::borrow(checkpoints, len - 1)) <= ts ){
             return len - 1
         };

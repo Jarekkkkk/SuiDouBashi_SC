@@ -149,11 +149,7 @@ module suiDouBashi_vest::external_bribe{
         let checkpoints = table::borrow(&self.checkpoints, id);
         let len = vec::length(checkpoints);
 
-        if( len == 0){
-            return 0
-        };
-
-        if(!table::contains(&self.checkpoints, id)){
+        if(len == 0){
             return 0
         };
 
@@ -329,42 +325,64 @@ module suiDouBashi_vest::external_bribe{
         let bps_borrow = table::borrow(&self.checkpoints, id);
         if(vec::length(bps_borrow) == 0) return 0;
 
-        let start_timestamp = if(table::contains(&reward.last_earn, id)){
-            bribe_start(*table::borrow(&reward.last_earn, id))
+        let last_earn = if(table::contains(&reward.last_earn, id)){
+            *table::borrow(&reward.last_earn, id)
         }else{
             0
         };
 
-        let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
-        let bp = vec::borrow(bps_borrow, start_idx);
-        let ts = checkpoints::balance_ts(bp);
+        let bps_borrow = table::borrow(&self.checkpoints, id);
+        if(vec::length(bps_borrow) == 0) return 0;
 
-        start_timestamp = sui::math::max(bribe_start(ts), start_timestamp);
-        let _ts = clock::timestamp_ms(clock) / 1000;
+        let start_idx = get_prior_balance_index(self, vsdb, last_earn);
+        let end_idx = vec::length(bps_borrow) - 1;
+        let earned_reward = 0;
+        let pre_reward_bal = 0;
+        let pre_reward_ts = bribe_start(last_earn);
+        let _pre_supply = 1;
+        if(end_idx > 0){
+            let i = start_idx;
+            while( i <= end_idx - 1){
+                let cp_0 = vec::borrow(bps_borrow, i);
+                let _next_epoch_start = bribe_start(checkpoints::balance_ts(cp_0));
+                // check that you've earned it
+                // this won't happen until a week has passed
+                if(_next_epoch_start > pre_reward_ts){
+                    earned_reward = earned_reward + pre_reward_bal;
+                };
 
-        let epochs = ( bribe_start(_ts) - start_timestamp ) / DURATION;
-        let rewards = 0;
-        let i = 0;
-        while(i < epochs){
-            let idx = get_prior_balance_index(self, vsdb, start_timestamp + DURATION);
-            let bp = vec::borrow(bps_borrow, idx);
-            let balance = checkpoints::balance(bp);
+                pre_reward_ts = _next_epoch_start;
+                _pre_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, _next_epoch_start + DURATION)));
 
-            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, start_timestamp + DURATION)));
-            let acc = if(table::contains(&reward.token_rewards_per_epoch, start_timestamp)){
-                *table::borrow(&reward.token_rewards_per_epoch, start_timestamp)
-            }else{
+                let rewards =  if(table::contains(&reward.token_rewards_per_epoch, _next_epoch_start)){
+                    *table::borrow(&reward.token_rewards_per_epoch, _next_epoch_start)
+                }else{
+                    0
+                };
+
+                pre_reward_bal = (checkpoints::balance(cp_0) as u128) * (rewards as u128) / ((_pre_supply + 1 ) as u128);
+
+                i = i + 1;
+            }
+                };
+
+        let cp = vec::borrow(bps_borrow, end_idx);
+        let last_epoch_start = sui::math::max(bribe_start(checkpoints::balance_ts(cp)), bribe_start(last_earn));
+        let last_epoch_end = last_epoch_start + DURATION;
+
+        if(clock::timestamp_ms(clock) / 1000 > last_epoch_end){
+            let supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, get_prior_supply_index(self, last_epoch_end)));
+
+            let rewards =  if(table::contains(&reward.token_rewards_per_epoch, last_epoch_start)){
+                *table::borrow(&reward.token_rewards_per_epoch, last_epoch_start)
+            }else {
                 0
             };
 
-            let pre_reward_bal = (balance as u128) * (acc as u128) / ((supply + 1) as u128);
-            rewards = rewards + pre_reward_bal;
-            start_timestamp = start_timestamp + DURATION;
-
-            i = i + 1;
+            earned_reward = earned_reward + (checkpoints::balance(cp) as u128) * (rewards as u128) / (supply as u128);
         };
 
-        (rewards as u64)
+        ( earned_reward as u64 )
     }
 
     //// [voter]: receive votintg
