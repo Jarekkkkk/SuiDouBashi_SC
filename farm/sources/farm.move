@@ -90,7 +90,7 @@ module suiDouBashi_farm::farm{
         pending_reward: u64
     }
 
-    public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::get_lp_balance(&self.lp_balance)}
+    public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::lp_balance(&self.lp_balance)}
     public fun get_player_info<X,Y>(self: &Farm<X,Y>, player: address): &PlayerInfo {
         table::borrow(&self.player_infos, player)
     }
@@ -163,7 +163,7 @@ module suiDouBashi_farm::farm{
             player_infos: table::new<address, PlayerInfo>(ctx),
         };
 
-        let pool_name = pool::get_pool_name<X,Y>(pool);
+        let pool_name = pool::name<X,Y>(pool);
         vec_map::insert(&mut reg.farms, pool_name, object::id(&farm));
         reg.total_acc_points = reg.total_acc_points + alloc_point;
         assert!(reg.total_acc_points <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);
@@ -193,7 +193,7 @@ module suiDouBashi_farm::farm{
         let ts = clock::timestamp_ms(clock) / 1000;
         let player_info = table::borrow(&self.player_infos, player);
         let index = self.index;
-        let lp_balance = pool::get_lp_balance(&self.lp_balance);
+        let lp_balance = pool::lp_balance(&self.lp_balance);
 
         if(ts > self.last_reward_time && lp_balance != 0){
             let multiplier = get_multiplier(reg, self.last_reward_time, ts);
@@ -210,7 +210,7 @@ module suiDouBashi_farm::farm{
 
         if(ts <= self.last_reward_time) return;
 
-        let lp_balance = pool::get_lp_balance(&self.lp_balance);
+        let lp_balance = pool::lp_balance(&self.lp_balance);
         if(lp_balance == 0){
             self.last_reward_time = ts;
             return
@@ -245,7 +245,7 @@ module suiDouBashi_farm::farm{
         clock: &Clock,
         ctx:&mut TxContext
     ){
-        let lp_balance = pool::get_lp_balance(lp);
+        let lp_balance = pool::lp_balance(lp);
         stake(reg, self, pool, lp, lp_balance, clock, ctx);
     }
 
@@ -259,7 +259,7 @@ module suiDouBashi_farm::farm{
         ctx:&mut TxContext
     ){
         assert_setup(reg);
-        let lp_balance = pool::get_lp_balance(lp);
+        let lp_balance = pool::lp_balance(lp);
         assert!(lp_balance >= value, ERR_INSUFFICIENT_LP);
 
         let player = tx_context::sender(ctx);
@@ -428,7 +428,7 @@ module suiDouBashi_farm::farm{
     ){
         assert_governor(reg, ctx);
         assert!(clock::timestamp_ms(clock) / 1000 >= reg.end_time, ERR_NOT_FINISH);
-        let (coin_x, coin_y) = pool::claim_fees_dev(pool, &mut self.lp_balance, ctx);
+        let (coin_x, coin_y, _, _) = pool::claim_fees_dev(pool, &mut self.lp_balance, ctx);
 
         if(option::is_some(&coin_x)){
             let coin_x = option::extract(&mut coin_x);

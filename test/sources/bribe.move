@@ -128,7 +128,7 @@ module test::bribe_test{
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 let reward = gauge::borrow_reward(&gauge);
                 let sdb_reward = test::take_from_sender<Coin<SDB>>(s);
-                assert!(pool::get_lp_balance(&lp) == 1999000 , 404);
+                assert!(pool::lp_balance(&lp) == 1999000 , 404);
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
                 // index at 1
@@ -138,7 +138,7 @@ module test::bribe_test{
                 assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock)/ 1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==  0, 404);
                 // total staked lp
-                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) ==  0, 404);
+                assert!(pool::lp_balance(gauge::total_supply_borrow(&gauge)) ==  0, 404);
                 // receeive accumulated rewards
                 assert!(coin::value(&sdb_reward) == 86400, 404);
                 assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000000000000, 404);
@@ -153,7 +153,7 @@ module test::bribe_test{
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
                 let reward = gauge::borrow_reward(&gauge);
                 let sdb_reward = test::take_from_sender<Coin<SDB>>(s);
-                assert!(pool::get_lp_balance(&lp) ==  63244552, 404);
+                assert!(pool::lp_balance(&lp) ==  63244552, 404);
                 // LP position record in Gauge
                 assert!(gauge::get_balance_of(&gauge, a) == 0, 404);
                 // index at 1
@@ -163,7 +163,7 @@ module test::bribe_test{
                 assert!(checkpoints::supply_ts(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) == get_time(clock)/ 1000, 404);
                 assert!(checkpoints::supply(table_vec::borrow(gauge::supply_checkpoints_borrow(&gauge), 3)) ==   0, 404);
                 // total staked lp
-                assert!(pool::get_lp_balance(gauge::total_supply_borrow(&gauge)) == 0 , 404);
+                assert!(pool::lp_balance(gauge::total_supply_borrow(&gauge)) == 0 , 404);
                 // receeive accumulated rewards
                 assert!(coin::value(&sdb_reward) == 86400, 404);
                 assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000000000000, 404);

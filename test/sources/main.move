@@ -83,7 +83,7 @@ module test::main{
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_1B(),1);
 
             assert!(vsdb::total_VeSDB(&reg, clock) == 4910714285702544000, 1);
-            assert!(vsdb::get_minted(&reg) == 1, 1);
+            assert!(vsdb::minted_vsdb(&reg) == 1, 1);
             assert!( vsdb::player_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
@@ -112,7 +112,7 @@ module test::main{
             assert!(vsdb::locked_balance(&vsdb) == 10 * setup::sui_1B(),1);
 
             assert!(vsdb::total_VeSDB(&reg, clock) == 9821428571419344000, 1);
-            assert!(vsdb::get_minted(&reg) == 1, 1);
+            assert!(vsdb::minted_vsdb(&reg) == 1, 1);
             assert!( vsdb::player_epoch(&vsdb) == 3, 0);
 
             test::return_to_sender(s, vsdb);
@@ -134,7 +134,7 @@ module test::main{
             assert!(voting >= 491071428557424000, 1);
             assert!(vsdb::locked_balance(&vsdb) == 5 * setup::sui_100M(), 404);
             assert!(vsdb::total_VeSDB(&reg, clock) == 10803571428534192000, 404);
-            assert!(vsdb::get_minted(&reg) == 3, 1);
+            assert!(vsdb::minted_vsdb(&reg) == 3, 1);
             assert!( vsdb::player_epoch(&vsdb) == 1, 0);
 
             test::return_to_sender(s, vsdb);
@@ -167,7 +167,7 @@ module test::main{
             assert!(!test::was_taken_from_address(a, id),1); // not exist
             assert!(!test::was_taken_from_address(a, id_1),1); // not exist
             assert!(vsdb::total_VeSDB(&reg, clock) == 10803571428562704000, 1);
-            assert!(vsdb::get_minted(&reg) == 1, 1);
+            assert!(vsdb::minted_vsdb(&reg) == 1, 1);
 
             test::return_to_sender(s, vsdb);
             test::return_shared(reg);

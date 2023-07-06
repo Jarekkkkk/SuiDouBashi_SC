@@ -185,22 +185,14 @@ module suiDouBashi_vest::gauge{
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let (coin_x, coin_y) = pool::claim_fees_dev(pool, &mut self.total_supply, ctx);
-        let value_x = if(option::is_some(&coin_x)){
+        let (coin_x, coin_y, value_x, value_y) = pool::claim_fees_dev(pool, &mut self.total_supply, ctx);
+        if(option::is_some(&coin_x)){
             let coin_x = option::extract(&mut coin_x);
-            let value_x = coin::value(&coin_x);
             coin::put(&mut self.fees_x, coin_x);
-            value_x
-        }else{
-            0
         };
-        let value_y = if(option::is_some(&coin_y)){
+        if(option::is_some(&coin_y)){
             let coin_y = option::extract(&mut coin_y);
-            let value_y = coin::value(&coin_y);
             coin::put(&mut self.fees_y, coin_y);
-            value_y
-        }else{
-            0
         };
         option::destroy_none(coin_x);
         option::destroy_none(coin_y);
@@ -380,7 +372,7 @@ module suiDouBashi_vest::gauge{
         clock: &Clock,
     ){
         let ts = clock::timestamp_ms(clock) / 1000;
-        let supply = pool::get_lp_balance(&self.total_supply);
+        let supply = pool::lp_balance(&self.total_supply);
 
         let len = table_vec::length(&self.supply_checkpoints);
 
@@ -443,7 +435,7 @@ module suiDouBashi_vest::gauge{
     ): u256{
         let reward = borrow_reward<X,Y>(self);
         let reward_per_token_stored = reward.reward_per_token_stored;
-        let total_supply = pool::get_lp_balance(&self.total_supply);
+        let total_supply = pool::lp_balance(&self.total_supply);
 
         if(total_supply == 0){
             return reward_per_token_stored
@@ -643,7 +635,7 @@ module suiDouBashi_vest::gauge{
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let balance = pool::get_lp_balance(lp_position);
+        let balance = pool::lp_balance(lp_position);
         stake(self, pool, lp_position, balance, clock, ctx);
     }
     public entry fun stake<X,Y>(
@@ -661,7 +653,7 @@ module suiDouBashi_vest::gauge{
         borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
 
         let staker = tx_context::sender(ctx);
-        let lp_value = pool::get_lp_balance(lp_position);
+        let lp_value = pool::lp_balance(lp_position);
         assert!(lp_value > 0, E_EMPTY_VALUE);
 
         pool::join_lp(pool, &mut self.total_supply, lp_position, value);
