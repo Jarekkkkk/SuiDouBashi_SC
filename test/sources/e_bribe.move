@@ -41,6 +41,14 @@ module test::e_bribe_test{
                 e_bribe::bribe(&mut e_bribe, mint<sui::sui::SUI>(setup::sui_100K(), ctx(s)), clock, ctx(s));
             };
 
+            {
+                let vsdb_1 = test::take_from_sender<Vsdb>(s);
+                let vsdb_2 = test::take_from_sender<Vsdb>(s);
+                test::return_to_sender(s, vsdb_2);
+                test::return_to_sender(s, vsdb_1);
+
+            };
+
             test::return_shared(voter);
             test::return_shared(minter);
             test::return_shared(vsdb_reg);
@@ -126,7 +134,7 @@ module test::e_bribe_test{
             burn(sdb);
         };
 
-        next_tx(s,a);{ // Vsdb holder withdraw bribes & fees
+        next_tx(s,a);{ // Vsdb holder internal_bribe ( tx fees )
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
 
@@ -155,7 +163,7 @@ module test::e_bribe_test{
             test::return_to_sender<Vsdb>(s, vsdb);
         };
 
-        next_tx(s,a);{ // Vsdb holder withdraw bribes & fees
+        next_tx(s,a);{ // Vsdb holder withdraw extenal_bribes ( bribes )
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
             let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
@@ -208,7 +216,6 @@ module test::e_bribe_test{
             let usdc = test::take_from_sender<Coin<USDC>>(s);
             let value = coin::value(&usdc);
             test::return_to_sender(s, usdc);
-
             voter::claim_bribes(&mut e_bribe, &vsdb, clock, ctx(s));
 
             test::return_to_sender(s, vsdb);
@@ -221,8 +228,6 @@ module test::e_bribe_test{
         next_tx(s,a);{
             let usdc = test::take_from_sender<Coin<USDC>>(s);
             let value = coin::value(&usdc);
-           std::debug::print(&value);
-           std::debug::print(&prev_usdc);
             assert!(value == prev_usdc, 404);
             test::return_to_sender(s, usdc);
         }

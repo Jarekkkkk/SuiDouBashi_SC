@@ -143,7 +143,6 @@ module test::bribe_test{
                 assert!(*table::borrow(gauge::user_reward_per_token_stored_borrow(reward), a) == 86400000000000000, 404);
                 assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock)/ 1000, 404);
 
-
                 test::return_shared(gauge);
                 burn(sdb_reward);
                 test::return_to_sender(s, lp);
