@@ -193,7 +193,7 @@ module suiDouBashi_amm::amm_test{
         next_tx(test, creator);{
             let pool = test::take_shared<Pool< X, Y>>(test);
             let lp_position = test::take_from_sender<LP<X,Y>>(test);
-            let lp_value = pool::get_lp_balance(&lp_position);
+            let lp_value = pool::lp_balance(&lp_position);
 
             assert!(lp_value == minted_lp, 0);
 
@@ -213,11 +213,11 @@ module suiDouBashi_amm::amm_test{
             let (res_x, res_y, _) = pool::get_reserves< X, Y>(&mut pool);
             let coin_x =  mint<X>(input_x, ctx(test));
 
-            let scale_x = math::pow(10, pool::get_decimals_x(&pool));
-            let scale_y = math::pow(10, pool::get_decimals_y(&pool));
+            let scale_x = math::pow(10, pool::decimal_x(&pool));
+            let scale_y = math::pow(10, pool::decimal_y(&pool));
             let dx = input_x - pool::calculate_fee(input_x, 3);
 
-            let desired_y = if(pool::get_stable<X,Y>(&pool)){
+            let desired_y = if(pool::stable<X,Y>(&pool)){
              (amm_math::stable_swap_output(dx, res_x, res_y, scale_x, scale_y) as u64)
             }else{
                 (amm_math::variable_swap_output(dx, res_x, res_y) as u64)
@@ -247,11 +247,11 @@ module suiDouBashi_amm::amm_test{
             let (res_x, res_y, _) = pool::get_reserves< X, Y>(&mut pool);
             let coin_y=  mint<Y>(input_y, ctx(test));
 
-            let scale_x = math::pow(10, pool::get_decimals_x(&pool));
-            let scale_y = math::pow(10, pool::get_decimals_y(&pool));
+            let scale_x = math::pow(10, pool::decimal_x(&pool));
+            let scale_y = math::pow(10, pool::decimal_y(&pool));
             let dy = input_y - pool::calculate_fee(input_y, 3);
 
-            let desired_x = if(pool::get_stable<X,Y>(&pool)){
+            let desired_x = if(pool::stable<X,Y>(&pool)){
              (amm_math::stable_swap_output(dy, res_y, res_x, scale_y, scale_x) as u64)
             }else{
                 (amm_math::variable_swap_output(dy, res_y, res_x) as u64)
@@ -282,7 +282,7 @@ module suiDouBashi_amm::amm_test{
         let (withdraw_x, withdraw_y) = {
             let pool = test::take_shared<Pool< X, Y>>(test);
             let lp_position = test::take_from_sender<LP<X,Y>>(test);
-            let lp_value = pool::get_lp_balance(&lp_position);
+            let lp_value = pool::lp_balance(&lp_position);
 
             let (withdraw_x, withdraw_y) = pool::quote_remove_liquidity(&pool, lp_value);
             pool::remove_liquidity<X,Y>(&mut pool, &mut lp_position, lp_value, 0, 0, clock, ctx(test));

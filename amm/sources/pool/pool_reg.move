@@ -81,7 +81,7 @@ module suiDouBashi_amm::pool_reg{
         pool: &mut Pool<X,Y>,
         fee: u8
     ){
-        assert_fee(pool::get_stable(pool), fee);
+        assert_fee(pool::stable(pool), fee);
         pool::update_fee(pool, fee);
     }
 
