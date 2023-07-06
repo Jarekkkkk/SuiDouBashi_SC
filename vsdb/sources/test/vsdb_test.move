@@ -97,7 +97,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let end = vsdb::round_down_week(get_time(clock) / 1000 + week());
             let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock) / 1000);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
-            assert!( vsdb::get_player_epoch(&vsdb) == 1, 0);
+            assert!( vsdb::player_epoch(&vsdb) == 1, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
             test::return_to_sender(s, vsdb);
@@ -115,7 +115,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let end = vsdb::round_down_week(get_time(clock)/1000 + 2 * week());
             let bias = vsdb::calculate_bias(sui_100M(), end, get_time(clock) / 1000);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
-            assert!( vsdb::get_player_epoch(&vsdb) == 2, 0);
+            assert!( vsdb::player_epoch(&vsdb) == 2, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);
@@ -134,7 +134,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let slope = vsdb::calculate_slope(value);
             let bias = vsdb::calculate_bias(value, end, get_time(clock) / 1000);
             assert!( vsdb::locked_end(&vsdb) == end, 0);
-            assert!( vsdb::get_player_epoch(&vsdb) == 3, 0);
+            assert!( vsdb::player_epoch(&vsdb) == 3, 0);
             assert!( vsdb::get_latest_slope(&vsdb) == slope, 0);
             assert!( vsdb::get_latest_bias(&vsdb) == bias , 0);
             test::return_to_sender(s, vsdb);

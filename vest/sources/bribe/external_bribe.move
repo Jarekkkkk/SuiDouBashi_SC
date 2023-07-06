@@ -1,6 +1,8 @@
 // External Bribes represent coin brbies from protocol
 module suiDouBashi_vest::external_bribe{
+    use std::vector as vec;
     use std::type_name;
+
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
@@ -11,7 +13,6 @@ module suiDouBashi_vest::external_bribe{
     use sui::sui::SUI;
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
-    use std::vector as vec;
     use sui::dynamic_field as df;
 
     use suiDouBashi_vsdb::vsdb::Vsdb;
@@ -280,6 +281,7 @@ module suiDouBashi_vest::external_bribe{
             get_reward<X,Y,SDB>(self, vsdb, clock, ctx);
         };
     }
+
     public entry fun get_reward<X, Y, T>(
         self: &mut ExternalBribe<X,Y>,
         vsdb: &Vsdb,
@@ -428,7 +430,7 @@ module suiDouBashi_vest::external_bribe{
         write_supply_checkpoint_(self, clock);
     }
 
-    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+    public fun left<X,Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
         let adjusted_ts = get_epoch_start(clock::timestamp_ms(clock) / 1000);
         if (!table::contains(&reward.token_rewards_per_epoch, adjusted_ts)){
             0

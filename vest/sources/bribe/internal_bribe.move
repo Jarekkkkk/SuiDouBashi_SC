@@ -652,6 +652,7 @@ module suiDouBashi_vest::internal_bribe{
 
         let ts = clock::timestamp_ms(clock) / 1000;
         if(reward.reward_rate == 0){
+            // gensis rewards checkpoint
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), 0, ts);
         };
 

@@ -29,6 +29,7 @@ module test::bribe_test{
             let e_bribe_a = test::take_shared<ExternalBribe<USDC, USDT>>(s);
             let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
             let ctx = ctx(s);
+
             // weekly emissions
             gauge::distribute_emissions(&mut gauge_a, &mut i_bribe_a, &mut pool_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
             gauge::distribute_emissions(&mut gauge_b, &mut i_bribe_b, &mut pool_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
@@ -122,7 +123,7 @@ module test::bribe_test{
             test::return_shared(pool_b);
         };
         next_tx(s,a);{// Assetion: nobody stake & LP successfully withdraw the rewards
-            { // gauge_a
+            {   // gauge_a
                 let lp = test::take_from_sender<LP<USDC, USDT>>(s);
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 let reward = gauge::borrow_reward(&gauge);
@@ -147,7 +148,7 @@ module test::bribe_test{
                 burn(sdb_reward);
                 test::return_to_sender(s, lp);
             };
-            {// guage_b
+            {   // guage_b
                 let lp = test::take_from_sender<LP<SDB, USDC>>(s);
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
                 let reward = gauge::borrow_reward(&gauge);

@@ -102,11 +102,13 @@ module test::voter_test{
             let voting = vsdb::voting_weight(&vsdb, clock);
             let reg = test::take_shared<VSDBRegistry>(s);
             let voter = test::take_shared<Voter>(s);
+
             assert!(voting >= 970238026331210741, 404);
             assert!(vsdb::locked_balance(&vsdb) == setup::sui_1B(),404);
             assert!(vsdb::total_VeSDB(&reg, clock) == 10726189649449434482, 404);
             assert!(vsdb::get_minted(&reg) == 2, 404);
-            assert!( vsdb::get_player_epoch(&vsdb) == 1, 404);
+            assert!( vsdb::player_epoch(&vsdb) == 1, 404);
+
             // intialize
             voter::initialize(&reg, &mut vsdb);
             test::return_to_sender(s, vsdb);
@@ -425,6 +427,7 @@ module test::voter_test{
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
                 let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
                 let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 443452346499522170 + vsdb_voting / 2, 404);
                 // gauge

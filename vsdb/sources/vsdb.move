@@ -1,21 +1,22 @@
-/// VSDB Vesting NFT represent membership of SuiDoBashi Ecosystem,
-/// Anyone holding VSDB can be verified project contributor as it retain our token value by holding SDB coins
-/// Whne holding VSDB, holder can enjoy the features in the SuiDoBashi ecosystem
+// SPDX-License-Identifier: MIT
+
 module suiDouBashi_vsdb::vsdb{
+    /// Package Version
     const VERSION: u64 = 1;
 
+    use std::vector as vec;
     use std::type_name::{Self, TypeName};
+    use std::option::{Self, Option};
+    use std::string::utf8;
+
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID};
     use sui::transfer;
-    use std::vector as vec;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use sui::coin::{Self, Coin};
-    use std::option::{Self, Option};
     use sui::clock::{Self, Clock};
-    use std::string::utf8;
     use sui::package;
     use sui::display;
     use sui::dynamic_field as df;
@@ -26,8 +27,14 @@ module suiDouBashi_vsdb::vsdb{
     use suiDouBashi_vsdb::event;
     use suiDouBashi_vsdb::i128::{Self, I128};
 
+    // ====== Constants =======
+
     const MAX_TIME: u64 = { 24 * 7 * 86400 };
     const WEEK: u64 = { 7 * 86400 };
+
+    // ====== Constants =======
+
+    // ====== Error =======
 
     const E_WRONG_VERSION: u64 = 001;
 
@@ -40,42 +47,55 @@ module suiDouBashi_vsdb::vsdb{
     const E_NOT_PURE: u64 = 106;
     const E_INVALID_LEVEL: u64 = 107;
 
-    /// one-time witness
+    // ====== Error =======
+
+    /// One-time witness of Vesting NFT
     struct VSDB has drop {}
 
-    /// Vesting NFT of SuiDoBashi ecosystem. Any SDB holder can lock up their coins for specific duration and receive Vsdb NFT in exchange to become SuiDoBashi contributor
-    /// Additional coins can be added to NFT anytime
-    /// The lock period can be up to at most 24 weeks
-    /// The logner the vesting time, the higher the governance power( voting weight ) you are granted
+    /// Vesting NFT of SuiDoBashi ecosystem. Any SDB holder can lock up their coins for specific duration at most 24 weeks and receive Vsdb NFT in exchange to SuiDoBashi contributor
+    /// Additional coins deposits and unlocked period extension are allowed anytime
+    /// The logner the vesting time, the higher the governance power( voting power ) you are granted
     /// As a VSDB holder, you can earn experiences by interacting with DAPPs on SuiDoBashi to enjoy the benefits in SuiDoBashi like fee deduction, or voting bonus
     struct Vsdb has key, store{
         id: UID,
+        /// Current level our NFT, corresponding to different images and bonus
         level: u8,
+        /// Accrued experiences from interacting with SuiDouBashi ecosystem
         experience: u64,
+        /// last time Vsdb was topped up/ extended the unlocked period/ merge
         last_updated: u64,
-        /// Locked SDB Balance
+        /// Locked SDB Coin
         balance: Balance<SDB>,
         /// Unlocked date ( week-based )
         end: u64,
+        /// Counts for Vsdb updated times
         player_epoch: u64,
-        /// Record the point history when vsdb holder deposit/ extend unlock time
+        /// point history
         player_point_history: Table<u64, Point>,
+        /// registered modules
         modules: vector<TypeName>
     }
 
+    /// Capability of Vsdb package, responsible for whitelisted modules
     struct VSDBCap has key, store { id: UID }
 
-    /// Global Registry object to record down global voting weight of all Vesting NFT
-    /// whitelist modules can write the state or data in Vsdb to join SuiDoBashi ecosystem
+    /// Global Registry object to record down global voting weight for all Vesting NFT
+    /// whitelist modules can be registered to join SuiDouBashi ecosystem
     struct VSDBRegistry has key {
         id: UID,
+        /// shared object version, used for future upgrade
         version: u64,
+        /// Registered modules, verifying which module is allowed to explore dynamic fieilds on our NFT
         modules: Table<TypeName, bool>,
+        /// total Vsdb NFT
         minted_vsdb: u64,
+        /// Total Locked up SDB Coin
         locked_total: u64,
+        /// Count for updated times
         epoch: u64,
+        /// point history
         point_history: TableVec<Point>,
-        /// slope difference for each week
+        /// account for locked SDB balance changed in each epoch
         slope_changes: Table<u64, I128>
     }
 
@@ -91,9 +111,9 @@ module suiDouBashi_vsdb::vsdb{
 
     public fun total_VeSDB(reg: &VSDBRegistry, clock: &Clock): u64{ total_VeSDB_at(reg, clock::timestamp_ms(clock) / 1000) }
 
-    public fun total_VeSDB_at(self: &VSDBRegistry, ts: u64): u64{
+    public fun total_VeSDB_at(reg: &VSDBRegistry, ts: u64): u64{
         // calculate by latest epoch
-        let point = table_vec::borrow(&self.point_history, self.epoch);
+        let point = table_vec::borrow(&reg.point_history, reg.epoch);
         let last_point_bias = point::bias(point);
         let last_point_slope = point::slope(point);
         let last_point_ts = point::ts(point);
@@ -105,16 +125,17 @@ module suiDouBashi_vsdb::vsdb{
 
             let d_slope = i128::zero();
             if(t_i > ts){
-                t_i = ts ;
+                t_i = ts;
             }else{
-                d_slope = if(table::contains(&self.slope_changes, t_i)){
-                    *table::borrow(&self.slope_changes, t_i)
+                d_slope = if(table::contains(&reg.slope_changes, t_i)){
+                    *table::borrow(&reg.slope_changes, t_i)
                 }else{
                     i128::zero()
                 };
             };
-            let time_left_unlock = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
-            last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left_unlock));
+
+            let time_left_epoch = i128::sub(&i128::from(((t_i as u128))), &i128::from((last_point_ts as u128)));
+            last_point_bias = i128::sub(&last_point_bias, &i128::mul(&last_point_slope, &time_left_epoch));
 
             if (t_i == ts) {
                 break
@@ -122,7 +143,7 @@ module suiDouBashi_vsdb::vsdb{
             last_point_slope = i128::add(&last_point_slope, &d_slope);
             last_point_ts = t_i;
 
-            i = i +1 ;
+            i = i + 1 ;
         };
 
         if(i128::is_neg(&last_point_bias)){
@@ -215,7 +236,7 @@ module suiDouBashi_vsdb::vsdb{
         let vsdb = new( sdb,unlock_time, clock, ctx);
         reg.minted_vsdb = reg.minted_vsdb + 1;
         reg.locked_total = reg.locked_total + amount;
-        checkpoint_(true, reg, locked_balance(&vsdb), locked_end(&vsdb), 0, 0, clock);
+        checkpoint_(true, reg, 0, 0, locked_balance(&vsdb), locked_end(&vsdb), clock);
         let id = object::id(&vsdb);
         transfer::public_transfer(vsdb, recipient);
 
@@ -240,7 +261,7 @@ module suiDouBashi_vsdb::vsdb{
 
         extend(self, option::none<Coin<SDB>>(), unlock_time, clock);
 
-        checkpoint_(true, reg, locked_balance(self), locked_end(self), locked_bal, locked_end, clock);
+        checkpoint_(true, reg, locked_bal, locked_end, locked_balance(self), locked_end(self), clock);
 
         event::deposit(object::id(self), locked_balance(self), unlock_time);
     }
@@ -263,7 +284,7 @@ module suiDouBashi_vsdb::vsdb{
         extend(self, option::some(sdb), 0, clock);
 
         reg.locked_total = reg.locked_total + value;
-        checkpoint_(true, reg, locked_balance(self), locked_end, locked_bal, locked_end, clock);
+        checkpoint_(true, reg, locked_bal, locked_end, locked_balance(self), locked_end, clock);
 
         event::deposit(object::id(self), locked_balance(self), locked_end);
     }
@@ -305,7 +326,7 @@ module suiDouBashi_vsdb::vsdb{
         self.experience = exp;
 
         let coin = withdraw(&mut vsdb, ctx);
-        checkpoint_(true, reg, locked_balance(&vsdb), locked_end(&vsdb), locked_bal_, locked_end_, clock);
+        checkpoint_(true, reg, locked_bal_, locked_end_, locked_balance(&vsdb), locked_end(&vsdb), clock);
 
         destroy(vsdb);
 
@@ -317,7 +338,7 @@ module suiDouBashi_vsdb::vsdb{
 
         reg.minted_vsdb = reg.minted_vsdb - 1 ;
         extend(self, option::some(coin), end_, clock);
-        checkpoint_(true, reg, locked_balance(self), locked_end(self), locked_bal, locked_end, clock);
+        checkpoint_(true, reg, locked_bal, locked_end, locked_balance(self), locked_end(self), clock);
 
         event::deposit(object::id(self), locked_balance(self), end_);
     }
@@ -336,7 +357,7 @@ module suiDouBashi_vsdb::vsdb{
         let withdrawl = coin::value(&coin);
         let id = object::id(&self);
 
-        checkpoint_(true, reg, locked_balance(&self), locked_end(&self), locked_bal, locked_end, clock);
+        checkpoint_(true, reg, locked_bal, locked_end, locked_balance(&self), locked_end(&self), clock);
 
         reg.locked_total = reg.locked_total - withdrawl;
 
@@ -371,9 +392,10 @@ module suiDouBashi_vsdb::vsdb{
     public fun voting_weight_at(self: &Vsdb, ts: u64): u64{
         let last_point = *table::borrow(&self.player_point_history, self.player_epoch);
         let last_point_bias = point::bias(&last_point);
-        let diff = i128::mul(&point::slope(&last_point), &i128::from(((ts - point::ts(&last_point)) as u128)));
 
-        last_point_bias = i128::sub(&last_point_bias, &diff);
+        if(point::ts(&last_point) > ts) return 0;
+
+        last_point_bias = i128::sub(&last_point_bias, &i128::mul(&point::slope(&last_point), &i128::from(((ts - point::ts(&last_point)) as u128))));
 
         if(i128::is_neg(&last_point_bias)){
             last_point_bias = i128::zero();
@@ -381,8 +403,6 @@ module suiDouBashi_vsdb::vsdb{
         return ((i128::as_u128(&last_point_bias))as u64)
     }
     // - point
-    public fun get_player_epoch(self: &Vsdb): u64 { self.player_epoch }
-
     public fun get_latest_bias(self: &Vsdb): I128{ get_bias(self, self.player_epoch) }
 
     public fun get_bias(self: &Vsdb, epoch: u64): I128{
@@ -402,14 +422,11 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     fun update_player_point_(self: &mut Vsdb, clock: &Clock){
-        let ts = clock::timestamp_ms(clock)/ 1000;
         let amount = balance::value(&self.balance);
-        let slope = calculate_slope(amount);
-        let bias = calculate_bias(amount, self.end, ts);
-
+        let ts = clock::timestamp_ms(clock) / 1000;
         self.player_epoch = self.player_epoch + 1;
 
-        let point = point::new(bias, slope, ts);
+        let point = point::new(calculate_bias(amount, self.end, ts), calculate_slope(amount), ts);
         table::add(&mut self.player_point_history, self.player_epoch, point);
     }
 
@@ -423,7 +440,7 @@ module suiDouBashi_vsdb::vsdb{
         i128::mul(&slope, &i128::from((end as u128) - (ts as u128)))
     }
 
-    public fun round_down_week(t: u64):u64{ t / WEEK * WEEK}
+    public fun round_down_week(t: u64): u64{ t / WEEK * WEEK}
 
     public fun max_time(): u64 { MAX_TIME }
 
@@ -496,10 +513,10 @@ module suiDouBashi_vsdb::vsdb{
     fun checkpoint_(
         player_checkpoint: bool,
         reg: &mut VSDBRegistry,
-        new_locked_amount: u64,
-        new_locked_end: u64,
         old_locked_amount: u64,
         old_locked_end: u64 ,
+        new_locked_amount: u64,
+        new_locked_end: u64,
         clock: &Clock
     ){
         let time_stamp = clock::timestamp_ms(clock) / 1000;
@@ -554,7 +571,8 @@ module suiDouBashi_vsdb::vsdb{
             t_i = t_i + WEEK;
             let d_slope = i128::zero();
 
-            if( t_i > time_stamp ){
+            if(t_i > time_stamp){
+                // current epoch
                 t_i = time_stamp;
             }else{
                 // latest obsolete checkpoint
@@ -590,7 +608,8 @@ module suiDouBashi_vsdb::vsdb{
 
         // Now point_history is filled until t=now
         if (player_checkpoint) {
-            // update the latest point
+            // update the latest point:
+            // add old_slope back and subtract new_slope
             last_point_slope = i128::add(&last_point_slope, &i128::sub(&u_new_slope, &u_old_slope));
             last_point_bias = i128::add(&last_point_bias, &i128::sub(&u_new_bias, &u_old_bias));
             if (i128::is_neg(&last_point_slope)) {
