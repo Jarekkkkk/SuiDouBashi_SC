@@ -187,6 +187,13 @@ module suiDouBashi_amm::amm_math{
             y
         }
     }
+    public fun min_u256(x: u256, y: u256): u256 {
+        if (x > y) {
+            y
+        } else {
+            x
+        }
+    }
 
     #[test] fun test_sqrt256(){
         let foo = sqrt_u256(3);
