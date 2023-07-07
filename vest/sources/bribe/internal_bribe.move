@@ -15,7 +15,7 @@ module suiDouBashi_vest::internal_bribe{
     use sui::math;
 
     use suiDouBashi_amm::amm_math;
-    use suiDouBashi_vsdb::vsdb::Vsdb;
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb};
 
     use suiDouBashi_vest::minter::package_version;
     use suiDouBashi_vest::event;
@@ -576,7 +576,12 @@ module suiDouBashi_vest::internal_bribe{
         }else{
             0
         };
-        let acc = (checkpoints::balance(cp) as u256) * ((reward_per_token<X,Y,T>(self, clock) - amm_math::max_u256(perior_reward, user_reward_per_token_stored)) as u256) / PRECISION;
+
+        // when vsdb expired, there's no accumulating pool fees anymore
+        let ( _, final_reward) = get_prior_reward_per_token(reward, vsdb::locked_end(vsdb));
+        let idx = amm_math::min_u256(amm_math::max_u256(perior_reward, user_reward_per_token_stored), final_reward);
+
+        let acc = (checkpoints::balance(cp) as u256) * (reward_per_token<X,Y,T>(self, clock) - idx)/ PRECISION;
         earned_reward = earned_reward + (acc as u64);
 
         return earned_reward

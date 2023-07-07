@@ -18,7 +18,7 @@ module suiDouBashi_vest::event{
         )
     }
 
-     struct Withdraw has copy, drop{
+    struct Withdraw has copy, drop{
         id: ID,
         unlocked_value: u64,
         ts: u64
