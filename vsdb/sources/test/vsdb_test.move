@@ -49,6 +49,17 @@ module suiDouBashi_vsdb::vsdb_test{
         test::end(scenario);
     }
 
+    #[allow(unused_function)]
+    fun test_art(){
+        let (a, _, _) = people();
+        let scenario = test::begin(a);
+        let clock = clock::create_for_testing(ctx(&mut scenario));
+
+
+        clock::destroy_for_testing(clock);
+        test::end(scenario);
+    }
+
     #[test]
     #[expected_failure(abort_code = suiDouBashi_vsdb::vsdb::E_LOCK)]
     fun test_error_unlock(){

@@ -12,9 +12,10 @@ module suiDouBashi_vsdb::to_string {
     // Maximum value of u128, i.e. 2 ** 128 - 1
     // Source: https://github.com/move-language/move/blob/a86f31415b9a18867b5edaed6f915a39b8c2ef40/language/move-prover/doc/user/spec-lang.md?plain=1#L214
     const MAX_U128: u128 = 340282366920938463463374607431768211455;
+    const MAX_U256: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
     /// @dev Converts a `u128` to its `ascii::String` decimal representation.
-    public fun to_string(value: u128): String {
+    public fun to_string(value: u256): String {
         if (value == 0) {
             return ascii::string(b"0")
         };
@@ -81,7 +82,7 @@ module suiDouBashi_vsdb::to_string {
         assert!(b"257" == ascii::into_bytes(to_string(257)), 1);
         assert!(b"10" == ascii::into_bytes(to_string(10)), 1);
         assert!(b"12345678" == ascii::into_bytes(to_string(12345678)), 1);
-        assert!(b"340282366920938463463374607431768211455" == ascii::into_bytes(to_string(MAX_U128)), 1);
+        assert!(b"340282366920938463463374607431768211455" == ascii::into_bytes(to_string(MAX_U256)), 1);
     }
 
     #[test]
