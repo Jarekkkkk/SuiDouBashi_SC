@@ -230,6 +230,24 @@ module suiDouBashi_vsdb::vsdb_test{
             assert!(vsdb::level(&vsdb)== 1, 404);
             test::return_to_sender(s, vsdb);
         };
+
+        add_time(clock, week() * 1000);
+
+        next_tx(s,a);{ // revive the expired NFT
+            let vsdb = test::take_from_sender< Vsdb>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            vsdb::revive(&mut reg, &mut vsdb, clock);
+            test::return_shared(reg);
+            test::return_to_sender(s, vsdb);
+        };
+
+        next_tx(s,a);{
+            let vsdb = test::take_from_sender< Vsdb>(s);
+            let _end = vsdb::round_down_week(get_time(clock)/1000 + vsdb::max_time());
+            assert!(vsdb::locked_end(&vsdb) == _end, 404);
+            assert!(vsdb::locked_balance(&vsdb) == sui_100M(), 404);
+            test::return_to_sender(s, vsdb);
+        };
     }
     use sui::math;
 
