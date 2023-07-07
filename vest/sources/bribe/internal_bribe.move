@@ -568,6 +568,7 @@ module suiDouBashi_vest::internal_bribe{
         };
 
         let cp = vec::borrow(bps_borrow, end_idx);
+        // last time voted
         let ( _, perior_reward ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
 
         // current slope
@@ -579,9 +580,8 @@ module suiDouBashi_vest::internal_bribe{
 
         // when vsdb expired, there's no accumulating pool fees anymore
         let ( _, final_reward) = get_prior_reward_per_token(reward, vsdb::locked_end(vsdb));
-        let idx = amm_math::min_u256(amm_math::max_u256(perior_reward, user_reward_per_token_stored), final_reward);
 
-        let acc = (checkpoints::balance(cp) as u256) * (reward_per_token<X,Y,T>(self, clock) - idx)/ PRECISION;
+        let acc = ((checkpoints::balance(cp) as u256) * (amm_math::min_u256(reward_per_token<X,Y,T>(self, clock), final_reward) - amm_math::max_u256(perior_reward, user_reward_per_token_stored)))/ PRECISION;
         earned_reward = earned_reward + (acc as u64);
 
         return earned_reward
