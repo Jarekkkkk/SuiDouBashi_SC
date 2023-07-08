@@ -82,7 +82,7 @@ module suiDouBashi_vsdb::to_string {
         assert!(b"257" == ascii::into_bytes(to_string(257)), 1);
         assert!(b"10" == ascii::into_bytes(to_string(10)), 1);
         assert!(b"12345678" == ascii::into_bytes(to_string(12345678)), 1);
-        assert!(b"340282366920938463463374607431768211455" == ascii::into_bytes(to_string(MAX_U256)), 1);
+        assert!(b"115792089237316195423570985008687907853269984665640564039457584007913129639935" == ascii::into_bytes(to_string(MAX_U256)), 1);
     }
 
     #[test]
