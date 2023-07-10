@@ -75,6 +75,7 @@ module suiDouBashi_vsdb::to_string {
         ascii::string(buffer)
     }
 
+
     #[test]
     fun test_to_string() {
         assert!(b"0" == ascii::into_bytes(to_string(0)), 1);
