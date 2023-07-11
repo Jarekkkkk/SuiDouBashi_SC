@@ -1,3 +1,4 @@
+#[allow(unused_function)]
 module suiDouBashi_vsdb::art_trait{
     use std::vector as vec;
     use std::ascii::{Self, String};
@@ -67,6 +68,7 @@ module suiDouBashi_vsdb::art_trait{
         b"luminous"
     ];
 
+    /// 4 different egg size
     const EGG_SIZE: vector<vector<u8>> = vector[
         b"tiny",
         b"small",
@@ -165,6 +167,40 @@ module suiDouBashi_vsdb::art_trait{
         ascii::string(vsdb)
     }
 
+    // ====== dynamic attributes ======
+    fun calc_attributes(bond: &mut BondData){
+        let dna = bond.dna_1;
+        bond.border_color = get_border_color(cut_dna(dna, 0, 32));
+        bond.card_color = get_card_color(cut_dna(dna, 32, 32), bond.border_color);
+        bond.shell_color = get_shell_color(cut_dna(dna, 64, 32), bond.border_color);
+        bond.egg_size = get_egg_size(bond.sdb_amount);
+    }
+
+    public fun calc_derived_data(bond: &mut BondData){
+        bond.solid_border_color = get_solid_border_color(bond.border_color);
+        bond.solid_card_color = get_solid_card_color(bond.border_color);
+        bond.solid_shell_color = get_solid_shell_color(bond.shell_color, bond.border_color);
+
+        // shell == luminous && card_color doesn't have affinity
+        bond.is_blended_shell = bond.shell_color == 12 && !(
+            bond.card_color == 9
+            || bond.card_color == 10
+            || bond.card_color == 11
+            || bond.card_color == 12
+        );
+
+        let card_gradient = get_card_gradient(bond.card_color);
+        if(option::is_some(&card_gradient)){
+            bond.card_gradient = option::extract(&mut card_gradient);
+            bond.has_card_gradient = true;
+        }else{
+            bond.card_gradient = vector[b"", b""];
+            bond.has_card_gradient = false;
+        };
+
+        option::destroy_none(card_gradient);
+    }
+
     public fun get_metadata_json(bond_data: &BondData): String{
         let url = SVG_PREFIX;
         vec::append(&mut url, encode(get_svg(bond_data)));
@@ -176,22 +212,13 @@ module suiDouBashi_vsdb::art_trait{
         let svg = b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 750 1050'>";
         vec::append(&mut svg, get_svg_style(bond));
         vec::append(&mut svg, get_svg_defs(bond));
-        vec::append(&mut svg, b"'<g id='cb-egg-");
-        vec::append(&mut svg, hex::encode(object::id_to_bytes(&bond.id)));
-        vec::append(&mut svg, b"'>");
-
-        vec::append(&mut svg, get_svg_border(bond));
-        vec::append(&mut svg, get_svg_card(bond));
-        vec::append(&mut svg, get_svg_card_radial_gradient(bond));
-        vec::append(&mut svg, get_svg_shadow_below_egg(bond));
-        vec::append(&mut svg, get_svg_egg(bond));
-        vec::append(&mut svg, get_svg_text(bond));
+        vec::append(&mut svg, get_svg_main(bond));
         vec::append(&mut svg, b"</svg>");
 
         svg
     }
 
-    // style
+    // ====== SVG <style> ======
     public fun get_svg_style(bond: &BondData):vector<u8>{
         let style = b"<style> #cb-egg-";
         vec::append(&mut style, hex::encode(object::id_to_bytes(&bond.id)));
@@ -200,18 +227,20 @@ module suiDouBashi_vsdb::art_trait{
         style
     }
 
-    // Defs
+    // ====== SVG <style> ======
+
+    // ====== SVG <Defs> ======
     public fun get_svg_defs(bond: &BondData):vector<u8>{
         let defs = b"<defs>";
-        vec::append(&mut defs, get_svg_def_card_diagonal_gradient(bond));
-        vec::append(&mut defs, get_svg_def_card_radial_gradient(bond));
-        vec::append(&mut defs, get_svg_def_card_rainbow_gradient(bond));
-        vec::append(&mut defs, get_svg_def_shell_rainbow_gradient(bond));
+        vec::append(&mut defs, get_svg_def_card_diagonal_gradient_(bond));
+        vec::append(&mut defs, get_svg_def_card_radial_gradient_(bond));
+        vec::append(&mut defs, get_svg_def_card_rainbow_gradient_(bond));
+        vec::append(&mut defs, get_svg_def_shell_rainbow_gradient_(bond));
         vec::append(&mut defs, b"</defs>");
         defs
     }
 
-    public fun get_svg_def_card_diagonal_gradient(bond: &BondData):vector<u8>{
+    fun get_svg_def_card_diagonal_gradient_(bond: &BondData):vector<u8>{
         if(!bond.has_card_gradient) return b"";
 
         let def = b"<linearGradient id='cb-egg-";
@@ -219,17 +248,18 @@ module suiDouBashi_vsdb::art_trait{
         vec::append(&mut def, b"-card-diagonal-gradient' y1='100%' gradientUnits='userSpaceOnUse'>");
         vec::append(&mut def, b"<stop offset='0' stop-color='");
         vec::append(&mut def, *vec::borrow(&bond.card_gradient, 0));
-        vec::append(&mut def, b"/>");
+        vec::append(&mut def, b"'/>");
 
         vec::append(&mut def, b"<stop offset='1' stop-color='");
         vec::append(&mut def, *vec::borrow(&bond.card_gradient, 1));
-        vec::append(&mut def, b"/>");
-        vec::append(&mut def, b"</linearGradient>'");
+        vec::append(&mut def, b"'/>");
+        vec::append(&mut def, b"</linearGradient>");
 
         def
     }
 
-    public fun get_svg_def_card_radial_gradient(bond: &BondData):vector<u8>{
+    fun get_svg_def_card_radial_gradient_(bond: &BondData):vector<u8>{
+        // shell_color == luminous
         if(bond.shell_color != 12 ) return b"";
 
         let def = b"<radialGradient id='cb-egg-";
@@ -240,7 +270,8 @@ module suiDouBashi_vsdb::art_trait{
         def
     }
 
-    public fun get_svg_def_card_rainbow_gradient(bond: &BondData):vector<u8>{
+    fun get_svg_def_card_rainbow_gradient_(bond: &BondData):vector<u8>{
+        // card_color != rainbow && border_color != rainbow
         if(bond.card_color != 12 && bond.border_color != 5 ) return b"";
 
         let def = b"<linearGradient id='cb-egg-";
@@ -251,8 +282,9 @@ module suiDouBashi_vsdb::art_trait{
         def
     }
 
-    public fun get_svg_def_shell_rainbow_gradient(bond: &BondData):vector<u8>{
-        if(bond.shell_color != 11 && !(bond.shell_color != 12 && bond.card_color == 12)) return b"";
+    fun get_svg_def_shell_rainbow_gradient_(bond: &BondData):vector<u8>{
+        // shell_color != rainbow && !(shell == luminous || card == rainbow)
+        if(bond.shell_color != 11 && !(bond.shell_color == 12 && bond.card_color == 12)) return b"";
 
         let def = b"<linearGradient id='cb-egg-";
         vec::append(&mut def, hex::encode(object::id_to_bytes(&bond.id)));
@@ -262,11 +294,32 @@ module suiDouBashi_vsdb::art_trait{
         def
     }
 
+    // ====== SVG <Defs> ======
+
+    // ====== SVG <Main> ======
+    public fun get_svg_main(bond: &BondData):vector<u8>{
+        let svg_main = b"<g id='cb-egg-";
+        vec::append(&mut svg_main, hex::encode(object::id_to_bytes(&bond.id)));
+        vec::append(&mut svg_main, b"'>");
+
+        vec::append(&mut svg_main, get_svg_border(bond));
+        vec::append(&mut svg_main, get_svg_card(bond));
+        vec::append(&mut svg_main, get_svg_card_radial_gradient(bond));
+        vec::append(&mut svg_main, get_svg_shadow_below_egg(bond));
+        //vec::append(&mut svg_main, get_svg_egg(bond));
+        //vec::append(&mut svg_main, get_svg_text(bond));
+        vec::append(&mut svg_main, b"</g>");
+
+        svg_main
+    }
+
     public fun get_svg_border(bond: &BondData):vector<u8>{
+        // shell == luminous && border == black
         if(bond.shell_color == 12 && bond.border_color == 1 ) return b"";
 
         let def = b"<rect ";
         if(bond.border_color == 5){
+            // border_color == rainbow
             vec::append(&mut def, b"style='fill: url(#cb-egg-");
             vec::append(&mut def, hex::encode(object::id_to_bytes(&bond.id)));
             vec::append(&mut def, b"-card-rainbow-gradient)' ");
@@ -434,21 +487,21 @@ module suiDouBashi_vsdb::art_trait{
     }
 
     fun get_svg_text(bond: &BondData):vector<u8>{
-        let text = b"<text fill='#fff' font-family='''Arial Black'', Arial' font-size='72px' font-weight='800' text-anchor='middle' x='50%' y='14%'>LUSD</text>";
-        vec::append(&mut text, b"<text fill='#fff' font-family='''Arial Black'', Arial' font-size='30px' font-weight='800' text-anchor='middle' x='50%' y='19%'>");
+        let text = b"<text fill='#fff' font-family='Arial Black, Arial' font-size='72px' font-weight='800' text-anchor='middle' x='50%' y='14%'>VSDB</text>";
+        vec::append(&mut text, b"<text fill='#fff' font-family='Arial Black, Arial' font-size='30px' font-weight='800' text-anchor='middle' x='50%' y='19%'>");
         vec::append(&mut text, b"ID: ");
-        vec::append(&mut text, hex::encode(object::id_to_bytes(&bond.id)));
-        vec::append(&mut text, b"</text> <text fill='#fff' font-family='''Arial Black'', Arial' font-size='40px' font-weight='800' text-anchor='middle' x='50%' y='72%'>BOND AMOUNT</text>");
-        vec::append(&mut text, b"<text fill='#fff' font-family='''Arial Black'', Arial' font-size='64px' font-weight='800' text-anchor='middle' x='50%' y='81%'>");
+        vec::append(&mut text, format_id(&bond.id));
+        vec::append(&mut text, b"</text> <text fill='#fff' font-family='Arial Black, Arial' font-size='40px' font-weight='800' text-anchor='middle' x='50%' y='72%'>LEVEL</text>");
+        vec::append(&mut text, b"<text fill='#fff' font-family='Arial Black, Arial' font-size='64px' font-weight='800' text-anchor='middle' x='50%' y='81%'>");
         vec::append(&mut text, ascii::into_bytes(format_value(bond.sdb_amount)));
-        vec::append(&mut text, b"/<text> <text fill='#fff' font-family='Arial Black, Arial' font-size='30px' font-weight='800' text-anchor='middle' x='50%' y='91%' opacity='0.6'>");
+        vec::append(&mut text, b"</text> <text fill='#fff' font-family='Arial Black, Arial' font-size='30px' font-weight='800' text-anchor='middle' x='50%' y='91%' opacity='0.6'>");
         vec::append(&mut text, format_date(bond.start_time));
         vec::append(&mut text, b"</text>");
         text
     }
 
     public fun get_svg_bond_data(bond: &BondData):vector<u8>{
-        let style = b"<text fill='#fff' font-family='Arial Black, Arial' font-size='40px' font-weight='800' text-anchor='middle' x='50%' y='755'>BOND AMOUNT</text> <text fill='#fff' font-family='Arial Black, Arial' font-size='64px' font-weight='800' text-anchor='middle' x='50%' y='848'>";
+        let style = b"<text fill='#fff' font-family='Arial Black, Arial' font-size='40px' font-weight='800' text-anchor='middle' x='50%' y='755'>Level</text> <text fill='#fff' font-family='Arial Black, Arial' font-size='64px' font-weight='800' text-anchor='middle' x='50%' y='848'>";
         vec::append(&mut style, ascii::into_bytes(to_string((bond.sdb_amount as u256))));
         vec::append(&mut style, b"</text> <text fill='#fff' font-family='Arial Black, Arial' font-size='30px' font-weight='800' text-anchor='middle' x='50%' y='950' opacity='0.6'>");
         vec::append(&mut style, get_month_string(date::get_month(bond.start_time)));
@@ -592,7 +645,7 @@ module suiDouBashi_vsdb::art_trait{
             let shell_weights = SHELL_WEIGHTS;
             let i = 0;
             while( i < vec::length(&shell_weights)){
-                *vec::borrow_mut(&mut shell_weights, i) = *vec::borrow(&shell_weights, i) * (100 - weights)/ (100 - 2 * weights);
+                *vec::borrow_mut(&mut shell_weights, i) = *vec::borrow(&shell_weights, i) * (100 * SCALING - weights)/ (100 * SCALING - 2 * weights);
                 i = i + 1;
             };
             *vec::borrow_mut(&mut shell_weights, card_color) = weights * 2;
@@ -758,6 +811,7 @@ module suiDouBashi_vsdb::art_trait{
 
         res
     }
+
     public fun format_value(value: u64):String{
         let decimals = (sdb::decimals() as u256);
         to_string((((value as u256) + 5 * decimals / 10)/ decimals))
@@ -773,50 +827,18 @@ module suiDouBashi_vsdb::art_trait{
         date
     }
 
-    /// DNA can be splited into 3
+    /// DNA determine weghts of `[BORDER, CARD, SHELL]`
     fun cut_dna(dna: u128, start_bit: u8, num_bites: u8):u64{
         let max = 1 << num_bites;
-        let value = ( dna >> start_bit) & ( max - 1);
-        (value as u64) * SCALING / (max as u64)
+        let value = (dna >> start_bit) & (max - 1);
+        (value as u64) * 100 * SCALING / (max as u64)
     }
 
-    fun calc_attributes(bond: &mut BondData){
-        let dna = bond.dna_1;
 
-        bond.border_color = get_border_color(cut_dna(dna, 0, 26));
-        bond.card_color = get_card_color(cut_dna(dna, 26, 27), bond.border_color);
-        bond.shell_color = get_shell_color(cut_dna(dna, 53, 27), bond.border_color);
-        bond.egg_size = get_egg_size(bond.sdb_amount);
-    }
-
-    public fun calc_derived_data(bond: &mut BondData){
-        bond.solid_border_color = get_solid_border_color(bond.border_color);
-        bond.solid_card_color = get_solid_card_color(bond.border_color);
-        bond.solid_shell_color = get_solid_shell_color(bond.shell_color, bond.border_color);
-
-        // shell == luminous && card_color doesn't have affinity
-        bond.is_blended_shell = bond.shell_color == 12 && !(
-            bond.card_color == 9
-            || bond.card_color == 10
-            || bond.card_color == 11
-            || bond.card_color == 12
-        );
-
-        let card_gradient = get_card_gradient(bond.card_color);
-        if(option::is_some(&card_gradient)){
-            bond.card_gradient = option::extract(&mut card_gradient);
-            bond.has_card_gradient = true;
-        }else{
-            bond.card_gradient = vector[b"", b""];
-            bond.has_card_gradient = false;
-        };
-
-        option::destroy_none(card_gradient);
-    }
     #[test]
     fun test_img(){
-        let url = img_url(b"0x1234", 100, 1000, 1000);
-        std::debug::print(&url);
+        let _url = img_url(b"0x1234", 100, 1000, 1000);
+        //std::debug::print(&url);
     }
 
     #[test]
@@ -829,8 +851,8 @@ module suiDouBashi_vsdb::art_trait{
             claimed_sdb: 53,
             start_time: 1684040292,
             end_time: 1684040292,
-            dna_1: 100,
-            dna_2:312,
+            dna_1: 103123123123,
+            dna_2: 1235453543123,
             status: 124,
 
             border_color: 1,
@@ -845,7 +867,12 @@ module suiDouBashi_vsdb::art_trait{
             has_card_gradient: true,
             card_gradient: vector[b"", b""]
         };
+        let border_dna = ( 100 * ((1 << 32) - 1) / 100);
+        let card_dna = ( 100 * ((1 << 32) - 1) / 100) << 32;
+        let shell_dna = ( 100 * ((1 << 32) - 1) / 100) << 64;
+        let dna = border_dna | card_dna | shell_dna;
 
+        bond.dna_1 = dna;
         calc_attributes(&mut bond);
         calc_derived_data(&mut bond);
         let data = get_metadata_json(&bond);
@@ -872,7 +899,7 @@ module suiDouBashi_vsdb::art_trait{
         let i = 0;
         let card_weights = CARD_WEIGHTS;
         while( i < vec::length(&CARD_WEIGHTS)){
-            *vec::borrow_mut(&mut card_weights, i) = *vec::borrow(&card_weights, i) * 10000;
+            *vec::borrow_mut(&mut card_weights, i) = *vec::borrow(&card_weights, i);
 
             i = i + 1;
         };
@@ -882,7 +909,7 @@ module suiDouBashi_vsdb::art_trait{
         weights = get_card_affinity_weights(5);
         let (exist, idx) = vec::index_of(&CARD_COLOR, &b"rainbow");
         assert!(exist, 404);
-        assert!(*vec::borrow(&CARD_WEIGHTS, idx) * 2 * SCALING == *vec::borrow(&weights, idx), 404);
+        assert!(*vec::borrow(&CARD_WEIGHTS, idx) * 2 == *vec::borrow(&weights, idx), 404);
      }
 
     #[test]
@@ -892,7 +919,7 @@ module suiDouBashi_vsdb::art_trait{
         let i = 0;
         let shell_weights = SHELL_WEIGHTS;
         while( i < vec::length(&SHELL_WEIGHTS)){
-            *vec::borrow_mut(&mut shell_weights, i) = *vec::borrow(&shell_weights, i) * 10000;
+            *vec::borrow_mut(&mut shell_weights, i) = *vec::borrow(&shell_weights, i);
 
             i = i + 1;
         };
@@ -902,6 +929,6 @@ module suiDouBashi_vsdb::art_trait{
         weights = get_shell_affinity_weights(5);
         let (exist, idx) = vec::index_of(&SHELL_COLOR, &b"rainbow");
         assert!(exist, 404);
-        assert!(*vec::borrow(&SHELL_WEIGHTS, idx) * 2 * SCALING == *vec::borrow(&weights, idx), 404);
+        assert!(*vec::borrow(&SHELL_WEIGHTS, idx) * 2 == *vec::borrow(&weights, idx), 404);
      }
 }

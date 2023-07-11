@@ -61,8 +61,6 @@ module suiDouBashi_vsdb::vsdb{
         level: u8,
         /// Accrued experiences from interacting with SuiDouBashi ecosystem
         experience: u64,
-        /// last time Vsdb was topped up/ extended the unlocked period/ merge
-        last_updated: u64,
         /// Locked SDB Coin
         balance: Balance<SDB>,
         /// Unlocked date ( week-based )
@@ -406,8 +404,6 @@ module suiDouBashi_vsdb::vsdb{
 
     public fun experience(self: &Vsdb):u64 { self.experience }
 
-    public fun last_updated(self: &Vsdb):u64 { self.last_updated }
-
     public fun player_epoch(self: &Vsdb): u64{ self.player_epoch }
 
     public fun locked_balance(self: &Vsdb): u64{ balance::value(&self.balance) }
@@ -477,7 +473,6 @@ module suiDouBashi_vsdb::vsdb{
             id: object::new(ctx),
             level: 0,
             experience: 0,
-            last_updated: 0,
             balance: coin::into_balance(locked_sdb),
             end: unlock_time,
             player_epoch: 0,
@@ -510,7 +505,6 @@ module suiDouBashi_vsdb::vsdb{
         option::destroy_none(coin);
 
         update_player_point_(self, clock);
-        self.last_updated = unix_timestamp(clock);
     }
 
     fun withdraw(self: &mut Vsdb, ctx: &mut TxContext): Coin<SDB>{
@@ -526,7 +520,6 @@ module suiDouBashi_vsdb::vsdb{
             experience: _,
             balance,
             end: _,
-            last_updated: _,
             player_epoch: _,
             player_point_history,
             modules,
