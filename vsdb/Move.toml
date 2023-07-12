@@ -1,7 +1,7 @@
 [package]
 name = "suiDouBashiVSDB"
 version = "0.0.1"
-published-at = "0x8b2faec938b4041ecb0e2055da04bf062a3ec39094d3e34b87c24cf8babb7093"
+published-at = "0x123456"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
@@ -9,4 +9,4 @@ MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui
 SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
 [addresses]
-suiDouBashi_vsdb = "0x8b2faec938b4041ecb0e2055da04bf062a3ec39094d3e34b87c24cf8babb7093"
+suiDouBashi_vsdb = "0x12345678"

@@ -68,7 +68,7 @@ module suiDouBashi_vsdb::vsdb{
         /// Counts for Vsdb updated times
         player_epoch: u64,
         /// point history
-        player_point_history: Table<u64, Point>,
+        player_point_history: TableVec<Point>,
         /// registered modules
         modules: vector<TypeName>
     }
@@ -92,7 +92,7 @@ module suiDouBashi_vsdb::vsdb{
         epoch: u64,
         /// point history
         point_history: TableVec<Point>,
-        /// Account for unlocked SDB coin amount
+        /// Account for unlocked SDB coin amount for each week
         slope_changes: Table<u64, I128>
     }
 
@@ -411,7 +411,7 @@ module suiDouBashi_vsdb::vsdb{
     public fun locked_end(self: &Vsdb):u64{ self.end }
 
     public fun player_point_history(self: &Vsdb, epoch: u64):&Point{
-        table::borrow(&self.player_point_history, epoch)
+        table_vec::borrow(&self.player_point_history, epoch)
     }
 
     public fun voting_weight(self: &Vsdb, clock: &Clock):u64{
@@ -419,7 +419,7 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     public fun voting_weight_at(self: &Vsdb, ts: u64): u64{
-        let last_point = *table::borrow(&self.player_point_history, self.player_epoch);
+        let last_point = *table_vec::borrow(&self.player_point_history, self.player_epoch);
         let last_point_bias = point::bias(&last_point);
 
         if(point::ts(&last_point) > ts) return 0;
@@ -436,19 +436,19 @@ module suiDouBashi_vsdb::vsdb{
     public fun get_latest_bias(self: &Vsdb): I128{ get_bias(self, self.player_epoch) }
 
     public fun get_bias(self: &Vsdb, epoch: u64): I128{
-        point::bias(table::borrow(&self.player_point_history, epoch))
+        point::bias(table_vec::borrow(&self.player_point_history, epoch))
     }
 
     public fun get_latest_slope(self: &Vsdb): I128{ get_slope(self, self.player_epoch) }
 
     public fun get_slope(self: &Vsdb, epoch: u64): I128{
-        point::slope( table::borrow(&self.player_point_history, epoch) )
+        point::slope( table_vec::borrow(&self.player_point_history, epoch) )
     }
 
     public fun get_latest_ts(self: &Vsdb): u64{ get_ts(self, self.player_epoch) }
 
     public fun get_ts(self: &Vsdb, epoch: u64): u64{
-        point::ts(table::borrow(&self.player_point_history, epoch))
+        point::ts(table_vec::borrow(&self.player_point_history, epoch))
     }
 
     // ===== Utils =====
@@ -469,6 +469,9 @@ module suiDouBashi_vsdb::vsdb{
 
     // ===== Main =====
     fun new(locked_sdb: Coin<SDB>, unlock_time: u64, clock: &Clock, ctx: &mut TxContext): Vsdb {
+        let amount = coin::value(&locked_sdb);
+        let ts = unix_timestamp(clock);
+        let point = point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts);
         let vsdb = Vsdb {
             id: object::new(ctx),
             level: 0,
@@ -476,11 +479,11 @@ module suiDouBashi_vsdb::vsdb{
             balance: coin::into_balance(locked_sdb),
             end: unlock_time,
             player_epoch: 0,
-            player_point_history: table::new<u64, Point>(ctx),
+            player_point_history: table_vec::singleton(point, ctx),
             modules: vec::empty<TypeName>(),
         };
 
-        update_player_point_(&mut vsdb, clock);
+        //update_player_point_(&mut vsdb, clock);
 
         vsdb
     }
@@ -525,7 +528,7 @@ module suiDouBashi_vsdb::vsdb{
             modules,
         } = self;
 
-        table::drop<u64, Point>(player_point_history);
+        table_vec::drop<Point>(player_point_history);
         balance::destroy_zero(balance);
         vec::destroy_empty(modules);
         object::delete(id);
@@ -536,8 +539,7 @@ module suiDouBashi_vsdb::vsdb{
         let ts = unix_timestamp(clock);
         self.player_epoch = self.player_epoch + 1;
 
-        let point = point::new(calculate_bias(amount, self.end, ts), calculate_slope(amount), ts);
-        table::add(&mut self.player_point_history, self.player_epoch, point);
+        table_vec::push_back(&mut self.player_point_history, point::new(calculate_bias(amount, self.end, ts), calculate_slope(amount), ts));
     }
 
     fun checkpoint_(

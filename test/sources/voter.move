@@ -107,7 +107,7 @@ module test::voter_test{
             assert!(vsdb::locked_balance(&vsdb) == setup::sui_1B(),404);
             assert!(vsdb::total_VeSDB(&reg, clock) == 10726189649449434482, 404);
             assert!(vsdb::minted_vsdb(&reg) == 2, 404);
-            assert!( vsdb::player_epoch(&vsdb) == 1, 404);
+            assert!( vsdb::player_epoch(&vsdb) == 0, 404);
 
             // intialize
             voter::initialize(&reg, &mut vsdb);
