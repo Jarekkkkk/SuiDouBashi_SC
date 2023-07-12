@@ -140,7 +140,7 @@ module suiDouBashi_vest::gauge{
         pool: &Pool<X,Y>,
         ctx: &mut TxContext
     ):(Gauge<X,Y>, ID, ID){
-        let internal_id = internal_bribe::create_bribe<X,Y>(ctx);
+        let internal_id = internal_bribe::new<X,Y>(ctx);
         let external_id = external_bribe::create_bribe<X,Y>(ctx);
 
         let id = object::new(ctx);

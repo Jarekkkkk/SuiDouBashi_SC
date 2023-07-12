@@ -263,7 +263,7 @@ module suiDouBashi_vest::voter{
         gauge: &mut Gauge<X,Y>,
         internal_bribe: &mut InternalBribe<X,Y>,
         external_bribe: &mut ExternalBribe<X,Y>,
-        clock: &Clock,
+        clock: &Clock
     ):Potato{
         assert!(self.version == package_version(), E_WRONG_VERSION);
         assert!(!potato.reset, E_NOT_RESET);

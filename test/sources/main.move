@@ -381,8 +381,8 @@ module test::main{
         };
         next_tx(s, a);{ // I_bribe receive the rewards
             let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            assert!(i_bribe::get_reward_balance<USDC,USDT,USDC>(&i_bribe) == 10_000_000_000, 404);
-            assert!(i_bribe::get_reward_balance<USDC,USDT,USDT>(&i_bribe) == 10_000_000_000, 404);
+            assert!(i_bribe::reward_balance<USDC,USDT,USDC>(&i_bribe) == 10_000_000_000, 404);
+            assert!(i_bribe::reward_balance<USDC,USDT,USDT>(&i_bribe) == 10_000_000_000, 404);
 
             test::return_shared(i_bribe);
         };

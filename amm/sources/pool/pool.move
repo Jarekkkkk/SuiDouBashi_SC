@@ -15,11 +15,11 @@ module suiDouBashi_amm::pool{
     use sui::transfer;
     use sui::table_vec::{Self,TableVec};
     use sui::math;
-    use sui::clock::Clock;
+    use sui::clock::{Self, Clock};
 
     use suiDouBashi_amm::event;
     use suiDouBashi_amm::amm_math;
-    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry, unix_timestamp};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
     friend suiDouBashi_amm::pool_reg;
 
@@ -331,6 +331,8 @@ module suiDouBashi_amm::pool{
         let (reserve_x, reserve_y, lp_supply) = get_reserves(self);
         (quote(lp_supply, reserve_x, value_lp), quote(lp_supply, reserve_y, value_lp))
     }
+
+    fun unix_timestamp(clock: &Clock):u64 { clock::timestamp_ms(clock)/ 1000 }
 
     public entry fun add_liquidity<X,Y>(
         self: &mut Pool<X,Y>,

@@ -155,8 +155,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_voting_weight(&i_bribe) == 970238026331210741, 404);
-                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == 970238026331210741, 404);
+                assert!(i_bribe::total_votes(&i_bribe) == 970238026331210741, 404);
+                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == 970238026331210741, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 970238026331210741, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 970238026331210741, 404);
@@ -211,8 +211,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_voting_weight(&i_bribe) == 0, 404);
-                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == 0, 404);
+                assert!(i_bribe::total_votes(&i_bribe) == 0, 404);
+                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == 0, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 0, 404);
@@ -289,8 +289,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_voting_weight(&i_bribe) == vsdb_voting / 2, 404);
-                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(i_bribe::total_votes(&i_bribe) == vsdb_voting / 2, 404);
+                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
@@ -314,8 +314,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_voting_weight(&i_bribe) == vsdb_voting / 2, 404);
-                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(i_bribe::total_votes(&i_bribe) == vsdb_voting / 2, 404);
+                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
@@ -408,8 +408,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_voting_weight(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(i_bribe::total_votes(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
+                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
@@ -434,8 +434,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_voting_weight(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(i_bribe::get_balance_of(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(i_bribe::total_votes(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
+                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
                 assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);

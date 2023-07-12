@@ -1,22 +1,20 @@
-// Internal Bribes represent pool fee distributed to LP stakers
 module suiDouBashi_vest::internal_bribe{
     use std::type_name;
+    use std::vector as vec;
+
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::transfer;
-    use sui::clock::{Self, Clock};
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
-    use std::vector as vec;
     use sui::balance::{Self, Balance};
-
     use sui::dynamic_field as df;
     use sui::math;
+    use sui::clock::{Self, Clock};
 
     use suiDouBashi_amm::amm_math;
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb};
-
     use suiDouBashi_vest::minter::package_version;
     use suiDouBashi_vest::event;
     use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
@@ -24,9 +22,15 @@ module suiDouBashi_vest::internal_bribe{
     friend suiDouBashi_vest::gauge;
     friend suiDouBashi_vest::voter;
 
+    // ====== Constants =======
+
     const DURATION: u64 = { 7 * 86400 };
     const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
+
+    // ====== Constants =======
+
+    // ====== Error =======
 
     const E_WRONG_VERSION: u64 = 001;
     const E_INVALID_TYPE: u64 = 100;
@@ -37,30 +41,46 @@ module suiDouBashi_vest::internal_bribe{
     const E_INVALID_REWARD_RATE: u64 = 106;
     const E_MAX_REWARD: u64 = 107;
 
+    // ====== Error =======
+
+    // Internal Bribe, responsible for collecting votes from Vsdb Holder and returning the internal bribes ( pool tx fees ) to the VSDB holder who votes fot the pool
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
+        /// package version
         version: u64,
-        total_supply: u64,
-        balance_of: Table<ID, u64>,
+        /// total votes the internal_bribe collects
+        total_votes: u64,
+        /// total votes point history, updated when someone cast/ revoke their votes
         supply_checkpoints: TableVec<SupplyCheckpoint>,
-        checkpoints: Table<ID, vector<Checkpoint>>, // Vsdb -> voting balance checkpoint
+        /// casted polls of each Vsdb
+        vsdb_votes: Table<ID, u64>,
+        /// voting history, updated when someone vote/ revoke their votes
+        vote_cp: Table<ID, vector<Checkpoint>>,
     }
 
-    public fun total_voting_weight<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_supply }
-    public fun get_balance_of<X,Y>(self: &InternalBribe<X,Y>, vsdb: &Vsdb):u64 {
-        *table::borrow(&self.balance_of, object::id(vsdb))
+    public fun total_votes<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_votes }
+
+    public fun vsdb_votes<X,Y>(self: &InternalBribe<X,Y>, vsdb: &Vsdb):u64 {
+        *table::borrow(&self.vsdb_votes, object::id(vsdb))
     }
 
+    /// Rewards for Internal Bribe, there are 2 rewards object for each internal_bribes object managing the pool tx fees in pair of coins
     struct Reward<phantom X, phantom Y, phantom T> has store{
+        /// total balance of stored rewards<T>
         balance: Balance<T>,
-        reward_rate: u64, // bribe_amount/ 7 days
+        /// estimated earned reward per second in current epoch ( rewards/ 7 days )
+        reward_rate: u64,
+        /// the finished period for each rewards, each reward can stay at most 7 days
         period_finish: u64,
-        last_update_time: u64, // update when someone 1.voting/ 2.reset/ 3.withdraw bribe/ 4. deposite bribe
+        /// last time when `vsdb votes`, `reward comes in` or `claim the rewards`
+        last_update_time: u64,
+        /// accumulating index of rewards_per_token
         reward_per_token_stored: u256,
-
-        user_reward_per_token_stored: Table<ID, u256>,
-
+        /// checkpoints of rewards. updated when `vsdb votes`, `reward comes in` or `vsdb claim the rewards`
         reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
+        /// reward_per_token index of each vsdb
+        player_reward_per_token_stored: Table<ID, u256>,
+        /// last time VSDB claim the rewards
         last_earn: Table<ID, u64>,
     }
 
@@ -68,37 +88,34 @@ module suiDouBashi_vest::internal_bribe{
         assert_generic_type<X,Y,T>();
         df::borrow(&self.id, type_name::get<T>())
     }
+
+    /// Private function, to protect mutable reference
     fun borrow_reward_mut<X,Y, T>(self: &mut InternalBribe<X,Y>):&mut Reward<X, Y, T>{
         assert_generic_type<X,Y,T>();
         df::borrow_mut(&mut self.id, type_name::get<T>())
     }
 
-    #[test_only]
-    public fun get_reward_rate<X,Y,T>(reward: &Reward<X,Y,T>):u64 { reward.reward_rate }
-    #[test_only]
-    public fun get_period_finish<X,Y,T>(reward: &Reward<X,Y,T>): u64{ reward.period_finish }
-
-    public fun get_reward_balance<X,Y,T>(self: &InternalBribe<X,Y>): u64 {
-        let reward = borrow_reward<X,Y,T>(self);
-        balance::value(&reward.balance)
+    public fun reward_balance<X,Y,T>(self: &InternalBribe<X,Y>): u64{
+        balance::value(&borrow_reward<X,Y,T>(self).balance)
     }
 
     // ===== Assertion =====
+
     public fun assert_generic_type<X,Y,T>(){
         let type_t = type_name::get<T>();
         assert!( type_t == type_name::get<X>() || type_t == type_name::get<Y>(), E_INVALID_TYPE);
     }
 
-    public (friend )fun create_bribe<X,Y>(
-        ctx: &mut TxContext
-    ):ID {
+    // ===== Assertion =====
+
+    public (friend )fun new<X,Y>( ctx: &mut TxContext ):ID {
         let bribe = InternalBribe<X,Y>{
             id: object::new(ctx),
             version: package_version(),
-            total_supply:0,
-            balance_of: table::new<ID, u64>(ctx),
+            total_votes:0,
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
-            checkpoints: table::new<ID, vector<Checkpoint>>(ctx),
+            vsdb_votes: table::new<ID, u64>(ctx),
+            vote_cp: table::new<ID, vector<Checkpoint>>(ctx),
         };
         let id = object::id(&bribe);
 
@@ -109,8 +126,7 @@ module suiDouBashi_vest::internal_bribe{
             last_update_time: 0,
             reward_per_token_stored: 0,
             reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
-
-            user_reward_per_token_stored: table::new<ID, u256>(ctx),
+            player_reward_per_token_stored: table::new<ID, u256>(ctx),
             last_earn: table::new<ID, u64>(ctx),
         };
         let reward_y = Reward<X,Y,Y>{
@@ -120,8 +136,7 @@ module suiDouBashi_vest::internal_bribe{
             last_update_time: 0,
             reward_per_token_stored: 0,
             reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
-
-            user_reward_per_token_stored: table::new<ID, u256>(ctx),
+            player_reward_per_token_stored: table::new<ID, u256>(ctx),
             last_earn: table::new<ID, u64>(ctx),
         };
 
@@ -133,26 +148,28 @@ module suiDouBashi_vest::internal_bribe{
         id
     }
 
+    // ====== GETTER ======
+
     public fun get_prior_balance_index<X,Y>(
         self: & InternalBribe<X,Y>,
         vsdb: &Vsdb,
         ts:u64
     ):u64 {
-        let id = object::id(vsdb);
-        if( !table::contains(&self.checkpoints, id)) return 0;
+        let vsdb = object::id(vsdb);
+        if( !table::contains(&self.vote_cp, vsdb)) return 0;
 
-        let checkpoints = table::borrow(&self.checkpoints, id);
-        let len = vec::length(checkpoints);
+        let bps = table::borrow(&self.vote_cp, vsdb);
+        let len = vec::length(bps);
 
         if( len == 0){
             return 0
         };
 
-        if( checkpoints::balance_ts(vec::borrow(checkpoints, len - 1)) <= ts ){
+        if( checkpoints::balance_ts(vec::borrow(bps, len - 1)) <= ts ){
             return len - 1
         };
 
-        if( checkpoints::balance_ts(vec::borrow(checkpoints, 0)) > ts){
+        if( checkpoints::balance_ts(vec::borrow(bps, 0)) > ts){
             return 0
         };
 
@@ -160,7 +177,7 @@ module suiDouBashi_vest::internal_bribe{
         let upper = len - 1;
         while ( lower < upper){
             let center = upper - (upper - lower) / 2;
-            let cp_ts = checkpoints::balance_ts(vec::borrow(checkpoints, center));
+            let cp_ts = checkpoints::balance_ts(vec::borrow(bps, center));
             if(cp_ts == ts ){
                 return center
             }else if (cp_ts < ts){
@@ -212,154 +229,55 @@ module suiDouBashi_vest::internal_bribe{
     ):(u64, u256) // ( ts, reward_per_token )
     {
         assert_generic_type<X,Y,T>();
-        let checkpoints = &reward.reward_per_token_checkpoints;
-        let len = table_vec::length(checkpoints);
+
+        let rps = &reward.reward_per_token_checkpoints;
+        let len = table_vec::length(rps);
 
         if( len == 0){
             return ( 0, 0 )
         };
 
-        if( checkpoints::reward_ts(table_vec::borrow(checkpoints, len - 1)) <= ts ){
-            let last_checkpoint = table_vec::borrow(checkpoints, len - 1);
-            return ( checkpoints::reward_ts(last_checkpoint), checkpoints::reward(last_checkpoint))
+        if( checkpoints::reward_ts(table_vec::borrow(rps, len - 1)) <= ts ){
+            let rp = table_vec::borrow(rps, len - 1);
+            return ( checkpoints::reward_ts(rp), checkpoints::reward(rp))
         };
 
-        if( checkpoints::reward_ts(table_vec::borrow(checkpoints, 0)) > ts){
+        if( checkpoints::reward_ts(table_vec::borrow(rps, 0)) > ts){
             return ( 0, 0 )
         };
 
         let lower = 0;
         let upper = len - 1;
-        while ( lower < upper){
-            let center = upper - (upper - lower) / 2;
-            let rp_ts = checkpoints::reward_ts(table_vec::borrow(checkpoints, center));
-            let reward = checkpoints::reward(table_vec::borrow(checkpoints, center));
-            if(rp_ts == ts ){
-                return (rp_ts, reward )
-            }else if (rp_ts < ts){
+        let center = upper - (upper - lower) / 2;
+        let rp = table_vec::borrow(rps, center);
+        let _rp_ts = checkpoints::reward_ts(rp);
+        while (lower < upper){
+            center = upper - (upper - lower) / 2;
+            rp = table_vec::borrow(rps, center);
+            _rp_ts = checkpoints::reward_ts(rp);
+
+            if(_rp_ts == ts){
+                return (_rp_ts, checkpoints::reward(rp) )
+            }else if (_rp_ts < ts){
                 lower = center;
             }else{
-                upper = center -1 ;
+                upper = center - 1 ;
             }
         };
-        let rp = table_vec::borrow(checkpoints, lower);
+        rp = table_vec::borrow(rps, lower);
         return ( checkpoints::reward_ts(rp), checkpoints::reward(rp))
     }
 
-     fun write_checkpoint_<X,Y>(
-        self: &mut InternalBribe<X,Y>,
-        vsdb: &Vsdb,
-        balance: u64,
-        clock: &Clock,
-    ){
-        let vsdb = object::id(vsdb);
-        let ts = clock::timestamp_ms(clock) / 1000;
-
-        if(!table::contains(&self.checkpoints, vsdb)){
-            table::add(&mut self.checkpoints, vsdb, vec::empty());
-        };
-
-        let player_checkpoint = table::borrow_mut(&mut self.checkpoints, vsdb);
-        let len = vec::length(player_checkpoint);
-
-        if( len > 0 && checkpoints::balance_ts(vec::borrow(player_checkpoint, len - 1)) == ts){
-            let cp_mut = vec::borrow_mut(player_checkpoint, len - 1 );
-            checkpoints::update_balance(cp_mut, balance);
-        }else{
-            let checkpoint = checkpoints::new_cp(ts, balance);
-            vec::push_back(player_checkpoint, checkpoint);
-        };
-    }
-
-    fun write_reward_per_token_checkpoint_<X, Y, T>(
-        reward: &mut Reward<X, Y, T>,
-        reward_per_token: u256,
-        timestamp: u64,
-    ){
-        let rp_s = &mut reward.reward_per_token_checkpoints;
-        let len = table_vec::length(rp_s);
-        if(len > 0 && checkpoints::reward_ts(table_vec::borrow(rp_s, len - 1)) == timestamp){
-            let rp = table_vec::borrow_mut(rp_s, len - 1);
-            checkpoints::update_reward(rp, reward_per_token);
-        }else{
-            table_vec::push_back(rp_s, checkpoints::new_rp(timestamp, reward_per_token));
-        };
-    }
-
-    fun write_supply_checkpoint_<X,Y>(
-        self: &mut InternalBribe<X,Y>,
-        clock: &Clock,
-    ){
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let supply = self.total_supply;
-
-        let len = table_vec::length(&self.supply_checkpoints);
-
-        if( len > 0 && checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, len - 1)) == ts){
-            let sp = table_vec::borrow_mut(&mut self.supply_checkpoints, len - 1 );
-            checkpoints::update_supply(sp, supply)
-        }else{
-            let checkpoint = checkpoints::new_sp(ts, supply);
-            table_vec::push_back(&mut self.supply_checkpoints, checkpoint);
-        };
-    }
-
-    ///  returns the last time the reward was modified or periodFinish if the reward has ended
     public fun last_time_reward_applicable<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        // Two scenarios
-        // 1. return current time if the latest deposited is in 7 days
-        // 2  return period_finish when bribe has been abandoned over 7 days
-        math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
+        math::min(unix_timestamp(clock), reward.period_finish)
     }
 
-    /// allows a voter to claim reward for a internal bribe ( pool_fees )
-    public entry fun get_all_rewards<X,Y>(
-        self: &mut InternalBribe<X,Y>,
-        vsdb: &Vsdb,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ){
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        get_reward<X,Y,X>(self, vsdb, clock, ctx);
-        get_reward<X,Y,Y>(self, vsdb, clock, ctx);
-    }
-    public entry fun get_reward<X, Y, T>(
-        self: &mut InternalBribe<X,Y>,
-        vsdb: &Vsdb,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ){
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        assert_generic_type<X,Y,T>();
+    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
+        let ts = unix_timestamp(clock);
 
-        let id = object::id(vsdb);
+        if(ts >= reward.period_finish) return 0;
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
-        let _reward = earned<X,Y,T>(self, vsdb, clock);
-
-        let reward = borrow_reward_mut<X,Y,T>(self);
-        if(!table::contains(&reward.last_earn, id)){
-            table::add(&mut reward.last_earn, id, 0);
-        };
-        if(!table::contains(&reward.user_reward_per_token_stored, id)){
-            table::add(&mut reward.user_reward_per_token_stored, id, 0);
-        };
-
-        let reward = borrow_reward_mut<X,Y,T>(self);
-        reward.reward_per_token_stored = reward_per_token_stored;
-        reward.last_update_time = last_update_time;
-
-        *table::borrow_mut(&mut reward.last_earn, id) = clock::timestamp_ms(clock) / 1000;
-        *table::borrow_mut(&mut reward.user_reward_per_token_stored, id) = reward_per_token_stored;
-        if(_reward > 0){
-            let coin_x = coin::take(&mut reward.balance, _reward, ctx);
-            let value_x = coin::value(&coin_x);
-            transfer::public_transfer(
-                coin_x,
-                tx_context::sender(ctx)
-            );
-            event::claim_reward(tx_context::sender(ctx), value_x);
-        }
+        return reward.period_finish - ts * reward.reward_rate
     }
 
     public fun reward_per_token<X, Y, T>(
@@ -369,69 +287,14 @@ module suiDouBashi_vest::internal_bribe{
         let reward = borrow_reward<X,Y,T>(self);
         let reward_stored = reward.reward_per_token_stored;
 
-        if(self.total_supply == 0){
+        if(self.total_votes == 0){
             return reward_stored
         };
         let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(reward.last_update_time, reward.period_finish)) as u256);
-        return reward_stored + elapsed * (reward.reward_rate as u256) * PRECISION / (self.total_supply as u256)
+        return reward_stored + elapsed * (reward.reward_rate as u256) * PRECISION / (self.total_votes as u256)
     }
 
-    /// update obsolete reward per token data
-    public entry fun batch_reward_per_token<X,Y,T>(
-        self: &mut InternalBribe<X,Y>,
-        max_run:u64,
-        clock: &Clock,
-    ){
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        let ( reward_per_token_stored, last_update_time ) = batch_reward_per_token_<X,Y,Y>(self, max_run, clock);
-        let reward = borrow_reward_mut<X,Y,Y>(self);
-        reward.reward_per_token_stored = reward_per_token_stored;
-        reward.last_update_time = last_update_time;
-    }
-
-    fun batch_reward_per_token_<X,Y,T>(
-        self: &mut InternalBribe<X,Y>,
-        max_run:u64, // useful when tx might be out of gas
-        clock: &Clock,
-    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
-    {
-        assert_generic_type<X,Y,T>();
-
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let reward = borrow_reward<X,Y,T>(self);
-        let start_timestamp = reward.last_update_time;
-        let reward_token_stored = reward.reward_per_token_stored;
-
-        if(table_vec::length(&self.supply_checkpoints) == 0){
-            return ( reward_token_stored, start_timestamp )
-        };
-
-        if(reward.reward_rate == 0){
-            return ( reward_token_stored, ts )
-        };
-
-        let start_idx = get_prior_supply_index(self, start_timestamp);
-        let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
-
-        let i = start_idx;
-        while(i < end_idx){
-            let sp_0_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i));
-            let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
-            if(sp_0_supply > 0){
-                let sp_1_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
-                let reward = borrow_reward_mut<X,Y,T>(self);
-                let (reward_per_token ,end_time) = calc_reward_per_token(reward, sp_1_ts, sp_0_ts, sp_0_supply, start_timestamp);
-                reward_token_stored = reward_token_stored + reward_per_token;
-                write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
-                start_timestamp = end_time;
-            };
-            i = i + 1;
-        };
-
-        return ( reward_token_stored, start_timestamp )
-    }
-
-    fun calc_reward_per_token<X, Y, T>(
+    fun calc_reward_per_token_<X, Y, T>(
         reward: &Reward<X, Y, T>,
         timestamp_1: u64,
         timestamp_0: u64,
@@ -444,88 +307,6 @@ module suiDouBashi_vest::internal_bribe{
         (reward, end_time)
     }
 
-    public entry fun batch_update_reward_per_token<X,Y,T>(
-        self: &mut InternalBribe<X,Y>,
-        max_run:u64,
-        clock: &Clock,
-    ){
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, max_run, false, clock);
-        let reward = borrow_reward_mut<X,Y,X>(self);
-        reward.reward_per_token_stored = reward_per_token_stored;
-        reward.last_update_time = last_update_time;
-    }
-
-    fun update_reward_for_all_tokens_<X,Y>(
-        self: &mut InternalBribe<X,Y>,
-        clock: &Clock,
-    ){
-        // reward_y
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,X>(self, MAX_U64, true, clock);
-        let reward = borrow_reward_mut<X,Y,X>(self);
-        reward.reward_per_token_stored = reward_per_token_stored;
-        reward.last_update_time = last_update_time;
-        // reward_x
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,Y>(self, MAX_U64, true, clock);
-        let reward = borrow_reward_mut<X,Y,Y>(self);
-        reward.reward_per_token_stored = reward_per_token_stored;
-        reward.last_update_time = last_update_time;
-    }
-
-    fun update_reward_per_token_<X,Y,T>(
-        self: &mut InternalBribe<X,Y>,
-        max_run:u64, // useful when tx might be out of gas
-        actual_last: bool,
-        clock: &Clock,
-    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
-    {
-        assert_generic_type<X,Y,T>();
-
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let reward = borrow_reward<X,Y,T>(self);
-        let start_timestamp = reward.last_update_time;
-        let reward_token_stored = reward.reward_per_token_stored;
-
-        if(table_vec::length(&self.supply_checkpoints) == 0){
-            return ( reward_token_stored, start_timestamp )
-        };
-
-        if(reward.reward_rate == 0){
-            return ( reward_token_stored, ts )
-        };
-
-        let start_idx = get_prior_supply_index(self, start_timestamp);
-        let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
-
-        if(end_idx > 0){
-            let i = start_idx;
-            while(i <= end_idx - 1){
-                let sp_0_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i));
-                let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
-                if(sp_0_supply > 0){
-                    let sp_1_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
-                    let reward = borrow_reward_mut<X,Y,T>(self);
-                    let (reward_per_token ,end_time) = calc_reward_per_token(reward, sp_1_ts, sp_0_ts, sp_0_supply, start_timestamp);
-                    reward_token_stored = reward_token_stored + reward_per_token;
-                    write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
-                    start_timestamp = end_time;
-                };
-                i = i + 1;
-            }
-        };
-        if(actual_last){
-            let sp_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, end_idx));
-            let sp_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, end_idx));
-            if(sp_supply > 0){
-                let reward = borrow_reward<X,Y,T>(self);
-                let ( reward_per_token, _ ) = calc_reward_per_token(reward, last_time_reward_applicable(reward, clock), math::max(sp_ts, start_timestamp), sp_supply, start_timestamp);
-                reward_token_stored = reward_token_stored + reward_per_token;
-                write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), reward_token_stored, ts);
-                start_timestamp = ts;
-            };
-        };
-        return ( reward_token_stored, start_timestamp )
-    }
-
     public fun earned<X,Y,T>(
         self: &InternalBribe<X,Y>,
         vsdb: &Vsdb,
@@ -536,7 +317,7 @@ module suiDouBashi_vest::internal_bribe{
         let reward = borrow_reward<X,Y,T>(self);
         let rps_borrow = &reward.reward_per_token_checkpoints;
         let id = object::id(vsdb);
-        if( !table::contains(&self.checkpoints, id) || table_vec::length(rps_borrow) == 0 ){
+        if( !table::contains(&self.vote_cp, id) || table_vec::length(rps_borrow) == 0 ){
             return 0
         };
         let last_earn = if(table::contains(&reward.last_earn, id)){
@@ -546,7 +327,7 @@ module suiDouBashi_vest::internal_bribe{
         };
         let start_timestamp = math::max(last_earn, checkpoints::reward_ts(table_vec::borrow(rps_borrow, 0)));
 
-        let bps_borrow = table::borrow(&self.checkpoints, id);
+        let bps_borrow = table::borrow(&self.vote_cp, id);
 
         let start_idx = get_prior_balance_index(self, vsdb, start_timestamp);
         let end_idx = vec::length(bps_borrow) - 1;
@@ -571,8 +352,8 @@ module suiDouBashi_vest::internal_bribe{
         let ( _, perior_reward ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
 
         // current slope
-        let user_reward_per_token_stored = if(table::contains(&reward.user_reward_per_token_stored, id)){
-            *table::borrow(&reward.user_reward_per_token_stored, id)
+        let player_reward_per_token_stored = if(table::contains(&reward.player_reward_per_token_stored, id)){
+            *table::borrow(&reward.player_reward_per_token_stored, id)
         }else{
             0
         };
@@ -580,10 +361,41 @@ module suiDouBashi_vest::internal_bribe{
         // when vsdb expired, there's no accumulating pool fees anymore
         let ( _, final_reward) = get_prior_reward_per_token(reward, vsdb::locked_end(vsdb));
 
-        let acc = ((checkpoints::balance(cp) as u256) * (amm_math::min_u256(reward_per_token<X,Y,T>(self, clock), final_reward) - amm_math::max_u256(perior_reward, user_reward_per_token_stored)))/ PRECISION;
+        let acc = ((checkpoints::balance(cp) as u256) * (amm_math::min_u256(reward_per_token<X,Y,T>(self, clock), final_reward) - amm_math::max_u256(perior_reward, player_reward_per_token_stored)))/ PRECISION;
         earned_reward = earned_reward + (acc as u64);
 
         return earned_reward
+    }
+
+    fun unix_timestamp(clock: &Clock):u64 { clock::timestamp_ms(clock)/ 1000 }
+
+    // ====== GETTER ======
+
+
+    // ====== ENTRY ======
+
+    /// update obsolete reward per token data
+    public entry fun batch_reward_per_token<X,Y,T>(
+        self: &mut InternalBribe<X,Y>,
+        max_run:u64,
+        clock: &Clock,
+    ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        let ( reward_per_token_stored, last_update_time ) = batch_reward_per_token_<X,Y,Y>(self, max_run, clock);
+        let reward = borrow_reward_mut<X,Y,Y>(self);
+        reward.reward_per_token_stored = reward_per_token_stored;
+        reward.last_update_time = last_update_time;
+    }
+
+    public entry fun batch_update_reward_per_token<X,Y,T>(
+        self: &mut InternalBribe<X,Y>,
+        max_run:u64,
+        clock: &Clock,
+    ){
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, max_run, false, clock);
+        let reward = borrow_reward_mut<X,Y,X>(self);
+        reward.reward_per_token_stored = reward_per_token_stored;
+        reward.last_update_time = last_update_time;
     }
 
     public (friend) fun deposit<X,Y>(
@@ -593,18 +405,20 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+        assert!(amount > 0, E_EMPTY_VALUE);
 
         let id = object::id(vsdb);
         update_reward_for_all_tokens_(self, clock);
 
-        self.total_supply = self.total_supply + amount;
+        self.total_votes = self.total_votes + amount;
 
-        if(table::contains(&self.balance_of, id)){
-            *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(&self.balance_of, id) + amount;
+        if(table::contains(&self.vsdb_votes, id)){
+            *table::borrow_mut(&mut self.vsdb_votes, id) = *table::borrow(&self.vsdb_votes, id) + amount;
         }else{
-            table::add(&mut self.balance_of, id, amount);
+            table::add(&mut self.vsdb_votes, id, amount);
         };
 
+        amount = *table::borrow(&self.vsdb_votes, id);
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
@@ -616,31 +430,25 @@ module suiDouBashi_vest::internal_bribe{
         clock: &Clock
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+        assert!(amount > 0, E_EMPTY_VALUE);
+
         update_reward_for_all_tokens_(self, clock);
 
         let id = object::id(vsdb);
-        assert!(table::contains(&self.balance_of, id), E_INVALID_VOTER);
-        let supply = self.total_supply;
-        let balance = *table::borrow(& self.balance_of, id);
-        assert!(supply >= amount, E_INSUFFICIENT_VOTES);
-        assert!(balance >= amount, E_INSUFFICIENT_VOTES);
-        self.total_supply = supply - amount;
-        *table::borrow_mut(&mut self.balance_of, id) = balance - amount;
+        assert!(table::contains(&self.vsdb_votes, id), E_INVALID_VOTER);
 
+        let supply = self.total_votes;
+        let balance = *table::borrow(& self.vsdb_votes, id);
+        assert!(supply >= amount && balance >= amount, E_INSUFFICIENT_VOTES);
+        self.total_votes = supply - amount;
+        *table::borrow_mut(&mut self.vsdb_votes, id) = balance - amount;
+
+        amount = *table::borrow(&self.vsdb_votes, id);
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
 
-    public fun left<X, Y, T>(reward: &Reward<X, Y, T>, clock: &Clock):u64{
-        let ts = clock::timestamp_ms(clock) / 1000;
-
-        if(ts >= reward.period_finish) return 0;
-
-        let _remaining = reward.period_finish - ts;
-        return _remaining * reward.reward_rate
-    }
-
-    public fun deposit_pool_fees<X,Y,T>(
+    public entry fun deposit_pool_fees<X,Y,T>(
         self: &mut InternalBribe<X,Y>,
         coin: Coin<T>,
         clock: &Clock,
@@ -653,7 +461,7 @@ module suiDouBashi_vest::internal_bribe{
         let reward = borrow_reward<X,Y,T>(self);
         assert!(value > 0, E_EMPTY_VALUE);
 
-        let ts = clock::timestamp_ms(clock) / 1000;
+        let ts = unix_timestamp(clock);
         if(reward.reward_rate == 0){
             // gensis rewards checkpoint
             write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), 0, ts);
@@ -682,5 +490,226 @@ module suiDouBashi_vest::internal_bribe{
         reward.period_finish = ts + DURATION;
 
         event::notify_reward<X>(tx_context::sender(ctx), value);
+    }
+
+    /// allows a voter to claim reward for a internal bribe ( pool_fees )
+    public entry fun get_all_rewards<X,Y>(
+        self: &mut InternalBribe<X,Y>,
+        vsdb: &Vsdb,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        get_reward<X,Y,X>(self, vsdb, clock, ctx);
+        get_reward<X,Y,Y>(self, vsdb, clock, ctx);
+    }
+
+    public entry fun get_reward<X, Y, T>(
+        self: &mut InternalBribe<X,Y>,
+        vsdb: &Vsdb,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        assert_generic_type<X,Y,T>();
+
+        let id = object::id(vsdb);
+
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,T>(self, MAX_U64, true, clock);
+        let _reward = earned<X,Y,T>(self, vsdb, clock);
+
+        let reward = borrow_reward_mut<X,Y,T>(self);
+        if(!table::contains(&reward.last_earn, id)){
+            table::add(&mut reward.last_earn, id, 0);
+        };
+        if(!table::contains(&reward.player_reward_per_token_stored, id)){
+            table::add(&mut reward.player_reward_per_token_stored, id, 0);
+        };
+
+        let reward = borrow_reward_mut<X,Y,T>(self);
+        reward.reward_per_token_stored = reward_per_token_stored;
+        reward.last_update_time = last_update_time;
+
+        *table::borrow_mut(&mut reward.last_earn, id) = unix_timestamp(clock);
+        *table::borrow_mut(&mut reward.player_reward_per_token_stored, id) = reward_per_token_stored;
+        if(_reward > 0){
+            let coin_x = coin::take(&mut reward.balance, _reward, ctx);
+            let value_x = coin::value(&coin_x);
+            transfer::public_transfer(
+                coin_x,
+                tx_context::sender(ctx)
+            );
+            event::claim_reward(tx_context::sender(ctx), value_x);
+        }
+    }
+
+    // ====== ENTRY ======
+
+    // ====== LOGIC ======
+
+    fun write_checkpoint_<X,Y>(
+        self: &mut InternalBribe<X,Y>,
+        vsdb: &Vsdb,
+        balance: u64,
+        clock: &Clock,
+    ){
+        let vsdb = object::id(vsdb);
+        let ts = unix_timestamp(clock);
+
+        if(!table::contains(&self.vote_cp, vsdb)){
+            table::add(&mut self.vote_cp, vsdb, vec::empty());
+        };
+
+        let bps = table::borrow_mut(&mut self.vote_cp, vsdb);
+        let len = vec::length(bps);
+
+        if( len > 0 && checkpoints::balance_ts(vec::borrow(bps, len - 1)) == ts){
+            checkpoints::update_balance(vec::borrow_mut(bps, len - 1 ), balance);
+        }else{
+            vec::push_back(bps, checkpoints::new_cp(ts, balance));
+        };
+    }
+
+    fun write_supply_checkpoint_<X,Y>(
+        self: &mut InternalBribe<X,Y>,
+        clock: &Clock,
+    ){
+        let ts = unix_timestamp(clock);
+
+        let len = table_vec::length(&self.supply_checkpoints);
+
+        if( len > 0 && checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, len - 1)) == ts){
+            checkpoints::update_supply(table_vec::borrow_mut(&mut self.supply_checkpoints, len - 1 ), self.total_votes)
+        }else{
+            table_vec::push_back(&mut self.supply_checkpoints, checkpoints::new_sp(ts, self.total_votes));
+        };
+    }
+
+    fun write_reward_per_token_checkpoint_<X, Y, T>(
+        reward: &mut Reward<X, Y, T>,
+        reward_per_token: u256,
+        ts: u64,
+    ){
+        let rps = &mut reward.reward_per_token_checkpoints;
+        let len = table_vec::length(rps);
+        if(len > 0 && checkpoints::reward_ts(table_vec::borrow(rps, len - 1)) == ts){
+            checkpoints::update_reward(table_vec::borrow_mut(rps, len - 1), reward_per_token);
+        }else{
+            table_vec::push_back(rps, checkpoints::new_rp(ts, reward_per_token));
+        };
+    }
+
+    fun update_reward_for_all_tokens_<X,Y>(
+        self: &mut InternalBribe<X,Y>,
+        clock: &Clock,
+    ){
+        // reward_y
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,X>(self, MAX_U64, true, clock);
+        let reward = borrow_reward_mut<X,Y,X>(self);
+        reward.reward_per_token_stored = reward_per_token_stored;
+        reward.last_update_time = last_update_time;
+        // reward_x
+        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y,Y>(self, MAX_U64, true, clock);
+        let reward = borrow_reward_mut<X,Y,Y>(self);
+        reward.reward_per_token_stored = reward_per_token_stored;
+        reward.last_update_time = last_update_time;
+    }
+
+    fun update_reward_per_token_<X,Y,T>(
+        self: &mut InternalBribe<X,Y>,
+        max_run:u64, // useful when tx might be out of gas
+        actual_last: bool,
+        clock: &Clock,
+    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
+    {
+        assert_generic_type<X,Y,T>();
+
+        let ts = unix_timestamp(clock);
+        let reward = borrow_reward<X,Y,T>(self);
+        let start_timestamp = reward.last_update_time;
+        let reward_token_stored = reward.reward_per_token_stored;
+
+        if(table_vec::length(&self.supply_checkpoints) == 0){
+            return ( reward_token_stored, start_timestamp )
+        };
+
+        if(reward.reward_rate == 0){
+            return ( reward_token_stored, ts )
+        };
+
+        let start_idx = get_prior_supply_index(self, start_timestamp);
+        let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
+
+        if(end_idx > 0){
+            let i = start_idx;
+            while(i <= end_idx - 1){
+                let sp_0_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i));
+                let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
+                if(sp_0_supply > 0){
+                    let sp_1_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
+                    let reward = borrow_reward_mut<X,Y,T>(self);
+                    let (reward_per_token ,end_time) = calc_reward_per_token_(reward, sp_1_ts, sp_0_ts, sp_0_supply, start_timestamp);
+                    reward_token_stored = reward_token_stored + reward_per_token;
+                    write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
+                    start_timestamp = end_time;
+                };
+                i = i + 1;
+            }
+        };
+
+        if(actual_last){
+            let sp_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, end_idx));
+            let sp_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, end_idx));
+            if(sp_supply > 0){
+                let reward = borrow_reward<X,Y,T>(self);
+                let ( reward_per_token, _ ) = calc_reward_per_token_(reward, last_time_reward_applicable(reward, clock), math::max(sp_ts, start_timestamp), sp_supply, start_timestamp);
+                reward_token_stored = reward_token_stored + reward_per_token;
+                write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y,T>(self), reward_token_stored, ts);
+                start_timestamp = ts;
+            };
+        };
+        return ( reward_token_stored, start_timestamp )
+    }
+
+    fun batch_reward_per_token_<X,Y,T>(
+        self: &mut InternalBribe<X,Y>,
+        max_run:u64, // useful when tx might be out of gas
+        clock: &Clock,
+    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
+    {
+        assert_generic_type<X,Y,T>();
+
+        let ts = unix_timestamp(clock);
+        let reward = borrow_reward<X,Y,T>(self);
+        let start_timestamp = reward.last_update_time;
+        let reward_token_stored = reward.reward_per_token_stored;
+
+        if(table_vec::length(&self.supply_checkpoints) == 0){
+            return ( reward_token_stored, start_timestamp )
+        };
+
+        if(reward.reward_rate == 0){
+            return ( reward_token_stored, ts )
+        };
+
+        let start_idx = get_prior_supply_index(self, start_timestamp);
+        let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
+
+        let i = start_idx;
+        while(i < end_idx){
+            let sp_0_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i));
+            let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
+            if(sp_0_supply > 0){
+                let sp_1_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
+                let reward = borrow_reward_mut<X,Y,T>(self);
+                let (reward_per_token ,end_time) = calc_reward_per_token_(reward, sp_1_ts, sp_0_ts, sp_0_supply, start_timestamp);
+                reward_token_stored = reward_token_stored + reward_per_token;
+                write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
+                start_timestamp = end_time;
+            };
+            i = i + 1;
+        };
+
+        return ( reward_token_stored, start_timestamp )
     }
 }
