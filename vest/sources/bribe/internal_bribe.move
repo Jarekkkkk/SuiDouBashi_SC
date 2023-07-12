@@ -256,8 +256,7 @@ module suiDouBashi_vest::internal_bribe{
         let ts = clock::timestamp_ms(clock) / 1000;
 
         if(!table::contains(&self.checkpoints, vsdb)){
-            let checkpoints = vec::empty();
-            table::add(&mut self.checkpoints, vsdb, checkpoints);
+            table::add(&mut self.checkpoints, vsdb, vec::empty());
         };
 
         let player_checkpoint = table::borrow_mut(&mut self.checkpoints, vsdb);
@@ -591,17 +590,17 @@ module suiDouBashi_vest::internal_bribe{
         self: &mut InternalBribe<X,Y>,
         vsdb: &Vsdb,
         amount: u64,
-        clock: &Clock,
-        _ctx: &mut TxContext
+        clock: &Clock
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+
         let id = object::id(vsdb);
         update_reward_for_all_tokens_(self, clock);
 
         self.total_supply = self.total_supply + amount;
 
         if(table::contains(&self.balance_of, id)){
-            *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(& self.balance_of, id) + amount;
+            *table::borrow_mut(&mut self.balance_of, id) = *table::borrow(&self.balance_of, id) + amount;
         }else{
             table::add(&mut self.balance_of, id, amount);
         };
@@ -614,8 +613,7 @@ module suiDouBashi_vest::internal_bribe{
         self: &mut InternalBribe<X,Y>,
         vsdb: &Vsdb,
         amount: u64,
-        clock: &Clock,
-        _ctx: &mut TxContext
+        clock: &Clock
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         update_reward_for_all_tokens_(self, clock);

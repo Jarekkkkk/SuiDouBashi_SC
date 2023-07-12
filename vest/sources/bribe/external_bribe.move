@@ -392,8 +392,7 @@ module suiDouBashi_vest::external_bribe{
         self: &mut ExternalBribe<X,Y>,
         vsdb: &Vsdb,
         amount: u64,
-        clock: &Clock,
-        _ctx: &mut TxContext
+        clock: &Clock
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let id = object::id(vsdb);
@@ -414,8 +413,7 @@ module suiDouBashi_vest::external_bribe{
         self: &mut ExternalBribe<X,Y>,
         vsdb: &Vsdb,
         amount: u64,
-        clock: &Clock,
-        _ctx: &mut TxContext
+        clock: &Clock
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let id = object::id(vsdb);

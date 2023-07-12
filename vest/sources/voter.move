@@ -264,7 +264,6 @@ module suiDouBashi_vest::voter{
         internal_bribe: &mut InternalBribe<X,Y>,
         external_bribe: &mut ExternalBribe<X,Y>,
         clock: &Clock,
-        ctx: &mut TxContext
     ):Potato{
         assert!(self.version == package_version(), E_WRONG_VERSION);
         assert!(!potato.reset, E_NOT_RESET);
@@ -278,8 +277,8 @@ module suiDouBashi_vest::voter{
 
             *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) - pool_weight;
 
-            internal_bribe::withdraw<X,Y>(internal_bribe, vsdb, pool_weight, clock, ctx);
-            external_bribe::withdraw<X,Y>(external_bribe, vsdb, pool_weight, clock, ctx);
+            internal_bribe::withdraw<X,Y>(internal_bribe, vsdb, pool_weight, clock);
+            external_bribe::withdraw<X,Y>(external_bribe, vsdb, pool_weight, clock);
 
             event::abstain<X,Y>(object::id(vsdb), pool_weight);
 
@@ -297,7 +296,6 @@ module suiDouBashi_vest::voter{
         internal_bribe: &mut InternalBribe<X,Y>,
         external_bribe: &mut ExternalBribe<X,Y>,
         clock: &Clock,
-        ctx: &mut TxContext
     ): Potato{
         assert!(self.version == package_version(), E_WRONG_VERSION);
         assert!(potato.reset, E_NOT_VOTE);
@@ -316,8 +314,8 @@ module suiDouBashi_vest::voter{
             vec_map::insert(&mut voting_state_mut.pool_votes, pool_id, pool_weight);
             *table::borrow_mut(&mut self.weights, pool_id) = *table::borrow(&self.weights, pool_id) + pool_weight;
 
-            internal_bribe::deposit<X,Y>(internal_bribe, vsdb, pool_weight, clock, ctx);
-            external_bribe::deposit<X,Y>(external_bribe, vsdb, pool_weight, clock, ctx);
+            internal_bribe::deposit<X,Y>(internal_bribe, vsdb, pool_weight, clock);
+            external_bribe::deposit<X,Y>(external_bribe, vsdb, pool_weight, clock);
 
             potato.used_weight = potato.used_weight + pool_weight;
 

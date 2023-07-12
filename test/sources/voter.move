@@ -52,7 +52,7 @@ module test::voter_test{
 
                 {
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
                     voter::reset_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -75,10 +75,10 @@ module test::voter_test{
                {
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     // just in case, this can skip if no record
-                    potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+                    potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
                     potato = voter::poke_entry(potato, &mut voter, &mut vsdb);
                     // can be skipped as well
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -128,7 +128,7 @@ module test::voter_test{
                 { // Potato
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato, &mut voter, vec::singleton(object::id_to_address(&pool_id)), vec::singleton(weights));
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -185,7 +185,7 @@ module test::voter_test{
                 let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
                 {
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock, ctx(s));
+                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
                     voter::reset_exit(potato, &mut voter, &mut vsdb);
                 };
                 test::return_shared(gauge);
@@ -255,8 +255,8 @@ module test::voter_test{
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato, &mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut i_bribe_a, &mut e_bribe_a, clock, ctx(s));
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut i_bribe_b, &mut e_bribe_b, clock, ctx(s));
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut i_bribe_a, &mut e_bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut i_bribe_b, &mut e_bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -372,8 +372,8 @@ module test::voter_test{
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato,&mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut i_bribe_a, &mut e_bribe_a, clock, ctx(s));
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut i_bribe_b, &mut e_bribe_b, clock, ctx(s));
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut i_bribe_a, &mut e_bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut i_bribe_b, &mut e_bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 

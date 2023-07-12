@@ -471,7 +471,7 @@ module suiDouBashi_vsdb::vsdb{
     fun new(locked_sdb: Coin<SDB>, unlock_time: u64, clock: &Clock, ctx: &mut TxContext): Vsdb {
         let amount = coin::value(&locked_sdb);
         let ts = unix_timestamp(clock);
-        let point = point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts);
+        let player_point_history = table_vec::singleton(point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts), ctx);
         let vsdb = Vsdb {
             id: object::new(ctx),
             level: 0,
@@ -479,11 +479,9 @@ module suiDouBashi_vsdb::vsdb{
             balance: coin::into_balance(locked_sdb),
             end: unlock_time,
             player_epoch: 0,
-            player_point_history: table_vec::singleton(point, ctx),
+            player_point_history,
             modules: vec::empty<TypeName>(),
         };
-
-        //update_player_point_(&mut vsdb, clock);
 
         vsdb
     }
