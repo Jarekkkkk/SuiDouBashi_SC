@@ -1,3 +1,6 @@
+/// Checkpoints for any kinds of balance, supply, rewards
+/// useful when contract requires massive interactions and rewards calculations
+/// All the checkpoints don't have copy ability to protect each checkpoint
 module suiDouBashi_vest::checkpoints{
 
     ///checkpoint for marking reward rate
@@ -13,7 +16,7 @@ module suiDouBashi_vest::checkpoints{
     }
 
     ///checkpoint for marking balance
-    struct Checkpoint has store {
+    struct BalanceCheckpoint has store {
         timestamp: u64,
         balance: u64
     }
@@ -28,7 +31,6 @@ module suiDouBashi_vest::checkpoints{
     public fun reward(r: &RewardPerTokenCheckpoint):u256 { r.reward_per_token }
 
 
-
     public fun new_sp(timestamp: u64, supply: u64):SupplyCheckpoint{
         SupplyCheckpoint{
             timestamp,
@@ -39,15 +41,14 @@ module suiDouBashi_vest::checkpoints{
     public fun supply(s: &SupplyCheckpoint):u64 { s.supply }
 
 
-
-    public fun new_cp(timestamp: u64, balance: u64):Checkpoint{
-        Checkpoint{
+    public fun new_cp(timestamp: u64, balance: u64):BalanceCheckpoint{
+        BalanceCheckpoint{
             timestamp,
             balance
         }
     }
-    public fun balance_ts(c: &Checkpoint):u64 { c.timestamp }
-    public fun balance(c: &Checkpoint):u64 { c.balance }
+    public fun balance_ts(c: &BalanceCheckpoint):u64 { c.timestamp }
+    public fun balance(c: &BalanceCheckpoint):u64 { c.balance }
 
 
     // ===== Setter =====
@@ -59,7 +60,7 @@ module suiDouBashi_vest::checkpoints{
         s.supply = v;
     }
 
-    public fun update_balance(c: &mut Checkpoint, v: u64){
+    public fun update_balance(c: &mut BalanceCheckpoint, v: u64){
         c.balance = v
     }
 

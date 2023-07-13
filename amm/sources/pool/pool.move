@@ -76,7 +76,7 @@ module suiDouBashi_amm::pool{
         reserve_y: Balance<Y>,
         decimal_x: u8,
         decimal_y: u8,
-        last_block_timestamp: u64,
+        last_update_time: u64,
         last_price_x_cumulative: u256,
         last_price_y_cumulative: u256,
         observations: TableVec<Observation>,
@@ -669,7 +669,7 @@ module suiDouBashi_amm::pool{
             decimal_x: coin::get_decimals(metadata_x),
             decimal_y: coin::get_decimals(metadata_y),
 
-            last_block_timestamp: ts,
+            last_update_time: ts,
             last_price_x_cumulative: 0,
             last_price_y_cumulative: 0,
             observations: table_vec::singleton(observation, ctx),
@@ -874,7 +874,7 @@ module suiDouBashi_amm::pool{
         let res_x = (balance::value<X>(&self.reserve_x) as u256);
         let res_y = (balance::value<Y>(&self.reserve_y) as u256);
         let ts = unix_timestamp(clock);
-        let elapsed = ( ts - self.last_block_timestamp );
+        let elapsed = ( ts - self.last_update_time );
 
         if(elapsed > 0 && res_x != 0 && res_y != 0){
             self.last_price_x_cumulative = self.last_price_x_cumulative + (res_x * (elapsed as u256));
@@ -891,7 +891,7 @@ module suiDouBashi_amm::pool{
                 reserve_y_cumulative: self.last_price_y_cumulative,
             })
         };
-        self.last_block_timestamp = ts;
+        self.last_update_time = ts;
     }
 
     /// IMPORTANT: have to be called for settlement before any lp balance updated

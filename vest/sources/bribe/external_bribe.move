@@ -18,7 +18,7 @@ module suiDouBashi_vest::external_bribe{
     use suiDouBashi_vsdb::vsdb::Vsdb;
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vest::event;
-    use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint};
+    use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, BalanceCheckpoint};
     use suiDouBashi_vest::minter::package_version;
 
     friend suiDouBashi_vest::gauge;
@@ -43,7 +43,7 @@ module suiDouBashi_vest::external_bribe{
         balance_of: Table<ID, u64>,
         supply_checkpoints: TableVec<SupplyCheckpoint>,
 
-        checkpoints: Table<ID, vector<Checkpoint>>,
+        checkpoints: Table<ID, vector<BalanceCheckpoint>>,
     }
 
     public fun total_voting_weight<X,Y>(self: &ExternalBribe<X,Y>):u64{ self.total_supply }
@@ -103,7 +103,7 @@ module suiDouBashi_vest::external_bribe{
             balance_of: table::new<ID, u64>(ctx),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
 
-            checkpoints: table::new<ID, vector<Checkpoint>>(ctx),
+            checkpoints: table::new<ID, vector<BalanceCheckpoint>>(ctx),
         };
         let id = object::id(&bribe);
 

@@ -18,7 +18,7 @@ module suiDouBashi_vest::gauge{
 
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vest::event;
-    use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, Checkpoint, RewardPerTokenCheckpoint};
+    use suiDouBashi_vest::checkpoints::{Self, SupplyCheckpoint, BalanceCheckpoint, RewardPerTokenCheckpoint};
     use suiDouBashi_vest::internal_bribe::{Self, InternalBribe};
     use suiDouBashi_vest::external_bribe::{Self};
     use suiDouBashi_vest::minter::package_version;
@@ -50,7 +50,7 @@ module suiDouBashi_vest::gauge{
         fees_x: Balance<X>,
         fees_y: Balance<Y>,
         supply_checkpoints: TableVec<SupplyCheckpoint>, // total LP staked amount
-        checkpoints: Table<address, TableVec<Checkpoint>>, // each address can stake once for each pool
+        checkpoints: Table<address, TableVec<BalanceCheckpoint>>, // each address can stake once for each pool
         supply_index: u256,
         claimable: u64
     }
@@ -82,7 +82,7 @@ module suiDouBashi_vest::gauge{
         *table::borrow(&self.balance_of, staker)
     }
     #[test_only]
-    public fun checkpoints_borrow<X,Y>(self: &Gauge<X,Y>, staker: address): &TableVec<Checkpoint>{
+    public fun checkpoints_borrow<X,Y>(self: &Gauge<X,Y>, staker: address): &TableVec<BalanceCheckpoint>{
         table::borrow(&self.checkpoints, staker)
     }
     #[test_only]
@@ -154,7 +154,7 @@ module suiDouBashi_vest::gauge{
             fees_x: balance::zero<X>(),
             fees_y: balance::zero<Y>(),
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
-            checkpoints: table::new<address, TableVec<Checkpoint>>(ctx),
+            checkpoints: table::new<address, TableVec<BalanceCheckpoint>>(ctx),
             supply_index: 0,
             claimable: 0
         };
