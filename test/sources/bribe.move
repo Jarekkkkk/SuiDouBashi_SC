@@ -74,21 +74,21 @@ module test::bribe_test{
             {// e_bribe_a
                 let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
                 let reward = e_bribe::borrow_reward<USDC, USDT, SDB>(&e_bribe);
-                let epoch_start = e_bribe::get_epoch_start(get_time(clock)/ 1000);
+                let epoch_start = e_bribe::epoch_start(get_time(clock)/ 1000);
                 assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
                 assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
                 assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
-                assert!( e_bribe::get_reward_balance<USDC, USDT, SDB>(&e_bribe) == setup::stake_1(), 0);
+                assert!( e_bribe::reward_balance<USDC, USDT, SDB>(&e_bribe) == setup::stake_1(), 0);
                 test::return_shared(e_bribe);
             };
             {// e_bribe_a
                 let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
                 let reward = e_bribe::borrow_reward<SDB, USDC, SDB>(&e_bribe);
-                let epoch_start = e_bribe::get_epoch_start(get_time(clock)/ 1000);
+                let epoch_start = e_bribe::epoch_start(get_time(clock)/ 1000);
                 assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
                 assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
                 assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
-                assert!( e_bribe::get_reward_balance<SDB, USDC, SDB>(&e_bribe) == setup::stake_1(), 0);
+                assert!( e_bribe::reward_balance<SDB, USDC, SDB>(&e_bribe) == setup::stake_1(), 0);
                 test::return_shared(e_bribe);
             };
         };

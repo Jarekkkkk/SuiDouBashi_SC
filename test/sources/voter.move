@@ -159,7 +159,7 @@ module test::voter_test{
                 assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == 970238026331210741, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 970238026331210741, 404);
-                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 970238026331210741, 404);
+                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == 970238026331210741, 404);
                 // vsdb
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == 970238026331210741, 404);
                 assert!(voter::used_weights(&vsdb) == 970238026331210741, 404);
@@ -215,7 +215,7 @@ module test::voter_test{
                 assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == 0, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 404);
-                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == 0, 404);
+                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == 0, 404);
                 // vsdb
                 let pool_votes_borrow = voter::pool_votes(&vsdb);
                 assert!(vec_map::try_get(pool_votes_borrow, &pool_id) == std::option::none<u64>(), 404);
@@ -293,7 +293,7 @@ module test::voter_test{
                 assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
-                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
@@ -318,7 +318,7 @@ module test::voter_test{
                 assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
-                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
@@ -410,9 +410,10 @@ module test::voter_test{
                 // i_brbie
                 assert!(i_bribe::total_votes(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
                 assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
+               std::debug::print(&(vsdb_voting / 2));
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
@@ -438,7 +439,7 @@ module test::voter_test{
                 assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // e_bribe
                 assert!(e_bribe::total_voting_weight(&e_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(e_bribe::get_balance_of(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 

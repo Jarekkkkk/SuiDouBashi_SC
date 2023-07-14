@@ -638,6 +638,7 @@ module suiDouBashi_vest::gauge{
         let balance = pool::lp_balance(lp_position);
         stake(self, pool, lp_position, balance, clock, ctx);
     }
+
     public entry fun stake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
@@ -682,6 +683,7 @@ module suiDouBashi_vest::gauge{
         let bal = get_balance_of(self, tx_context::sender(ctx));
         unstake(self, pool, lp_position, bal, clock, ctx);
     }
+
     public entry fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,

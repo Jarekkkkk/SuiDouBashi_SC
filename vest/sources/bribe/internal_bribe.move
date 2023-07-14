@@ -43,7 +43,7 @@ module suiDouBashi_vest::internal_bribe{
 
     // ====== Error =======
 
-    // Internal Bribe, responsible for collecting votes from Vsdb Holder and returning the internal bribes ( pool tx fees ) to the VSDB holder who votes fot the pool
+    /// Internal Bribe, responsible for collecting votes from Vsdb Holder and returning the internal bribes ( pool tx fees ) to the VSDB holder who votes fot the pool
     struct InternalBribe<phantom X, phantom Y> has key, store{
         id: UID,
         /// package version
@@ -55,12 +55,12 @@ module suiDouBashi_vest::internal_bribe{
         /// casted polls of each Vsdb
         vsdb_votes: Table<ID, u64>,
         /// voting history, updated when someone vote/ revoke their votes
-        vote_cp: Table<ID, vector<BalanceCheckpoint>>,
+        vote_bp: Table<ID, vector<BalanceCheckpoint>>,
     }
 
-    public fun total_votes<X,Y>(self: &InternalBribe<X,Y>):u64{ self.total_votes }
+    public fun total_votes<X,Y>(self: &InternalBribe<X,Y>): u64{ self.total_votes }
 
-    public fun vsdb_votes<X,Y>(self: &InternalBribe<X,Y>, vsdb: &Vsdb):u64 {
+    public fun vsdb_votes<X,Y>(self: &InternalBribe<X,Y>, vsdb: &Vsdb): u64{
         *table::borrow(&self.vsdb_votes, object::id(vsdb))
     }
 
@@ -115,7 +115,7 @@ module suiDouBashi_vest::internal_bribe{
             total_votes:0,
             supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
             vsdb_votes: table::new<ID, u64>(ctx),
-            vote_cp: table::new<ID, vector<BalanceCheckpoint>>(ctx),
+            vote_bp: table::new<ID, vector<BalanceCheckpoint>>(ctx),
         };
         let id = object::id(&bribe);
 
@@ -155,10 +155,10 @@ module suiDouBashi_vest::internal_bribe{
         vsdb: &Vsdb,
         ts:u64
     ):u64 {
-        let vsdb = object::id(vsdb);
-        if( !table::contains(&self.vote_cp, vsdb)) return 0;
+        let id = object::id(vsdb);
+        if( !table::contains(&self.vote_bp, id)) return 0;
 
-        let bps = table::borrow(&self.vote_cp, vsdb);
+        let bps = table::borrow(&self.vote_bp, id);
         let len = vec::length(bps);
 
         if( len == 0){
@@ -176,13 +176,13 @@ module suiDouBashi_vest::internal_bribe{
         let lower = 0;
         let upper = len - 1;
         let _center = 0;
-        let _cp_ts = 0;
+        let _bp_ts = 0;
         while ( lower < upper){
             _center = upper - (upper - lower) / 2;
-            _cp_ts = checkpoints::balance_ts(vec::borrow(bps, _center));
-            if(_cp_ts == ts ){
+            _bp_ts = checkpoints::balance_ts(vec::borrow(bps, _center));
+            if(_bp_ts == ts ){
                 return _center
-            }else if (_cp_ts < ts){
+            }else if (_bp_ts < ts){
                 lower = _center;
             }else{
                 upper = _center - 1 ;
@@ -282,7 +282,7 @@ module suiDouBashi_vest::internal_bribe{
         let reward = borrow_reward<X,Y,T>(self);
         let rps = &reward.reward_per_token_checkpoints;
         let id = object::id(vsdb);
-        if( !table::contains(&self.vote_cp, id) || table_vec::length(rps) == 0 ){
+        if( !table::contains(&self.vote_bp, id) || table_vec::length(rps) == 0 ){
             return 0
         };
         let last_earn = if(table::contains(&reward.last_earn, id)){
@@ -291,7 +291,8 @@ module suiDouBashi_vest::internal_bribe{
             0
         };
 
-        let bps = table::borrow(&self.vote_cp, id);
+        let bps = table::borrow(&self.vote_bp, id);
+
         let start_idx = get_prior_balance_index(self, vsdb, math::max(last_earn, checkpoints::reward_ts(table_vec::borrow(rps, 0))));
         let end_idx = vec::length(bps) - 1;
 
@@ -366,18 +367,18 @@ module suiDouBashi_vest::internal_bribe{
         assert!(self.version == package_version(), E_WRONG_VERSION);
         assert!(amount > 0, E_EMPTY_VALUE);
 
-        let vsdb = object::vsdb(vsdb);
+        let id = object::id(vsdb);
         update_reward_for_all_tokens_(self, clock);
 
         self.total_votes = self.total_votes + amount;
 
-        if(table::contains(&self.vsdb_votes, vsdb)){
-            *table::borrow_mut(&mut self.vsdb_votes, vsdb) = *table::borrow(&self.vsdb_votes, vsdb) + amount;
+        if(table::contains(&self.vsdb_votes, id)){
+            *table::borrow_mut(&mut self.vsdb_votes, id) = *table::borrow(&self.vsdb_votes, id) + amount;
         }else{
-            table::add(&mut self.vsdb_votes, vsdb, amount);
+            table::add(&mut self.vsdb_votes, id, amount);
         };
 
-        amount = *table::borrow(&self.vsdb_votes, vsdb);
+        amount = *table::borrow(&self.vsdb_votes, id);
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
@@ -393,16 +394,16 @@ module suiDouBashi_vest::internal_bribe{
 
         update_reward_for_all_tokens_(self, clock);
 
-        let vsdb = object::vsdb(vsdb);
-        assert!(table::contains(&self.vsdb_votes, vsdb), E_INVALID_VOTER);
+        let id = object::id(vsdb);
+        assert!(table::contains(&self.vsdb_votes, id), E_INVALID_VOTER);
 
         let supply = self.total_votes;
-        let balance = *table::borrow(& self.vsdb_votes, vsdb);
+        let balance = *table::borrow(& self.vsdb_votes, id);
         assert!(supply >= amount && balance >= amount, E_INSUFFICIENT_VOTES);
         self.total_votes = supply - amount;
-        *table::borrow_mut(&mut self.vsdb_votes, vsdb) = balance - amount;
+        *table::borrow_mut(&mut self.vsdb_votes, id) = balance - amount;
 
-        amount = *table::borrow(&self.vsdb_votes, vsdb);
+        amount = *table::borrow(&self.vsdb_votes, id);
         write_checkpoint_(self, vsdb, amount, clock);
         write_supply_checkpoint_(self, clock);
     }
@@ -459,6 +460,7 @@ module suiDouBashi_vest::internal_bribe{
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+
         get_reward<X,Y,X>(self, vsdb, clock, ctx);
         get_reward<X,Y,Y>(self, vsdb, clock, ctx);
     }
@@ -481,7 +483,7 @@ module suiDouBashi_vest::internal_bribe{
             reward.last_update_time = last_update_time;
         };
 
-        let _reward = earned<X,Y,T>(self, vsdb, clock);
+        let earned = earned<X,Y,T>(self, vsdb, clock);
 
         let reward = borrow_reward_mut<X,Y,T>(self);
         if(!table::contains(&reward.last_earn, id)){
@@ -490,15 +492,11 @@ module suiDouBashi_vest::internal_bribe{
         if(!table::contains(&reward.player_reward_per_token_stored, id)){
             table::add(&mut reward.player_reward_per_token_stored, id, 0);
         };
-
-        let reward = borrow_reward_mut<X,Y,T>(self);
-        reward.reward_per_token_stored = reward_per_token_stored;
-        reward.last_update_time = last_update_time;
-
         *table::borrow_mut(&mut reward.last_earn, id) = unix_timestamp(clock);
         *table::borrow_mut(&mut reward.player_reward_per_token_stored, id) = reward_per_token_stored;
-        if(_reward > 0){
-            let coin_x = coin::take(&mut reward.balance, _reward, ctx);
+
+        if(earned > 0){
+            let coin_x = coin::take(&mut reward.balance, earned, ctx);
             let value_x = coin::value(&coin_x);
             transfer::public_transfer(
                 coin_x,
@@ -570,11 +568,11 @@ module suiDouBashi_vest::internal_bribe{
         let id = object::id(vsdb);
         let ts = unix_timestamp(clock);
 
-        if(!table::contains(&self.vote_cp, id)){
-            table::add(&mut self.vote_cp, id, vec::empty());
+        if(!table::contains(&self.vote_bp, id)){
+            table::add(&mut self.vote_bp, id, vec::empty());
         };
 
-        let bps = table::borrow_mut(&mut self.vote_cp, id);
+        let bps = table::borrow_mut(&mut self.vote_bp, id);
         let len = vec::length(bps);
 
         if( len > 0 && checkpoints::balance_ts(vec::borrow(bps, len - 1)) == ts){
