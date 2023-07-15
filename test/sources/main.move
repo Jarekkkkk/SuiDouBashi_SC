@@ -1,20 +1,20 @@
 #[test_only]
 module test::main{
+    use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
+    use sui::object;
+    use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
+    use sui::transfer;
+    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
+
+    use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vote::minter::{mint_sdb, Minter};
+    use suiDouBashi_vote::bribe::{Self, Rewards};
 
     use suiDouBashi_amm::pool::Pool;
     use coin_list::mock_usdt::{MOCK_USDT as USDT};
     use coin_list::mock_usdc::{MOCK_USDC as USDC};
 
-    use suiDouBashi_vest::minter::{mint_sdb, Minter};
-
-    use test::setup;
-    use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
-    use sui::object;
-
-    use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
-    use sui::transfer;
-    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
 
 
     #[test] fun main(){
@@ -174,9 +174,9 @@ module test::main{
         }
     }
 
-    use suiDouBashi_vest::internal_bribe::{InternalBribe};
-    use suiDouBashi_vest::gauge::{Self, Gauge};
-    use suiDouBashi_vest::voter::{Self, Voter};
+    use suiDouBashi_vote::internal_bribe::{InternalBribe};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
+    use suiDouBashi_vote::voter::{Self, Voter};
     use suiDouBashi_amm::pool::{Self, LP};
     use sui::table;
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
@@ -232,16 +232,16 @@ module test::main{
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
 
-            voter::distribute(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+            voter::distribute(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
             test::return_shared(minter);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
-            test::return_shared(i_bribe);
+            test::return_shared(rewards);
         };
         next_tx(s,c);{ // Assertion: first time distribution
             let voter = test::take_shared<Voter>(s);
@@ -310,7 +310,7 @@ module test::main{
             burn(sdb);
         };
     }
-    use suiDouBashi_vest::internal_bribe::{Self as i_bribe};
+    use suiDouBashi_vote::internal_bribe::{Self as i_bribe};
     public fun internal_bribe_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
 
@@ -371,20 +371,20 @@ module test::main{
         next_tx(s,a);{ // distribute fees
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
 
-            voter::distribute_fees(&mut gauge, &mut i_bribe, &mut pool, clock, ctx(s));
+            voter::distribute_fees(&mut gauge, &mut rewards, &mut pool, clock, ctx(s));
 
             test::return_shared(pool);
             test::return_shared(gauge);
-            test::return_shared(i_bribe);
+            test::return_shared(rewards);
         };
         next_tx(s, a);{ // I_bribe receive the rewards
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            assert!(i_bribe::reward_balance<USDC,USDT,USDC>(&i_bribe) == 10_000_000_000, 404);
-            assert!(i_bribe::reward_balance<USDC,USDT,USDT>(&i_bribe) == 10_000_000_000, 404);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
+            assert!(bribe::reward_balance<USDC,USDT,USDC>(&rewards) == 10_000_000_000, 404);
+            assert!(bribe::reward_balance<USDC,USDT,USDT>(&rewards) == 10_000_000_000, 404);
 
-            test::return_shared(i_bribe);
+            test::return_shared(rewards);
         };
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
@@ -392,16 +392,16 @@ module test::main{
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
 
-            voter::distribute(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+            voter::distribute(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             test::return_shared(voter);
             test::return_shared(minter);
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
-            test::return_shared(i_bribe);
+            test::return_shared(rewards);
         };
         next_tx(s,a);{ // LP holders withdraw LP fees when pool is empty
             let vsdb = test::take_from_sender<Vsdb>(s);
@@ -483,42 +483,42 @@ module test::main{
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut i_bribe, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
                 add_time(clock, 1);
             };
 
@@ -534,7 +534,7 @@ module test::main{
             test::return_shared(vsdb_reg);
             test::return_shared(pool);
             test::return_shared(gauge);
-            test::return_shared(i_bribe);
+            test::return_shared(rewards);
             test::return_to_sender(s, lp);
 
             post_sdb

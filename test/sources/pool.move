@@ -232,7 +232,7 @@ module test::pool_test{
 
         use suiDouBashi_amm::pool_reg::{Self, PoolReg, PoolCap};
         use sui::coin::CoinMetadata;
-        use suiDouBashi_vest::minter::{mint_sdb, Minter};
+        use suiDouBashi_vote::minter::{mint_sdb, Minter};
         public fun deploy_pools(s: &mut Scenario, clock: &mut Clock){
         let (a,_,_) = setup::people();
 

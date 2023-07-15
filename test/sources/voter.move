@@ -14,10 +14,9 @@ module test::voter_test{
     use sui::clock::{increment_for_testing as add_time, Clock};
 
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
-    use suiDouBashi_vest::internal_bribe::{Self as i_bribe, InternalBribe};
-    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashi_vest::gauge::{Self, Gauge};
-    use suiDouBashi_vest::voter::{Self, Voter};
+    use suiDouBashi_vote::bribe::{Self, Bribe};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
+    use suiDouBashi_vote::voter::{Self, Voter};
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
     public fun vote_(clock: &mut Clock, s: &mut Scenario){
@@ -47,18 +46,16 @@ module test::voter_test{
 
             { // pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
 
                 {
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
+                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::reset_exit(potato, &mut voter, &mut vsdb);
                 };
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -70,21 +67,19 @@ module test::voter_test{
             let vsdb = test::take_from_sender<Vsdb>(s);
             { // pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
                {
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     // just in case, this can skip if no record
-                    potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
+                    potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     potato = voter::poke_entry(potato, &mut voter, &mut vsdb);
                     // can be skipped as well
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -122,19 +117,17 @@ module test::voter_test{
             {// pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 let pool_id = gauge::pool_id(&gauge);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
 
                 { // Potato
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato, &mut voter, vec::singleton(object::id_to_address(&pool_id)), vec::singleton(weights));
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -146,28 +139,23 @@ module test::voter_test{
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
                 //voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 970238026331210741, 404);
                 assert!(voter::get_total_weight(&voter) == 970238026331210741, 404);
                 // gauge
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
-                // i_brbie
-                assert!(i_bribe::total_votes(&i_bribe) == 970238026331210741, 404);
-                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == 970238026331210741, 404);
-                // e_bribe
-                assert!(e_bribe::total_voting_weight(&e_bribe) == 970238026331210741, 404);
-                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == 970238026331210741, 404);
+                // bribe
+                assert!(bribe::total_votes(&bribe) == 970238026331210741, 404);
+                assert!(bribe::vsdb_votes(&bribe, &vsdb) == 970238026331210741, 404);
                 // vsdb
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == 970238026331210741, 404);
                 assert!(voter::used_weights(&vsdb) == 970238026331210741, 404);
                 assert!(voter::voted(&vsdb), 404);
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool);
             };
             test::return_shared(voter);
@@ -181,16 +169,14 @@ module test::voter_test{
             let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
                 {
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut i_bribe, &mut e_bribe, clock);
+                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::reset_exit(potato, &mut voter, &mut vsdb);
                 };
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -202,8 +188,7 @@ module test::voter_test{
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
                 //voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 0, 404);
                 assert!(voter::get_total_weight(&voter) == 0, 404);
@@ -211,11 +196,8 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_votes(&i_bribe) == 0, 404);
-                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == 0, 404);
-                // e_bribe
-                assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 404);
-                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == 0, 404);
+                assert!(bribe::total_votes(&bribe) == 0, 404);
+                assert!(bribe::vsdb_votes(&bribe, &vsdb) == 0, 404);
                 // vsdb
                 let pool_votes_borrow = voter::pool_votes(&vsdb);
                 assert!(vec_map::try_get(pool_votes_borrow, &pool_id) == std::option::none<u64>(), 404);
@@ -223,8 +205,7 @@ module test::voter_test{
                 assert!(!voter::voted(&vsdb), 404);
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool);
             };
             test::return_shared(voter);
@@ -239,13 +220,11 @@ module test::voter_test{
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
                 let pool_id_a = gauge::pool_id(&gauge_a);
-                let i_bribe_a = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe_a = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe_a = test::take_shared<Bribe<USDC, USDT>>(s);
                 // pool_b
                 let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
                 let pool_id_b = gauge::pool_id(&gauge_b);
-                let i_bribe_b = test::take_shared<InternalBribe<SDB, USDC>>(s);
-                let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                let bribe_b = test::take_shared<Bribe<SDB, USDC>>(s);
 
                 { // Potato
                     let weights = vec::singleton(5000);
@@ -255,18 +234,16 @@ module test::voter_test{
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato, &mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut i_bribe_a, &mut e_bribe_a, clock);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut i_bribe_b, &mut e_bribe_b, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
                 test::return_shared(gauge_a);
-                test::return_shared(i_bribe_a);
-                test::return_shared(e_bribe_a);
+                test::return_shared(bribe_a);
 
                 test::return_shared(gauge_b);
-                test::return_shared(i_bribe_b);
-                test::return_shared(e_bribe_b);
+                test::return_shared(bribe_b);
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -280,8 +257,7 @@ module test::voter_test{
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
 
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == vsdb_voting / 2, 404);
@@ -289,42 +265,33 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_votes(&i_bribe) == vsdb_voting / 2, 404);
-                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
-                // e_bribe
-                assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
-                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(bribe::total_votes(&bribe) == vsdb_voting / 2, 404);
+                assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool);
             };
             {// pool_b
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
                 let pool_id = object::id(&pool);
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
-                let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                let bribe = test::take_shared<Bribe<SDB, USDC>>(s);
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == vsdb_voting / 2, 404);
                 // gauge
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_votes(&i_bribe) == vsdb_voting / 2, 404);
-                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
-                // e_bribe
-                assert!(e_bribe::total_voting_weight(&e_bribe) == vsdb_voting / 2, 404);
-                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(bribe::total_votes(&bribe) == vsdb_voting / 2, 404);
+                assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool);
             };
             //voter
@@ -344,13 +311,11 @@ module test::voter_test{
                 // pool_a
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
                 let pool_id_a = gauge::pool_id(&gauge_a);
-                let i_bribe_a = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe_a = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe_a = test::take_shared<Bribe<USDC, USDT>>(s);
                 // pool_b
                 let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
                 let pool_id_b = gauge::pool_id(&gauge_b);
-                let i_bribe_b = test::take_shared<InternalBribe<SDB, USDC>>(s);
-                let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                let bribe_b = test::take_shared<Bribe<SDB, USDC>>(s);
 
                 { // pool_a
                     let pool = test::take_shared<Pool<USDC, USDT>>(s);
@@ -372,18 +337,16 @@ module test::voter_test{
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato,&mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut i_bribe_a, &mut e_bribe_a, clock);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut i_bribe_b, &mut e_bribe_b, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
                 test::return_shared(gauge_a);
-                test::return_shared(i_bribe_a);
-                test::return_shared(e_bribe_a);
+                test::return_shared(bribe_a);
 
                 test::return_shared(gauge_b);
-                test::return_shared(i_bribe_b);
-                test::return_shared(e_bribe_b);
+                test::return_shared(bribe_b);
             };
             test::return_shared(voter);
             test::return_to_sender(s, vsdb);
@@ -399,8 +362,7 @@ module test::voter_test{
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let pool_id = object::id(&pool);
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
 
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 443452346499522170 + vsdb_voting / 2, 404);
@@ -408,26 +370,20 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_votes(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
-               std::debug::print(&(vsdb_voting / 2));
-                // e_bribe
-                assert!(e_bribe::total_voting_weight(&e_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(bribe::total_votes(&bribe) == 443452346499522170 + vsdb_voting / 2, 404);
+                assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool);
             };
             {// pool_b
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
                 let pool_id = object::id(&pool);
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
-                let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                let bribe = test::take_shared<Bribe<SDB, USDC>>(s);
 
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 443452346499522170 + vsdb_voting / 2, 404);
@@ -435,17 +391,13 @@ module test::voter_test{
                 assert!(gauge::get_supply_index(&gauge) == 0, 404);
                 assert!(gauge::get_claimable(&gauge) == 0, 404);
                 // i_brbie
-                assert!(i_bribe::total_votes(&i_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(i_bribe::vsdb_votes(&i_bribe, &vsdb) == vsdb_voting / 2, 404);
-                // e_bribe
-                assert!(e_bribe::total_voting_weight(&e_bribe) == 443452346499522170 + vsdb_voting / 2, 404);
-                assert!(e_bribe::vsdb_votes(&e_bribe, &vsdb) == vsdb_voting / 2, 404);
+                assert!(bribe::total_votes(&bribe) == 443452346499522170 + vsdb_voting / 2, 404);
+                assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
                 // pools
                 assert!(voter::pool_votes_by_pool(&vsdb, &pool_id) == vsdb_voting / 2, 404);
 
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool);
             };
             // voter

@@ -63,7 +63,7 @@ module test::setup{
     }
 
 
-    use suiDouBashi_vest::minter::{Self, Minter};
+    use suiDouBashi_vote::minter::{Self, Minter};
     use suiDouBashi_vsdb::vsdb::VSDBRegistry;
 
     public fun deploy_minter(clock: &mut Clock, s: &mut Scenario){
@@ -84,7 +84,7 @@ module test::setup{
         };
     }
 
-    use suiDouBashi_vest::voter::{Self, Voter, VOTER_SDB};
+    use suiDouBashi_vote::voter::{Self, Voter, VOTER_SDB};
     use suiDouBashi_vsdb::vsdb::{Self,VSDBCap};
     public fun deploy_voter(s: &mut Scenario){
         let ( a, _, _ ) = people();
@@ -115,10 +115,9 @@ module test::setup{
         }
     }
 
-    use suiDouBashi_vest::gauge::{Self, Gauge};
-    use suiDouBashi_vest::internal_bribe::{Self as i_bribe, InternalBribe};
-    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashi_vest::voter::VoterCap;
+    use suiDouBashi_vote::gauge::{Self, Gauge};
+    use suiDouBashi_vote::bribe::{Self, Bribe};
+    use suiDouBashi_vote::voter::VoterCap;
     public fun deploy_gauge(s: &mut Scenario){
         let ( a, _, _ ) = people();
 
@@ -144,33 +143,27 @@ module test::setup{
             {// pool_a
                 let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge = test::take_shared<Gauge<USDC,USDT>>(s);
-                let i_bribe = test::take_shared<InternalBribe<USDC,USDT>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
+                let bribe = test::take_shared<Bribe<USDC,USDT>>(s);
                 assert!(gauge::is_alive(&gauge), 0);
-                assert!(i_bribe::total_votes(&i_bribe) == 0, 0);
-                assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
+                assert!(bribe::total_votes(&bribe) == 0, 0);
                 assert!(voter::get_weights_by_pool(&voter, &pool_a) == 0, 0);
                 assert!(voter::get_pool_exists(&voter, &pool_a), 0);
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool_a);
             };
 
             {// pool_b
                 let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
-                let i_bribe = test::take_shared<InternalBribe<SDB, USDC>>(s);
-                let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+                let bribe = test::take_shared<Bribe<SDB, USDC>>(s);
                 assert!(gauge::is_alive(&gauge), 0);
-                assert!(i_bribe::total_votes(&i_bribe) == 0, 0);
-                assert!(e_bribe::total_voting_weight(&e_bribe) == 0, 0);
+                assert!(bribe::total_votes(&bribe) == 0, 0);
                 // amount of external bribe is at most 4, including pair of coins + SDB + SUI
                 assert!(voter::get_weights_by_pool(&voter, &pool_b) == 0, 0);
                 assert!(voter::get_pool_exists(&voter, &pool_b), 0);
                 test::return_shared(gauge);
-                test::return_shared(i_bribe);
-                test::return_shared(e_bribe);
+                test::return_shared(bribe);
                 test::return_shared(pool_b);
             };
 

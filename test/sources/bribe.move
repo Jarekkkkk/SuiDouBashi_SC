@@ -1,14 +1,13 @@
 module test::bribe_test{
-    use suiDouBashi_vest::internal_bribe::{InternalBribe};
-    use suiDouBashi_vest::external_bribe::{Self as e_bribe, ExternalBribe};
-    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vote::bribe::{Self, Rewards};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
     use coin_list::mock_usdt::{MOCK_USDT as USDT};
     use coin_list::mock_usdc::{MOCK_USDC as USDC};
-    use suiDouBashi_vest::checkpoints;
-    use suiDouBashi_vest::minter::{mint_sdb, Minter};
+    use suiDouBashi_vote::checkpoints;
+    use suiDouBashi_vote::minter::{mint_sdb, Minter};
     use sui::clock::{timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::table_vec;
     use sui::coin::{ Self, Coin, burn_for_testing as burn};
@@ -24,25 +23,21 @@ module test::bribe_test{
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
-            let i_bribe_a = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            let i_bribe_b = test::take_shared<InternalBribe<SDB, USDC>>(s);
-            let e_bribe_a = test::take_shared<ExternalBribe<USDC, USDT>>(s);
-            let e_bribe_b = test::take_shared<ExternalBribe<SDB, USDC>>(s);
+            let rewards_a = test::take_shared<Rewards<USDC, USDT>>(s);
+            let rewards_b = test::take_shared<Rewards<SDB, USDC>>(s);
             let ctx = ctx(s);
 
-            // weekly emissions
-            gauge::distribute_emissions(&mut gauge_a, &mut i_bribe_a, &mut pool_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
-            gauge::distribute_emissions(&mut gauge_b, &mut i_bribe_b, &mut pool_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
-            // bribe SDB
-            e_bribe::bribe(&mut e_bribe_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
-            e_bribe::bribe(&mut e_bribe_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            // tx fee
+            gauge::distribute_emissions(&mut gauge_a, &mut rewards_a, &mut pool_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            gauge::distribute_emissions(&mut gauge_b, &mut rewards_b, &mut pool_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            // bribe
+            bribe::bribe(&mut rewards_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            bribe::bribe(&mut rewards_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
-            test::return_shared(i_bribe_a);
-            test::return_shared(i_bribe_b);
-            test::return_shared(e_bribe_a);
-            test::return_shared(e_bribe_b);
+            test::return_shared(rewards_a);
+            test::return_shared(rewards_b);
             test::return_shared(pool_a);
             test::return_shared(pool_b);
             test::return_shared(minter);
@@ -54,7 +49,6 @@ module test::bribe_test{
                 let reward = gauge::borrow_reward(&gauge);
                 assert!( gauge::get_reward_rate(reward) == reward_index, 0);
                 assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
-                assert!( gauge::get_period_finish(reward) == get_time(clock) / 1000 + setup::week(), 0);
                 assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
                 assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == reward_index, 0);
                 assert!( gauge::reward_per_token(&gauge, clock) == 0, 404);
@@ -65,31 +59,22 @@ module test::bribe_test{
                 let reward = gauge::borrow_reward(&gauge);
                 assert!( gauge::get_reward_rate(reward) == reward_index, 0);
                 assert!( gauge::get_reward_per_token_stored(reward) == 0, 0);
-                assert!( gauge::get_period_finish(reward) == get_time(clock)/ 1000 + setup::week(), 0);
                 assert!( gauge::get_reward_balance(reward) == setup::stake_1(), 0);
                 assert!( table_vec::length(gauge::reward_checkpoints_borrow(reward)) == reward_index, 0);
                 assert!( gauge::reward_per_token(&gauge, clock) == 0, 404);
                 test::return_shared(gauge);
             };
-            {// e_bribe_a
-                let e_bribe = test::take_shared<ExternalBribe<USDC, USDT>>(s);
-                let reward = e_bribe::borrow_reward<USDC, USDT, SDB>(&e_bribe);
-                let epoch_start = e_bribe::epoch_start(get_time(clock)/ 1000);
-                assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
-                assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
-                assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
-                assert!( e_bribe::reward_balance<USDC, USDT, SDB>(&e_bribe) == setup::stake_1(), 0);
-                test::return_shared(e_bribe);
+            {   // e_bribe_a
+                let rewards_a = test::take_shared<Rewards<USDC, USDT>>(s);
+                assert!( bribe::rewards_per_epoch<USDC, USDT, USDC>(&rewards_a, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                assert!( bribe::rewards_per_epoch<USDC, USDT, USDT>(&rewards_a, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                test::return_shared(rewards_a);
             };
-            {// e_bribe_a
-                let e_bribe = test::take_shared<ExternalBribe<SDB, USDC>>(s);
-                let reward = e_bribe::borrow_reward<SDB, USDC, SDB>(&e_bribe);
-                let epoch_start = e_bribe::epoch_start(get_time(clock)/ 1000);
-                assert!( *table::borrow(e_bribe::get_reward_per_token_stored(reward), epoch_start) == setup::stake_1(), 0);
-                assert!( table::length(e_bribe::get_reward_per_token_stored(reward)) == 1, 0);
-                assert!( e_bribe::get_period_finish(reward) == epoch_start + setup::week(), 0);
-                assert!( e_bribe::reward_balance<SDB, USDC, SDB>(&e_bribe) == setup::stake_1(), 0);
-                test::return_shared(e_bribe);
+            {   // e_bribe_
+                let rewards_b = test::take_shared<Rewards<SDB, USDC>>(s);
+                assert!( bribe::rewards_per_epoch<SDB, USDC, SDB>(&rewards_b, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                assert!( bribe::rewards_per_epoch<SDB, USDC, USDC>(&rewards_b, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                test::return_shared(rewards_b);
             };
         };
         // stake for a day

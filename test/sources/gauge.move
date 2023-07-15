@@ -1,11 +1,11 @@
 module test::gauge_test{
-    use suiDouBashi_vest::gauge::{Self, Gauge};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
     use coin_list::mock_usdt::{MOCK_USDT as USDT};
     use coin_list::mock_usdc::{MOCK_USDC as USDC};
-    use suiDouBashi_vest::checkpoints;
+    use suiDouBashi_vote::checkpoints;
     use sui::clock::{timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use sui::table_vec;
     use suiDouBashi_amm::pool::{Self, Pool, LP};
