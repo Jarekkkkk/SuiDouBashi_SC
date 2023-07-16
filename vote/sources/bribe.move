@@ -106,7 +106,11 @@ module suiDouBashi_vote::bribe{
     }
 
     public fun rewards_per_epoch<X,Y,T>(rewards: &Rewards<X,Y>, ts: u64): u64{
-        *table::borrow(&borrow_reward<X,Y,T>(rewards).rewards_per_epoch, round_down_week(ts))
+        let ts_ =round_down_week(ts);
+        let reward = borrow_reward<X,Y,T>(rewards);
+
+        if(!table::contains(&reward.rewards_per_epoch, ts_)) return 0;
+        *table::borrow(&reward.rewards_per_epoch, ts_)
     }
 
     // ===== Assertion =====

@@ -9,7 +9,7 @@ module test::main{
     use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vote::minter::{mint_sdb, Minter};
-    use suiDouBashi_vote::bribe::{Self, Rewards};
+    use suiDouBashi_vote::bribe::{Self, Bribe, Rewards};
 
     use suiDouBashi_amm::pool::Pool;
     use coin_list::mock_usdt::{MOCK_USDT as USDT};
@@ -174,7 +174,6 @@ module test::main{
         }
     }
 
-    use suiDouBashi_vote::internal_bribe::{InternalBribe};
     use suiDouBashi_vote::gauge::{Self, Gauge};
     use suiDouBashi_vote::voter::{Self, Voter};
     use suiDouBashi_amm::pool::{Self, LP};
@@ -250,16 +249,6 @@ module test::main{
             let reward = gauge::borrow_reward(&gauge);
             let sdb_team = test::take_from_sender<Coin<SDB>>(s);
 
-          // { // new weekly index
-          //      let _weekly = 15071747136074714; // locked ratio is too low
-          //      let prev_idx = 95382;
-          //      let total_voting_weight = voter::get_total_weight(&voter);
-          //      let index = prev_idx + (_weekly as u256) * SCALE_FACTOR / (total_voting_weight as u256);
-          //      assert!(voter::get_index(&voter) == index && index == gauge::get_supply_index(&gauge), 404);
-          //  };
-            //let _new_claiabe = 7535873568537349; // have to hard-coded, we had reset it in the distribute function
-            //assert!(gauge::get_reward_rate(reward) == _new_claiabe / (7 * 86400), 404);
-
             assert!(coin::value(&sdb_team) == 513019197003257 , 404);
             assert!(voter::get_balance(&voter) == 8293810352052660, 404);
             assert!(gauge::get_reward_balance(reward) == 8293810352966256, 404);
@@ -270,11 +259,13 @@ module test::main{
             test::return_shared(gauge);
             test::return_shared(minter);
         };
+
         next_tx(s,a);{ // Action: staker A withdraw weekly emissions
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             gauge::get_reward(&mut gauge, clock, ctx(s));
             test::return_shared(gauge);
         };
+
         next_tx(s,a);{ // Assertion:
             let sdb = test::take_from_sender<Coin<SDB>>(s);
             let voter = test::take_shared<Voter>(s);
@@ -310,7 +301,7 @@ module test::main{
             burn(sdb);
         };
     }
-    use suiDouBashi_vote::internal_bribe::{Self as i_bribe};
+
     public fun internal_bribe_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
 
@@ -349,25 +340,17 @@ module test::main{
 
         next_tx(s,a);{ // LP holders withdraw LP fees when pool is empty
             let vsdb = test::take_from_sender<Vsdb>(s);
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            assert!( i_bribe::reward_per_token<USDC, USDT, USDC>(&i_bribe, clock) == 0, 404);
-            assert!( i_bribe::reward_per_token<USDC, USDT, USDT>(&i_bribe, clock) == 0, 404);
-            i_bribe::get_all_rewards(&mut i_bribe, &vsdb, clock, ctx(s));
+            let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
+            assert!( bribe::rewards_per_epoch<USDC, USDT, USDC>(&rewards, get_time(clock)) == 0, 404);
+            assert!( bribe::rewards_per_epoch<USDC, USDT, USDT>(&rewards, get_time(clock)) == 0, 404);
+            bribe::get_all_rewards(&mut bribe, &mut rewards, &vsdb, clock, ctx(s));
 
             test::return_to_sender(s, vsdb);
-            test::return_shared(i_bribe);
+            test::return_shared(bribe);
+            test::return_shared(rewards);
         };
 
-        // next_tx(s, a);{
-        //     let usdc = test::take_from_sender<Coin<USDC>>(s);
-        //     let usdt = test::take_from_sender<Coin<USDT>>(s);
-
-        //     assert!(coin::value(&usdc) == 911851118, 404);
-        //     assert!(coin::value(&usdt) == 911851118, 404);
-
-        //     test::return_to_sender(s, usdc);
-        //     test::return_to_sender(s, usdt);
-        // };
         next_tx(s,a);{ // distribute fees
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -405,12 +388,14 @@ module test::main{
         };
         next_tx(s,a);{ // LP holders withdraw LP fees when pool is empty
             let vsdb = test::take_from_sender<Vsdb>(s);
-            let i_bribe = test::take_shared<InternalBribe<USDC, USDT>>(s);
-            assert!( i_bribe::reward_per_token<USDC, USDT, USDC>(&i_bribe, clock) == 0, 404);
-            assert!( i_bribe::reward_per_token<USDC, USDT, USDT>(&i_bribe, clock) == 0, 404);
+            let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
+            let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
+            assert!( bribe::rewards_per_epoch<USDC, USDT, USDC>(&rewards, get_time(clock)) == 0, 404);
+            assert!( bribe::rewards_per_epoch<USDC, USDT, USDT>(&rewards, get_time(clock)) == 0, 404);
 
             test::return_to_sender(s, vsdb);
-            test::return_shared(i_bribe);
+            test::return_shared(bribe);
+            test::return_shared(rewards);
         };
         next_tx(s,a);{
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);

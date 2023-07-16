@@ -66,14 +66,14 @@ module test::bribe_test{
             };
             {   // e_bribe_a
                 let rewards_a = test::take_shared<Rewards<USDC, USDT>>(s);
-                assert!( bribe::rewards_per_epoch<USDC, USDT, USDC>(&rewards_a, get_time(clock)/ 1000) == setup::stake_1(), 0);
-                assert!( bribe::rewards_per_epoch<USDC, USDT, USDT>(&rewards_a, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                assert!( bribe::rewards_per_epoch<USDC, USDT, SDB>(&rewards_a, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                assert!( bribe::rewards_per_epoch<USDC, USDT, SDB>(&rewards_a, get_time(clock)/ 1000) == setup::stake_1(), 0);
                 test::return_shared(rewards_a);
             };
             {   // e_bribe_
                 let rewards_b = test::take_shared<Rewards<SDB, USDC>>(s);
                 assert!( bribe::rewards_per_epoch<SDB, USDC, SDB>(&rewards_b, get_time(clock)/ 1000) == setup::stake_1(), 0);
-                assert!( bribe::rewards_per_epoch<SDB, USDC, USDC>(&rewards_b, get_time(clock)/ 1000) == setup::stake_1(), 0);
+                assert!( bribe::rewards_per_epoch<SDB, USDC, SDB>(&rewards_b, get_time(clock)/ 1000) == setup::stake_1(), 0);
                 test::return_shared(rewards_b);
             };
         };
