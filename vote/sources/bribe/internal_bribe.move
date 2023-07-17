@@ -332,7 +332,6 @@ module suiDouBashi_vote::internal_bribe{
     // ====== GETTER ======
 
 
-
     // ====== ENTRY ======
 
     public entry fun batch_reward_per_token<X,Y,T>(

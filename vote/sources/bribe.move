@@ -1,4 +1,3 @@
-// External Bribe represent coin brbies from protocol
 module suiDouBashi_vote::bribe{
     use std::vector as vec;
     use std::type_name;

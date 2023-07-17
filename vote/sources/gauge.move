@@ -1,33 +1,35 @@
 // Gauges are used to incentivize pools, they emit reward tokens over 7 days for staked LP tokens
 module suiDouBashi_vote::gauge{
-    use std::type_name;
     use std::option;
+
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
-    use sui::dynamic_field as df;
     use sui::coin::{Self, Coin};
     use sui::transfer;
     use sui::clock::{Self, Clock};
     use sui::math;
-    use sui::table_vec::{Self, TableVec};
     use sui::table::{Self, Table};
-
-    use suiDouBashi_amm::amm_math;
-    use suiDouBashi_amm::pool::{Self, Pool, LP};
 
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vote::event;
-    use suiDouBashi_vote::checkpoints::{Self, SupplyCheckpoint, BalanceCheckpoint, RewardPerTokenCheckpoint};
+    use suiDouBashi_amm::pool::{Self, Pool, LP};
     use suiDouBashi_vote::bribe::{Self, Rewards};
     use suiDouBashi_vote::minter::package_version;
 
-    const DURATION: u64 = { 7 * 86400 };
+    friend suiDouBashi_vote::voter;
+
+    // ====== Constants =======
+
+    const WEEK: u64 = { 7 * 86400 };
     const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
-    const E_WRONG_VERSION: u64 = 001;
+    // ====== Constants =======
 
+    // ====== Error =======
+
+    const E_WRONG_VERSION: u64 = 001;
     const E_ALREADY_STAKE: u64 = 100;
     const E_INVALID_STAKER: u64 = 101;
     const E_EMPTY_VALUE: u64 = 102;
@@ -37,34 +39,73 @@ module suiDouBashi_vote::gauge{
     const E_INVALID_REWARD_RATE: u64 = 106;
     const E_MAX_REWARD: u64 = 107;
 
-    friend suiDouBashi_vote::voter;
+    // ====== Error =======
 
+    // ===== Assertion =====
+
+    public fun assert_upgrade<X,Y>(self: &Gauge<X,Y>){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+    }
+
+    // ===== Assertion =====
+
+    /// Guage manages all staked Liquidity from Liquidity Provider, all the LPs no longer take tx fees, but receive SDB coin instead
     struct Gauge<phantom X, phantom Y> has key, store{
         id: UID,
+        /// package version
         version: u64,
+        /// detremine whether the gauge is able to receive the SDB rewards
         is_alive:bool,
+        /// appended pools ID
         pool: ID,
-        total_supply: LP<X,Y>,
-        balance_of: Table<address, u64>,
+        /// balance of coin X
         fees_x: Balance<X>,
+        /// balance of coin Y
         fees_y: Balance<Y>,
-        supply_checkpoints: TableVec<SupplyCheckpoint>, // total LP staked amount
-        checkpoints: Table<address, TableVec<BalanceCheckpoint>>, // each address can stake once for each pool
-        supply_index: u256,
-        claimable: u64
+        /// balance of emission coin SDB
+        sdb_balance: Balance<SDB>,
+        /// current estimated rewerds per second
+        reward_rate: u64,
+        /// last time sdb comes in or LP stake/unstake
+        last_update_time: u64,
+        /// period finish time
+        period_finish: u64,
+        /// accumlating distribution SDB rewards per casted votes
+        voting_index: u256,
+        /// claimable SDB amount
+        claimable: u64,
+        /// total staked liquidity LP deposit
+        total_stakes: LP<X,Y>,
+        /// accumlating distribution SDB rewards per lp balance
+        staking_index: u256,
+        /// staked liquidity from LPs
+        lp_infos: Table<address, LPInfo>
+    }
+
+    struct LPInfo has store{
+        stakes: u64,
+        staking_index: u256,
+        pending_sdb: u64
     }
 
     public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
 
+    public (friend) fun update_is_alive<X,Y>(self: &mut Gauge<X,Y>, alive: bool ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+        self.is_alive = alive
+     }
+
     public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
 
-    public fun get_supply_index<X,Y>(self: &Gauge<X,Y>):u256{ self.supply_index }
+    public fun reward_rate<X,Y>(self: &Gauge<X,Y>): u64 { self.reward_rate }
 
-    public fun get_claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
+    public fun period_finish<X,Y>(self: &Gauge<X,Y>): u64 { self.period_finish }
 
-    public (friend) fun update_supply_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){
+    public fun voting_index<X,Y>(self: &Gauge<X,Y>):u256{ self.voting_index }
+
+    public (friend) fun update_voting_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        self.supply_index = v;
+        self.voting_index = v;
     }
 
     public (friend) fun update_claimable<X,Y>(self: &mut Gauge<X,Y>, v: u64){
@@ -72,67 +113,34 @@ module suiDouBashi_vote::gauge{
         self.claimable = v;
     }
 
-    public (friend) fun update_gauge<X,Y>(self: &mut Gauge<X,Y>, alive: bool ){
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        self.is_alive = alive
-     }
+    #[test_only] public fun sdb_balance<X,Y>(self: &Gauge<X,Y>): u64{ balance::value(&self.sdb_balance)}
 
-    public fun get_balance_of<X,Y>(self: &Gauge<X,Y>, staker: address):u64{
-        *table::borrow(&self.balance_of, staker)
-    }
-    #[test_only]
-    public fun checkpoints_borrow<X,Y>(self: &Gauge<X,Y>, staker: address): &TableVec<BalanceCheckpoint>{
-        table::borrow(&self.checkpoints, staker)
-    }
-    #[test_only]
-    public fun supply_checkpoints_borrow<X,Y>(self: &Gauge<X,Y>): &TableVec<SupplyCheckpoint>{
-        &self.supply_checkpoints
-    }
-    #[test_only]
-    public fun total_supply_borrow<X,Y>(self: &Gauge<X,Y>):&LP<X,Y>{ &self.total_supply }
+    public fun claimable<X,Y>(self: &Gauge<X,Y>):u64{ self.claimable }
 
-    struct Reward<phantom X, phantom Y > has store{
-        balance: Balance<SDB>,
+    public fun total_stakes<X,Y>(self: &Gauge<X,Y>):&LP<X,Y>{ &self.total_stakes }
 
-        reward_rate: u64, // reward_amount / 7 days
-        period_finish: u64,
-
-        last_update_time: u64,
-        reward_per_token_stored: u256,
-        user_reward_per_token_stored: Table<address, u256>,
-        last_earn: Table<address, u64>,
-
-        reward_per_token_checkpoints: TableVec<RewardPerTokenCheckpoint>,
+    public fun lp_stakes<X,Y>(self: &Gauge<X,Y>, staker: address):u64{
+        table::borrow(&self.lp_infos, staker).stakes
     }
 
-    public fun borrow_reward<X,Y>(self: &Gauge<X,Y>):&Reward<X, Y>{
-        df::borrow(&self.id, type_name::get<SDB>())
-    }
-    fun borrow_reward_mut<X,Y>(self: &mut Gauge<X,Y>):&mut Reward<X,Y>{
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        df::borrow_mut(&mut self.id, type_name::get<SDB>())
-    }
-    #[test_only]
-    public fun get_reward_balance<X,Y>(reward: &Reward<X,Y>):u64 { balance::value(&reward.balance) }
-    #[test_only]
-    public fun get_reward_rate<X,Y>(reward: &Reward<X,Y>):u64 { reward.reward_rate }
-    #[test_only]
-    public fun get_period_finish<X,Y>(reward: &Reward<X,Y>): u64{ reward.period_finish }
-    #[test_only]
-    public fun get_last_update_time<X,Y>(reward: &Reward<X,Y>): u64{ reward.last_update_time }
-    #[test_only]
-    public fun get_reward_per_token_stored<X,Y>(reward: &Reward<X,Y>): u256{ reward.reward_per_token_stored }
-    #[test_only]
-    public fun user_reward_per_token_stored_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u256>{
-        &reward.user_reward_per_token_stored
-    }
-    #[test_only]
-    public fun last_earn_borrow<X,Y>(reward: &Reward<X,Y>):&Table<address, u64>{
-        &reward.last_earn
-    }
-    #[test_only]
-    public fun reward_checkpoints_borrow<X,Y>(reward: &Reward<X,Y>):&TableVec<RewardPerTokenCheckpoint>{
-        &reward.reward_per_token_checkpoints
+    public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u256 { self.staking_index }
+
+    public fun pending_sdb<X,Y>(self: &Gauge<X,Y>, staker: address, clock: &Clock):u64{
+        if(!table::contains(&self.lp_infos, staker)) return 0;
+
+        let lp_info = table::borrow(&self.lp_infos, staker);
+        let ts = unix_timestamp(clock);
+        let pending_sdb = lp_info.pending_sdb;
+
+        if(ts > self.last_update_time && lp_info.stakes > 0){
+            let delta = cal_staking_index(self, clock) - lp_info.staking_index;
+            if(delta > 0){
+                let share = (lp_info.stakes as u256) * delta / PRECISION;
+                pending_sdb = pending_sdb + (share as u64);
+            };
+        };
+
+        pending_sdb
     }
 
     public (friend) fun new<X,Y>(
@@ -147,32 +155,87 @@ module suiDouBashi_vote::gauge{
             version: package_version(),
             is_alive: true,
             pool: object::id(pool),
-            total_supply: pool::create_lp(pool, ctx),
-            balance_of: table::new<address, u64>(ctx),
             fees_x: balance::zero<X>(),
             fees_y: balance::zero<Y>(),
-            supply_checkpoints: table_vec::empty<SupplyCheckpoint>(ctx),
-            checkpoints: table::new<address, TableVec<BalanceCheckpoint>>(ctx),
-            supply_index: 0,
-            claimable: 0
-        };
-        // SDB emission rewards
-        let reward =  Reward<X,Y>{
-            balance: balance::zero<SDB>(),
+            sdb_balance: balance::zero<SDB>(),
             reward_rate: 0,
-            period_finish: 0,
             last_update_time: 0,
-            reward_per_token_stored: 0,
-            reward_per_token_checkpoints: table_vec::empty<RewardPerTokenCheckpoint>(ctx),
-
-            user_reward_per_token_stored: table::new<address, u256>(ctx),
-            last_earn: table::new<address, u64>(ctx),
+            period_finish: 0,
+            voting_index: 0,
+            claimable: 0,
+            total_stakes: pool::create_lp(pool, ctx),
+            staking_index: 0,
+            lp_infos: table::new<address, LPInfo>(ctx),
         };
-
-        df::add(&mut gauge.id, type_name::get<SDB>(), reward);
 
         (gauge, bribe, rewards)
     }
+
+    // ====== GETTER ======
+
+    // ====== GETTER ======
+    // ====== ENTRY ======
+    // ====== ENTRY ======
+    // ====== UTILS ======
+
+    public fun cal_staking_index<X,Y>(
+        self: &Gauge<X,Y>,
+        clock: &Clock
+    ): u256{
+        let total_stakes = pool::lp_balance(&self.total_stakes);
+        if(total_stakes == 0) return self.staking_index;
+
+        self.staking_index + ((last_time_reward_applicable(self,clock) - self.last_update_time) as u256) * (self.reward_rate as u256) * PRECISION / (total_stakes as u256)
+    }
+
+    fun unix_timestamp(clock: &Clock): u64 { clock::timestamp_ms(clock) / 1000 }
+
+    public fun left<X, Y>(self: &Gauge<X, Y>, clock: &Clock):u64{
+        let ts = unix_timestamp(clock);
+
+        if(ts >= self.period_finish) return 0;
+
+        let _remaining = self.period_finish - ts;
+        return _remaining * self.reward_rate
+    }
+
+    public fun last_time_reward_applicable<X, Y>(self: &Gauge<X,Y>, clock: &Clock):u64{
+        math::min(unix_timestamp(clock), self.period_finish)
+    }
+
+    public fun epoch_start(ts: u64): u64{ ts / WEEK * WEEK }
+
+    public fun epoch_end(ts: u64): u64{ ts / WEEK * WEEK + WEEK }
+
+    // ====== UTILS ======
+
+    // ====== LOGIC ======
+    fun update_gauge<X,Y>(
+        self: &mut Gauge<X,Y>,
+        clock: &Clock
+    ){
+        self.staking_index = cal_staking_index<X,Y>(self, clock);
+        self.last_update_time = last_time_reward_applicable(self, clock);
+    }
+
+    fun update_lp<X,Y>(
+        self: &mut Gauge<X,Y>,
+        staker: address
+    ){
+        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
+        let staked = lp_info.stakes;
+        if(staked > 0){
+            let delta = self.staking_index - lp_info.staking_index;
+
+            if(delta > 0){
+                let share = (staked as u256) * delta / PRECISION;
+                lp_info.pending_sdb = lp_info.pending_sdb + (share as u64);
+            }
+        };
+        lp_info.staking_index = self.staking_index;
+    }
+
+    // ====== LOGIC ======
 
     /// Claim the fees from pool
     public fun claim_fee<X,Y>(
@@ -183,7 +246,8 @@ module suiDouBashi_vote::gauge{
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let (coin_x, coin_y, value_x, value_y) = pool::claim_fees_dev(pool, &mut self.total_supply, ctx);
+
+        let (coin_x, coin_y, value_x, value_y) = pool::claim_fees_dev(pool, &mut self.total_stakes, ctx);
         if(option::is_some(&coin_x)){
             let coin_x = option::extract(&mut coin_x);
             coin::put(&mut self.fees_x, coin_x);
@@ -195,196 +259,22 @@ module suiDouBashi_vote::gauge{
         option::destroy_none(coin_x);
         option::destroy_none(coin_y);
 
-        if(value_x > 0 || value_y > 0){
+        if(value_x > 0){
             let bal_x = balance::value(&self.fees_x);
-            let bal_y = balance::value(&self.fees_y);
-
-            // only deposit when accumulated amount exceed the left amount
-            if(bal_x > DURATION){
+            if(bal_x > WEEK){
                 let withdraw = balance::withdraw_all(&mut self.fees_x);
                 bribe::bribe(rewards, coin::from_balance(withdraw, ctx), clock, ctx);
             };
-
-            if(bal_y > DURATION){
+        };
+        if(value_y > 0){
+            let bal_y = balance::value(&self.fees_y);
+            if(bal_y > WEEK){
                 let withdraw = balance::withdraw_all(&mut self.fees_y);
                 bribe::bribe(rewards, coin::from_balance(withdraw, ctx), clock, ctx);
             }
         };
 
         event::claim_fees(tx_context::sender(ctx), value_x, value_y);
-    }
-
-    public fun get_prior_balance_index<X,Y>(
-        self: & Gauge<X,Y>,
-        staker: address,
-        ts:u64
-    ):u64 {
-        if( !table::contains(&self.checkpoints, staker)) return 0;
-
-        let checkpoints = table::borrow(&self.checkpoints, staker);
-        let len = table_vec::length(checkpoints);
-
-        if( len == 0){
-            return 0
-        };
-
-        if( checkpoints::balance_ts(table_vec::borrow(checkpoints, len - 1)) <= ts ){
-            return len - 1
-        };
-
-        if( checkpoints::balance_ts(table_vec::borrow(checkpoints, 0)) > ts){
-            return 0
-        };
-
-        let lower = 0;
-        let upper = len - 1;
-        while ( lower < upper){
-            let center = upper - (upper - lower) / 2;
-            let cp_ts = checkpoints::balance_ts(table_vec::borrow(checkpoints, center));
-            if(cp_ts == ts ){
-                return center
-            }else if (cp_ts < ts){
-                lower = center;
-            }else{
-                upper = center -1 ;
-            }
-        };
-        return lower
-    }
-
-    public fun get_prior_supply_index<X,Y>(
-        self: & Gauge<X,Y>,
-        ts:u64
-    ):u64 {
-        let len = table_vec::length(&self.supply_checkpoints);
-
-        if( len == 0){
-            return 0
-        };
-
-        if( checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, len - 1)) <= ts ){
-            return len - 1
-        };
-
-        if( checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, 0)) > ts){
-            return 0
-        };
-
-        let lower = 0;
-        let upper = len - 1;
-        while ( lower < upper){
-            let center = upper - (upper - lower) / 2;
-            let sp_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, center));
-            if( sp_ts == ts ){
-                return center
-            }else if ( sp_ts < ts){
-                lower = center;
-            }else{
-                upper = center -1 ;
-            }
-        };
-        return lower
-    }
-
-    public fun get_prior_reward_per_token<X, Y>(
-        reward: &Reward<X, Y>,
-        ts:u64
-    ):(u64, u256) // ( ts, reward_per_token )
-    {
-        let checkpoints = &reward.reward_per_token_checkpoints;
-        let len = table_vec::length(checkpoints);
-
-        if( len == 0){
-            return ( 0, 0 )
-        };
-
-        if( checkpoints::reward_ts(table_vec::borrow(checkpoints, len - 1)) <= ts ){
-            let last_checkpoint = table_vec::borrow(checkpoints, len - 1);
-            return ( checkpoints::reward_ts(last_checkpoint), checkpoints::reward(last_checkpoint))
-        };
-
-        if( checkpoints::reward_ts(table_vec::borrow(checkpoints, 0)) > ts){
-            return ( 0, 0 )
-        };
-
-        let lower = 0;
-        let upper = len - 1;
-        while ( lower < upper){
-            let center = upper - (upper - lower) / 2;
-            let rp_ts = checkpoints::reward_ts(table_vec::borrow(checkpoints, center));
-            let reward = checkpoints::reward(table_vec::borrow(checkpoints, center));
-            if(rp_ts == ts ){
-                return (rp_ts, reward )
-            }else if (rp_ts < ts){
-                lower = center;
-            }else{
-                upper = center -1 ;
-            }
-        };
-        let rp = table_vec::borrow(checkpoints, lower);
-        return ( checkpoints::reward_ts(rp), checkpoints::reward(rp))
-    }
-
-    fun write_checkpoint_<X,Y>(
-        self: &mut Gauge<X,Y>,
-        staker: address,
-        balance: u64,
-        clock: &Clock,
-        ctx: &mut TxContext
-    ){
-        let ts = clock::timestamp_ms(clock) / 1000;
-
-        if(!table::contains(&self.checkpoints, staker)){
-            table::add(&mut self.checkpoints, staker, table_vec::empty(ctx));
-        };
-
-        let player_checkpoint = table::borrow_mut(&mut self.checkpoints, staker);
-        let len = table_vec::length(player_checkpoint);
-
-        if(len > 0 && checkpoints::balance_ts(table_vec::borrow(player_checkpoint, len - 1)) == ts){
-            let cp_mut = table_vec::borrow_mut(player_checkpoint, len - 1 );
-            checkpoints::update_balance(cp_mut, balance);
-        }else{
-            let checkpoint = checkpoints::new_cp(ts, balance);
-            table_vec::push_back(player_checkpoint, checkpoint);
-        };
-    }
-
-    fun write_reward_per_token_checkpoint_<X, Y>(
-        reward: &mut Reward<X, Y>,
-        reward_per_token: u256,
-        timestamp: u64,
-    ){
-        let rp_s = &mut reward.reward_per_token_checkpoints;
-        let len = table_vec::length(rp_s);
-        if(len > 0 && checkpoints::reward_ts(table_vec::borrow(rp_s, len - 1)) == timestamp){
-            let rp = table_vec::borrow_mut(rp_s, len - 1);
-            checkpoints::update_reward(rp, reward_per_token);
-        }else{
-            table_vec::push_back(rp_s, checkpoints::new_rp(timestamp, reward_per_token));
-        };
-    }
-
-    fun write_supply_checkpoint_<X,Y>(
-        self: &mut Gauge<X,Y>,
-        clock: &Clock,
-    ){
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let supply = pool::lp_balance(&self.total_supply);
-
-        let len = table_vec::length(&self.supply_checkpoints);
-
-        if( len > 0 && checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, len - 1)) == ts){
-            let cp_mut = table_vec::borrow_mut(&mut self.supply_checkpoints, len - 1 );
-            checkpoints::update_supply(cp_mut, supply)
-        }else{
-            let checkpoint = checkpoints::new_sp(ts, supply);
-            table_vec::push_back(&mut self.supply_checkpoints, checkpoint);
-        };
-    }
-
-    public fun last_time_reward_applicable<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
-        math::min(clock::timestamp_ms(clock) / 1000, reward.period_finish)
     }
 
     public fun get_reward<X,Y>(
@@ -394,277 +284,66 @@ module suiDouBashi_vote::gauge{
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.balance_of, staker), E_INVALID_STAKER);
+        assert!(table::contains(&self.lp_infos, staker), E_INVALID_STAKER);
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
-        {
-            let reward = borrow_reward_mut<X,Y>(self);
-            if(!table::contains(&reward.last_earn, staker)){
-                table::add(&mut reward.last_earn, staker, 0);
-            };
-            if(!table::contains(&reward.user_reward_per_token_stored, staker)){
-                table::add(&mut reward.user_reward_per_token_stored, staker, 0);
-            };
-            reward.reward_per_token_stored = reward_per_token_stored;
-            reward.last_update_time = last_update_time;
+        update_gauge(self, clock);
+        update_lp(self, staker);
+
+        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
+        let pending = lp_info.pending_sdb;
+        if(pending > 0){
+            transfer::public_transfer(coin::take(&mut self.sdb_balance, pending, ctx), staker);
         };
+        lp_info.pending_sdb = 0;
 
-        let _reward = earned<X,Y>(self, staker, clock);
-        let reward = borrow_reward_mut<X,Y>(self);
-        *table::borrow_mut(&mut reward.last_earn, staker) = clock::timestamp_ms(clock) / 1000;
-        *table::borrow_mut(&mut reward.user_reward_per_token_stored, staker) = reward_per_token_stored;
-        if(_reward > 0){
-            let coin_x = coin::take(&mut reward.balance, _reward, ctx);
-            let value_x = coin::value(&coin_x);
-            transfer::public_transfer(
-                coin_x,
-                tx_context::sender(ctx)
-            );
-            event::claim_reward(tx_context::sender(ctx), value_x);
-        };
-        let lp_value = *table::borrow(&self.balance_of, tx_context::sender(ctx));
-        write_checkpoint_(self, staker, lp_value, clock, ctx);
-        write_supply_checkpoint_(self, clock);
-    }
-
-    public fun reward_per_token<X, Y>(
-        self: &Gauge<X,Y>,
-        clock: &Clock
-    ): u256{
-        let reward = borrow_reward<X,Y>(self);
-        let reward_per_token_stored = reward.reward_per_token_stored;
-        let total_supply = pool::lp_balance(&self.total_supply);
-
-        if(total_supply == 0){
-            return reward_per_token_stored
-        };
-
-        let last_update = reward.last_update_time;
-        let period_finish = reward.period_finish;
-        let reward_rate = reward.reward_rate;
-        let elapsed = ((last_time_reward_applicable(reward, clock) - math::min(last_update, period_finish)) as u256);
-        return reward_per_token_stored + (reward_rate as u256) * PRECISION / (total_supply as u256) * elapsed
-    }
-
-    fun calc_reward_per_token<X, Y>(
-        reward: &Reward<X, Y>,
-        timestamp_1: u64,
-        timestamp_0: u64,
-        supply: u64,
-        start_timestamp: u64
-    ):(u256, u64){
-        let end_time = math::max(timestamp_1, start_timestamp);
-        let start_time = math::max(timestamp_0, start_timestamp);
-        let reward =  ((math::min(end_time, reward.period_finish) - math::min(start_time, reward.period_finish)) as u256) * (reward.reward_rate as u256) * PRECISION / (supply as u256);
-
-        (reward, end_time)
-    }
-
-    public fun batch_reward_per_token<X,Y>(
-        self: &mut Gauge<X,Y>,
-        max_run:u64,
-        clock: &Clock,
-    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
-    {
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let reward = borrow_reward<X,Y>(self);
-        let start_timestamp = reward.last_update_time;
-        let reward_token_stored = reward.reward_per_token_stored;
-
-        // no voting received
-        if(table_vec::length(&self.supply_checkpoints) == 0){
-            return ( reward_token_stored, start_timestamp )
-        };
-
-        // no bribing
-        if(reward.reward_rate == 0){
-            return ( reward_token_stored, ts )
-        };
-
-        let start_idx = get_prior_supply_index(self, start_timestamp);
-        let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
-
-        let i = start_idx;
-        while(i < end_idx){
-            let sp_0_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i));
-            let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
-            if(sp_0_supply > 0){
-                let sp_1_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
-                let reward = borrow_reward_mut<X,Y>(self);
-                let (reward_per_token ,end_time) = calc_reward_per_token(reward, sp_1_ts, sp_0_ts, sp_0_supply, start_timestamp);
-                reward_token_stored = reward_token_stored + reward_per_token;
-                write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
-                start_timestamp = end_time;
-            };
-            i = i + 1;
-        };
-
-        return ( reward_token_stored, start_timestamp )
-    }
-
-    public entry fun batch_update_reward_per_token<X,Y>(
-        self: &mut Gauge<X,Y>,
-        max_run:u64,
-        clock: &Clock,
-    ){
-        assert!(self.version == package_version(), E_WRONG_VERSION);
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, max_run, false, clock);
-
-        borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
-        borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
-    }
-
-    fun update_reward_per_token_<X,Y>(
-        self: &mut Gauge<X,Y>,
-        max_run:u64,
-        actual_last: bool,
-        clock: &Clock
-    ):(u256, u64) // ( reward_per_token_stored, last_update_time)
-    {
-        let ts = clock::timestamp_ms(clock) / 1000;
-        let reward = borrow_reward<X,Y>(self);
-        let start_timestamp = reward.last_update_time;
-        let reward_token_stored = reward.reward_per_token_stored;
-
-        if(table_vec::length(&self.supply_checkpoints) == 0){
-            return ( reward_token_stored, start_timestamp )
-        };
-
-        if(reward.reward_rate == 0){
-            return ( reward_token_stored, ts)
-        };
-
-        let start_idx = get_prior_supply_index(self, start_timestamp);
-        let end_idx = math::min(table_vec::length(&self.supply_checkpoints) - 1, max_run);
-
-        if(end_idx > 0){
-            let i = start_idx;
-            while( i <= end_idx - 1){
-                let sp_0_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i));
-                let sp_0_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, i));
-                if(sp_0_supply > 0){
-                    let ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, i + 1));
-                    let reward = borrow_reward_mut<X,Y>(self);
-                    let ( reward_per_token , end_time) = calc_reward_per_token(reward, ts, sp_0_ts, sp_0_supply, start_timestamp);
-                    reward_token_stored = reward_token_stored + reward_per_token;
-                    write_reward_per_token_checkpoint_(reward, reward_token_stored, end_time);
-                    start_timestamp = end_time;
-                };
-                i = i + 1;
-            }
-        };
-
-        if(actual_last){
-            let sp_supply = checkpoints::supply(table_vec::borrow(&self.supply_checkpoints, end_idx));
-            let sp_ts = checkpoints::supply_ts(table_vec::borrow(&self.supply_checkpoints, end_idx));
-            if(sp_supply > 0){
-                let reward = borrow_reward<X,Y>(self);
-                let ( reward_per_token, _ ) = calc_reward_per_token(reward, last_time_reward_applicable(reward, clock), math::max(sp_ts, start_timestamp), sp_supply, start_timestamp);
-                reward_token_stored = reward_token_stored + reward_per_token;
-
-                write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), reward_token_stored, ts);
-                start_timestamp = ts;
-            };
-        };
-        return ( reward_token_stored, start_timestamp )
-    }
-
-    /// Calculate staker's SDB reward by weekly
-    /// this is estimation, earned will only update after calling update_reward_per_token_()
-    public fun earned<X,Y>(
-        self: & Gauge<X,Y>,
-        staker: address,
-        clock: &Clock
-    ):u64{
-        let reward = borrow_reward<X,Y>(self);
-        let rps_borrow = &reward.reward_per_token_checkpoints;
-
-        if(!table::contains(&self.checkpoints, staker) || table_vec::length(rps_borrow) == 0){
-            return 0
-        };
-
-        let last_earn = if(table::contains(&reward.last_earn, staker)){
-            *table::borrow(&reward.last_earn, staker)
-        }else{
-            0
-        };
-        let start_timestamp = math::max(last_earn, checkpoints::reward_ts(table_vec::borrow(rps_borrow, 0)));
-
-        let bps_borrow = table::borrow(&self.checkpoints, staker);
-
-        let start_idx = get_prior_balance_index(self, staker, start_timestamp);
-        let end_idx = table_vec::length(bps_borrow) - 1;
-
-        let earned_reward = 0;
-        if(end_idx > 0){
-            let i = start_idx;
-            while( i <= end_idx - 1){ // leave last one
-                let cp_0 = table_vec::borrow(bps_borrow, i);
-                let cp_1 = table_vec::borrow(bps_borrow, i + 1);
-                let ( _, reward_per_token_0) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_0));
-                let ( _, reward_per_token_1 ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp_1));
-                let acc = (checkpoints::balance(cp_0) as u256) * ((reward_per_token_1 - reward_per_token_0) as u256) / PRECISION;
-                earned_reward = earned_reward + (acc as u64);
-                i = i + 1;
-            }
-        };
-
-        // accumulating rewards
-        let cp = table_vec::borrow(bps_borrow, end_idx);
-        let ( _, reward_stored ) = get_prior_reward_per_token(reward, checkpoints::balance_ts(cp));
-        let user_reward_per_token_stored = if(table::contains(&reward.user_reward_per_token_stored, staker)){
-            *table::borrow(&reward.user_reward_per_token_stored, staker)
-        }else{
-            0
-        };
-        // current slope
-        let acc = (checkpoints::balance(cp) as u256) * (reward_per_token<X,Y>(self, clock) - amm_math::max_u256(reward_stored, user_reward_per_token_stored)) / PRECISION;
-        earned_reward = earned_reward + (acc as u64);
-        return earned_reward
+        event::claim_reward(staker, pending);
     }
 
      /// Stake LP_TOKEN
     public entry fun stake_all<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
-        lp_position: &mut LP<X,Y>,
+        lp: &mut LP<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let balance = pool::lp_balance(lp_position);
-        stake(self, pool, lp_position, balance, clock, ctx);
+        let balance = pool::lp_balance(lp);
+        stake(self, pool, lp, balance, clock, ctx);
     }
 
     public entry fun stake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
-        lp_position: &mut LP<X,Y>, // not taking the ownership, otherwise owner lose all of its previous shares
+        lp: &mut LP<X,Y>,
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
 
-        borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
-        borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
+        let lp_value = pool::lp_balance(lp);
+        assert!(lp_value >= value, E_EMPTY_VALUE);
+        assert!(value > 0, E_EMPTY_VALUE);
 
         let staker = tx_context::sender(ctx);
-        let lp_value = pool::lp_balance(lp_position);
-        assert!(lp_value > 0, E_EMPTY_VALUE);
-
-        pool::join_lp(pool, &mut self.total_supply, lp_position, value);
-
-        if(!table::contains(&self.balance_of, staker)){
-            table::add(&mut self.balance_of, staker, value);
-        }else{
-            *table::borrow_mut(&mut self.balance_of, staker) = *table::borrow(& self.balance_of, staker) + value;
+        if(!table::contains(&self.lp_infos, staker)){
+            table::add(&mut self.lp_infos,
+                staker,
+                LPInfo{
+                    stakes: 0,
+                    staking_index: 0,
+                    pending_sdb: 0
+                }
+            );
         };
+        update_gauge(self, clock);
+        update_lp(self, staker);
 
-        write_checkpoint_(self, staker, value, clock, ctx);
-        write_supply_checkpoint_(self, clock);
+        pool::join_lp(pool, &mut self.total_stakes, lp, value);
+
+        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
+        lp_info.stakes = lp_info.stakes + value;
 
         event::deposit_lp<X,Y>(tx_context::sender(ctx), value);
     }
@@ -673,56 +352,41 @@ module suiDouBashi_vote::gauge{
     public entry fun unstake_all<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
-        lp_position: &mut LP<X,Y>,
+        lp: &mut LP<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let bal = get_balance_of(self, tx_context::sender(ctx));
-        unstake(self, pool, lp_position, bal, clock, ctx);
+        let bal = lp_stakes(self, tx_context::sender(ctx));
+        unstake(self, pool, lp, bal, clock, ctx);
     }
 
     public entry fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
-        lp_position: &mut LP<X,Y>,
+        lp: &mut LP<X,Y>,
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+
         let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.balance_of, staker), E_INVALID_STAKER);
-        let bal = get_balance_of(self, staker);
-        assert!(value <= bal, E_INSUFFICENT_BALANCE);
+        assert!(table::contains(&self.lp_infos, staker), E_INVALID_STAKER);
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
+        update_gauge(self, clock);
+        update_lp(self, staker);
 
-        borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
-        borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
+        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
+        assert!(value <= lp_info.stakes, E_INSUFFICENT_BALANCE);
 
-        // unstake the LP from pool
-        pool::join_lp(pool, lp_position, &mut self.total_supply, value);
-
-        *table::borrow_mut(&mut self.balance_of, staker) =  bal - value;
-        let bal = get_balance_of(self, staker);
-
-        write_checkpoint_(self, staker, bal, clock, ctx);
-        write_supply_checkpoint_(self, clock);
+        pool::join_lp(pool, lp, &mut self.total_stakes, value);
+        lp_info.stakes = lp_info.stakes - value;
 
         event::withdraw_lp<X,Y>(tx_context::sender(ctx), value);
     }
 
-    public fun left<X, Y>(reward: &Reward<X, Y>, clock: &Clock):u64{
-        let ts = clock::timestamp_ms(clock) / 1000;
-
-        if(ts >= reward.period_finish) return 0;
-
-        let _remaining = reward.period_finish - ts;
-        return _remaining * reward.reward_rate
-    }
-
-    // distribute pool fees
+    /// should only be called from voter module
     public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,
         rewards: &mut Rewards<X,Y>,
@@ -732,37 +396,30 @@ module suiDouBashi_vote::gauge{
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let value = coin::value(&coin);
-        let reward = borrow_reward<X,Y>(self);
-        assert!(value > 0, E_EMPTY_VALUE);
-        let ts = clock::timestamp_ms(clock) / 1000;
-        if(reward.reward_rate == 0){
-            write_reward_per_token_checkpoint_(borrow_reward_mut<X,Y>(self), 0, ts);
-        };
 
-        let ( reward_per_token_stored, last_update_time ) = update_reward_per_token_<X,Y>(self, MAX_U64, true, clock);
-        borrow_reward_mut<X,Y>(self).reward_per_token_stored = reward_per_token_stored;
-        borrow_reward_mut<X,Y>(self).last_update_time = last_update_time;
+        let value = coin::value(&coin);
+        assert!(value > 0, E_EMPTY_VALUE);
+        let ts = unix_timestamp(clock);
+        let time_left = epoch_end(ts) - ts;
 
         claim_fee(self, rewards, pool, clock, ctx);
+        update_gauge(self, clock);
 
-        let reward = borrow_reward_mut<X,Y>(self);
-
-        if(ts >= reward.period_finish){
-            coin::put(&mut reward.balance, coin);
-            reward.reward_rate = value / DURATION;
+        if(ts >= self.period_finish){
+            coin::put(&mut self.sdb_balance, coin);
+            self.reward_rate = value / time_left;
         }else{
-            let _remaining = reward.period_finish - ts;
-            let _left = _remaining * reward.reward_rate;
-            assert!(value > _left, E_INSUFFICENT_BRIBES);
-            coin::put(&mut reward.balance, coin);
-            reward.reward_rate = ( value + _left ) / DURATION;
+            let _remaining = self.period_finish - ts;
+            let _left = _remaining * self.reward_rate;
+            coin::put(&mut self.sdb_balance, coin);
+            self.reward_rate = ( value + _left ) / time_left;
         };
 
-        assert!(reward.reward_rate > 0, E_INVALID_REWARD_RATE);
-        assert!( reward.reward_rate <= balance::value(&reward.balance) / DURATION, E_MAX_REWARD);
+        assert!(self.reward_rate > 0, E_INVALID_REWARD_RATE);
+        assert!( self.reward_rate <= balance::value(&self.sdb_balance) / time_left, E_MAX_REWARD);
 
-        reward.period_finish = ts + DURATION;
+        self.period_finish = epoch_end(ts);
+        self.last_update_time = ts;
 
         event::notify_reward<SDB>(tx_context::sender(ctx), value);
     }

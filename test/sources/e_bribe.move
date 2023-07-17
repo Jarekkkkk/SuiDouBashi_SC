@@ -144,7 +144,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // Assertion: received the reward
             let sdb = test::take_from_sender<Coin<SDB>>(s);
-            assert!(coin::value(&sdb) == 19246888256400000, 404);
+            assert!(coin::value(&sdb) == 19246888256796093, 404);
             burn(sdb);
         };
 
@@ -218,7 +218,6 @@ module test::e_bribe_test{
                     test::return_shared(bribe);
                     test::return_shared(rewards);
                 };
-
             };
             test::return_to_sender(s, vsdb);
             test::return_to_sender(s, _vsdb);

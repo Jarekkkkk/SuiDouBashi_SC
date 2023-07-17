@@ -177,7 +177,6 @@ module test::main{
     use suiDouBashi_vote::gauge::{Self, Gauge};
     use suiDouBashi_vote::voter::{Self, Voter};
     use suiDouBashi_amm::pool::{Self, LP};
-    use sui::table;
     const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
 
     fun distribute_fees_(clock: &mut Clock, s: &mut Scenario){
@@ -207,8 +206,8 @@ module test::main{
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge= test::take_shared<Gauge<USDC, USDT>>(s);
                 let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u256);
-                assert!(gauge::get_supply_index(&gauge) == index, 404);
-                assert!(gauge::get_claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
+                assert!(gauge::voting_index(&gauge) == index, 404);
+                assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
 
                 test::return_shared(pool);
                 test::return_shared(gauge);
@@ -218,8 +217,8 @@ module test::main{
                 let gauge= test::take_shared<Gauge<SDB, USDC>>(s);
                 let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u256);
 
-                assert!(gauge::get_supply_index(&gauge) == index, 404);
-                assert!(gauge::get_claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
+                assert!(gauge::voting_index(&gauge) == index, 404);
+                assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
                 test::return_shared(pool);
                 test::return_shared(gauge);
             };
@@ -234,7 +233,6 @@ module test::main{
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
 
             voter::distribute(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
-
             test::return_shared(voter);
             test::return_shared(minter);
             test::return_shared(vsdb_reg);
@@ -246,13 +244,12 @@ module test::main{
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let reward = gauge::borrow_reward(&gauge);
             let sdb_team = test::take_from_sender<Coin<SDB>>(s);
 
             assert!(coin::value(&sdb_team) == 513019197003257 , 404);
             assert!(voter::get_balance(&voter) == 8293810352052660, 404);
-            assert!(gauge::get_reward_balance(reward) == 8293810352966256, 404);
-            assert!(gauge::get_claimable(&gauge) == 0, 404);
+            assert!(gauge::sdb_balance(&gauge) == 8293810352793456, 404);
+            assert!(gauge::claimable(&gauge) == 0, 404);
 
             burn(sdb_team);
             test::return_shared(voter);
@@ -270,14 +267,12 @@ module test::main{
             let sdb = test::take_from_sender<Coin<SDB>>(s);
             let voter = test::take_shared<Voter>(s);
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let reward = gauge::borrow_reward(&gauge);
 
             // staked for 6 days, previous epoch rate stay at 1
-            assert!(coin::value(&sdb) == 1 * 6 * 86400, 404);
-            assert!( gauge::get_reward_balance(reward) == 8293810352966256 - coin::value(&sdb), 404);
+            assert!(coin::value(&sdb) == 518397, 404);
+            assert!( gauge::sdb_balance(&gauge) == 8293810352793456 - coin::value(&sdb), 404);
             // reward
-            assert!(gauge::get_period_finish(reward) == get_time(clock) / 1000 + setup::week() , 404);
-            assert!(*table::borrow(gauge::last_earn_borrow(reward), a) == get_time(clock)/1000 , 404);
+            assert!(gauge::period_finish(&gauge) == gauge::epoch_end(get_time(clock) / 1000) , 404);
 
             burn(sdb);
             test::return_shared(voter);
@@ -289,7 +284,7 @@ module test::main{
         next_tx(s,a);
         let opt_emission = { // Action: staker A withdraw weekly emissions after a week
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let earned = gauge::earned(&gauge, a, clock);
+            let earned = gauge::pending_sdb(&gauge, a, clock);
             gauge::get_reward(&mut gauge, clock, ctx(s));
             test::return_shared(gauge);
 
@@ -411,40 +406,6 @@ module test::main{
             test::return_shared(pool_a);
         };
 
-        next_tx(s,a);{ // Action: Batch reward per token
-            let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let prev_len = {
-                let reward = gauge::borrow_reward(&gauge);
-                let rps = gauge::reward_checkpoints_borrow(reward);
-                sui::table_vec::length(rps)
-            };
-
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-            gauge::batch_reward_per_token(&mut gauge, 200, clock);
-            add_time(clock, 1);
-
-            let post_len = {
-                let reward = gauge::borrow_reward(&gauge);
-                let rps = gauge::reward_checkpoints_borrow(reward);
-                sui::table_vec::length(rps)
-            };
-
-            assert!(prev_len == post_len, 404);
-            test::return_shared(gauge);
-        };
-
         next_tx(s,a);{ // Staker claim the rewards
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
@@ -453,7 +414,7 @@ module test::main{
             gauge::get_reward(&mut gauge, clock, ctx(s));
             gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
             add_time(clock, 1);
-            let prev_earned = gauge::earned(&gauge, a, clock);
+            let prev_earned = gauge::pending_sdb(&gauge, a, clock);
             assert!(prev_earned == 0, 404);
 
             test::return_shared(gauge);

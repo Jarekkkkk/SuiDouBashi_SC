@@ -348,7 +348,7 @@ module suiDouBashi_vote::voter{
         gauge: &mut Gauge<X,Y>,
         is_alive: bool
     ){
-        gauge::update_gauge(gauge, is_alive);
+        gauge::update_is_alive(gauge, is_alive);
     }
 
     /// weekly minted SDB to incentivize pools --> LP_Staker
@@ -409,8 +409,8 @@ module suiDouBashi_vote::voter{
 
         update_for(self, gauge);
 
-        let claimable = gauge::get_claimable(gauge);
-        if(claimable > gauge::left(gauge::borrow_reward<X,Y>(gauge), clock) && claimable / DURATION > 0){
+        let claimable = gauge::claimable(gauge);
+        if(claimable > gauge::left(gauge, clock) && claimable > DURATION){
             gauge::update_claimable(gauge, 0);
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
 
@@ -424,19 +424,19 @@ module suiDouBashi_vote::voter{
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let gauge_weights = *table::borrow(&self.weights, gauge::pool_id(gauge));
         if(gauge_weights > 0){
-            let s_idx = gauge::get_supply_index(gauge);
+            let s_idx = gauge::voting_index(gauge);
             let index_ = self.index;
 
             let delta = index_ - s_idx;
             if(delta > 0){
                 let share = (gauge_weights as u256) * (delta as u256) / SCALE_FACTOR;
                 if(gauge::is_alive(gauge)){
-                    let updated = (share as u64) + gauge::get_claimable(gauge);
+                    let updated = (share as u64) + gauge::claimable(gauge);
                     gauge::update_claimable(gauge, updated);
                 }
             };
         };
-        gauge::update_supply_index(gauge, self.index);
+        gauge::update_voting_index(gauge, self.index);
     }
 
     public fun notify_reward_amount_(self: &mut Voter, sdb: Coin<SDB>){

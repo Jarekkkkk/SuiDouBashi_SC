@@ -144,8 +144,8 @@ module test::voter_test{
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 970238026331210741, 404);
                 assert!(voter::get_total_weight(&voter) == 970238026331210741, 404);
                 // gauge
-                assert!(gauge::get_supply_index(&gauge) == 0, 404);
-                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                assert!(gauge::voting_index(&gauge) == 0, 404);
+                assert!(gauge::claimable(&gauge) == 0, 404);
                 // bribe
                 assert!(bribe::total_votes(&bribe) == 970238026331210741, 404);
                 assert!(bribe::vsdb_votes(&bribe, &vsdb) == 970238026331210741, 404);
@@ -193,8 +193,8 @@ module test::voter_test{
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 0, 404);
                 assert!(voter::get_total_weight(&voter) == 0, 404);
                 // gauge
-                assert!(gauge::get_supply_index(&gauge) == 0, 404);
-                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                assert!(gauge::voting_index(&gauge) == 0, 404);
+                assert!(gauge::claimable(&gauge) == 0, 404);
                 // i_brbie
                 assert!(bribe::total_votes(&bribe) == 0, 404);
                 assert!(bribe::vsdb_votes(&bribe, &vsdb) == 0, 404);
@@ -262,8 +262,8 @@ module test::voter_test{
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == vsdb_voting / 2, 404);
                 // gauge
-                assert!(gauge::get_supply_index(&gauge) == 0, 404);
-                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                assert!(gauge::voting_index(&gauge) == 0, 404);
+                assert!(gauge::claimable(&gauge) == 0, 404);
                 // i_brbie
                 assert!(bribe::total_votes(&bribe) == vsdb_voting / 2, 404);
                 assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
@@ -282,8 +282,8 @@ module test::voter_test{
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == vsdb_voting / 2, 404);
                 // gauge
-                assert!(gauge::get_supply_index(&gauge) == 0, 404);
-                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                assert!(gauge::voting_index(&gauge) == 0, 404);
+                assert!(gauge::claimable(&gauge) == 0, 404);
                 // i_brbie
                 assert!(bribe::total_votes(&bribe) == vsdb_voting / 2, 404);
                 assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
@@ -367,8 +367,8 @@ module test::voter_test{
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 443452346499522170 + vsdb_voting / 2, 404);
                 // gauge
-                assert!(gauge::get_supply_index(&gauge) == 0, 404);
-                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                assert!(gauge::voting_index(&gauge) == 0, 404);
+                assert!(gauge::claimable(&gauge) == 0, 404);
                 // i_brbie
                 assert!(bribe::total_votes(&bribe) == 443452346499522170 + vsdb_voting / 2, 404);
                 assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
@@ -388,8 +388,8 @@ module test::voter_test{
                 // voter
                 assert!(voter::get_weights_by_pool(&voter, &pool) == 443452346499522170 + vsdb_voting / 2, 404);
                 // gauge
-                assert!(gauge::get_supply_index(&gauge) == 0, 404);
-                assert!(gauge::get_claimable(&gauge) == 0, 404);
+                assert!(gauge::voting_index(&gauge) == 0, 404);
+                assert!(gauge::claimable(&gauge) == 0, 404);
                 // i_brbie
                 assert!(bribe::total_votes(&bribe) == 443452346499522170 + vsdb_voting / 2, 404);
                 assert!(bribe::vsdb_votes(&bribe, &vsdb) == vsdb_voting / 2, 404);
