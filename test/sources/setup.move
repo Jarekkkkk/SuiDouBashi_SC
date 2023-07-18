@@ -94,8 +94,7 @@ module test::setup{
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
 
-            assert!(voter::get_registry_length(&voter) == 0, 0);
-            assert!(voter::get_total_weight(&voter) == 0, 0);
+            assert!(voter::total_weight(&voter) == 0, 0);
 
             test::return_shared(voter);
         };
@@ -138,16 +137,14 @@ module test::setup{
         next_tx(s,a);{ // Assertion: create gauge, I_birbe & E_bribe successfully
             let voter = test::take_shared<Voter>(s);
 
-            assert!(voter::get_registry_length(&voter) == 2, 0);
-
             {// pool_a
                 let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge = test::take_shared<Gauge<USDC,USDT>>(s);
                 let bribe = test::take_shared<Bribe<USDC,USDT>>(s);
                 assert!(gauge::is_alive(&gauge), 0);
                 assert!(bribe::total_votes(&bribe) == 0, 0);
-                assert!(voter::get_weights_by_pool(&voter, &pool_a) == 0, 0);
-                assert!(voter::get_pool_exists(&voter, &pool_a), 0);
+                assert!(voter::pool_weights(&voter, &pool_a) == 0, 0);
+                assert!(voter::is_registry(&voter, &pool_a), 0);
                 test::return_shared(gauge);
                 test::return_shared(bribe);
                 test::return_shared(pool_a);
@@ -160,8 +157,8 @@ module test::setup{
                 assert!(gauge::is_alive(&gauge), 0);
                 assert!(bribe::total_votes(&bribe) == 0, 0);
                 // amount of external bribe is at most 4, including pair of coins + SDB + SUI
-                assert!(voter::get_weights_by_pool(&voter, &pool_b) == 0, 0);
-                assert!(voter::get_pool_exists(&voter, &pool_b), 0);
+                assert!(voter::pool_weights(&voter, &pool_b) == 0, 0);
+                assert!(voter::is_registry(&voter, &pool_b), 0);
                 test::return_shared(gauge);
                 test::return_shared(bribe);
                 test::return_shared(pool_b);

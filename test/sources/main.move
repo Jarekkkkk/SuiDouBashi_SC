@@ -197,15 +197,15 @@ module test::main{
         };
         next_tx(s,a);{ // Assertion: voter state is successfully updated
             let voter = test::take_shared<Voter>(s);
-            let total_voting_weight = voter::get_total_weight(&voter);
+            let total_voting_weight = voter::total_weight(&voter);
             let index = (setup::stake_1() as u256) * SCALE_FACTOR / (total_voting_weight as u256);
             // voter
-            assert!(voter::get_index(&voter) == index, 404);
-            assert!(voter::get_balance(&voter) == setup::stake_1(), 404);
+            assert!(voter::index(&voter) == index, 404);
+            assert!(voter::sdb_balance(&voter) == setup::stake_1(), 404);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge= test::take_shared<Gauge<USDC, USDT>>(s);
-                let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u256);
+                let gauge_weights =( voter::pool_weights(&voter, &pool) as u256);
                 assert!(gauge::voting_index(&gauge) == index, 404);
                 assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
 
@@ -215,7 +215,7 @@ module test::main{
             {// pool_b
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
                 let gauge= test::take_shared<Gauge<SDB, USDC>>(s);
-                let gauge_weights =( voter::get_weights_by_pool(&voter, &pool) as u256);
+                let gauge_weights =( voter::pool_weights(&voter, &pool) as u256);
 
                 assert!(gauge::voting_index(&gauge) == index, 404);
                 assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
@@ -240,6 +240,7 @@ module test::main{
             test::return_shared(gauge);
             test::return_shared(rewards);
         };
+
         next_tx(s,c);{ // Assertion: first time distribution
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
@@ -247,7 +248,7 @@ module test::main{
             let sdb_team = test::take_from_sender<Coin<SDB>>(s);
 
             assert!(coin::value(&sdb_team) == 513019197003257 , 404);
-            assert!(voter::get_balance(&voter) == 8293810352052660, 404);
+            assert!(voter::sdb_balance(&voter) == 8293810352052660, 404);
             assert!(gauge::sdb_balance(&gauge) == 8293810352793456, 404);
             assert!(gauge::claimable(&gauge) == 0, 404);
 
@@ -290,6 +291,7 @@ module test::main{
 
             earned
         };
+
         next_tx(s,a);{
             let sdb = test::take_from_sender<Coin<SDB>>(s);
             assert!(coin::value(&sdb) == opt_emission, 404);
@@ -325,6 +327,7 @@ module test::main{
 
             opt_output
         };
+
         next_tx(s,a);{
             let sdb = test::take_from_sender<Coin<SDB>>(s);
             assert!(coin::value(&sdb) == opt_sdb, 404);
@@ -351,12 +354,13 @@ module test::main{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
 
-            voter::distribute_fees(&mut gauge, &mut rewards, &mut pool, clock, ctx(s));
+            gauge::claim_fee_(&mut gauge, &mut rewards, &mut pool, clock, ctx(s));
 
             test::return_shared(pool);
             test::return_shared(gauge);
             test::return_shared(rewards);
         };
+
         next_tx(s, a);{ // I_bribe receive the rewards
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
             assert!(bribe::reward_balance<USDC,USDT,USDC>(&rewards) == 10_000_000_000, 404);
@@ -364,6 +368,7 @@ module test::main{
 
             test::return_shared(rewards);
         };
+
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
             let minter = test::take_shared<Minter>(s);
@@ -381,6 +386,7 @@ module test::main{
             test::return_shared(gauge);
             test::return_shared(rewards);
         };
+
         next_tx(s,a);{ // LP holders withdraw LP fees when pool is empty
             let vsdb = test::take_from_sender<Vsdb>(s);
             let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
@@ -392,6 +398,7 @@ module test::main{
             test::return_shared(bribe);
             test::return_shared(rewards);
         };
+
         next_tx(s,a);{
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
