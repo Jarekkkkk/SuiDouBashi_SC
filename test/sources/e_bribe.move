@@ -38,10 +38,10 @@ module test::e_bribe_test{
             voter::distribute(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
 
             { // bribing 100K for gauge_a
-                bribe::bribe(&mut rewards, mint<USDC>(setup::usdc_100K(), ctx(s)), clock, ctx(s));
-                bribe::bribe(&mut rewards, mint<USDT>(setup::usdc_100K(), ctx(s)), clock, ctx(s));
-                bribe::bribe(&mut rewards, mint_sdb(&mut minter, setup::sui_100K(), ctx(s)), clock, ctx(s));
-                bribe::bribe(&mut rewards, mint<sui::sui::SUI>(setup::sui_100K(), ctx(s)), clock, ctx(s));
+                bribe::bribe(&mut rewards, mint<USDC>(setup::usdc_100K(), ctx(s)), clock);
+                bribe::bribe(&mut rewards, mint<USDT>(setup::usdc_100K(), ctx(s)), clock);
+                bribe::bribe(&mut rewards, mint_sdb(&mut minter, setup::sui_100K(), ctx(s)), clock);
+                bribe::bribe(&mut rewards, mint<sui::sui::SUI>(setup::sui_100K(), ctx(s)), clock);
             };
 
             test::return_shared(voter);
@@ -128,7 +128,7 @@ module test::e_bribe_test{
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
             {
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };

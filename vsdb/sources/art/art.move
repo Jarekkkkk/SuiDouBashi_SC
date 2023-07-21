@@ -941,14 +941,14 @@ module suiDouBashi_vsdb::art{
         };
         let border_dna = ( 90 * ((1 << 32) - 1) / 100);
         let card_dna = (40 * ((1 << 32) - 1) / 100) << 32;
-        let shell_dna = ( 60 * ((1 << 32) - 1) / 100) << 64;
+        let shell_dna = ( 100 * ((1 << 32) - 1) / 100) << 64;
         let dna = border_dna | card_dna | shell_dna;
 
         bond.dna_1 = dna;
-       std::debug::print(&dna);
         calc_attributes(&mut bond);
         calc_derived_data(&mut bond);
         let _data = get_metadata_json(&bond);
+       std::debug::print(&_data);
         object::delete(id);
     }
 

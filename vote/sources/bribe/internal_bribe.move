@@ -411,7 +411,6 @@ module suiDouBashi_vote::internal_bribe{
         self: &mut InternalBribe<X,Y>,
         coin: Coin<T>,
         clock: &Clock,
-        ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         assert_generic_type<X,Y,T>();
@@ -448,7 +447,7 @@ module suiDouBashi_vote::internal_bribe{
 
         reward.period_finish = ts + DURATION;
 
-        event::notify_reward<X>(tx_context::sender(ctx), value);
+        event::notify_reward<X>(value);
     }
 
     /// allows a voter to claim reward for a internal bribe ( pool_fees )

@@ -2,6 +2,9 @@ module suiDouBashi_vote::minter{
     const VERSION: u64 = 1;
     public fun package_version(): u64 { VERSION }
 
+    use std::option::{Self, Option};
+    use std::vector as vec;
+
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Supply, Balance};
     use sui::clock::{Self, Clock};
@@ -9,10 +12,8 @@ module suiDouBashi_vote::minter{
     use sui::transfer;
     use sui::math;
     use sui::object::{Self, UID};
-    use std::option::{Self, Option};
-    use std::vector as vec;
 
-    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vsdb::sdb::{Self, SDB};
     use suiDouBashi_vsdb::vsdb::{Self, VSDBRegistry};
     use suiDouBashi_vote::event;
 
@@ -32,11 +33,17 @@ module suiDouBashi_vote::minter{
 
     struct Minter has key{
         id: UID,
+        /// package version
         verison: u64,
+        /// supply of SDB coin emit weekly SDB emissions
         supply: Supply<SDB>,
+        /// balance of SDB coin
         balance: Balance<SDB>,
+        /// team address reveive a portion of weekly SDB emissio
         team: address,
+        /// the percentage rate of team rewards
         team_rate: u64,
+        /// lsst time distribute weekly SDB emission
         active_period: u64,
         weekly: u64,
         emission: u16,
@@ -73,7 +80,7 @@ module suiDouBashi_vote::minter{
             team: tx_context::sender(ctx),
             team_rate: 30,
             active_period: tx_context::epoch_timestamp_ms(ctx) / 1000 / WEEK * WEEK,
-            weekly: 75_000 * (math::pow(10, 9)),
+            weekly: 75_000 * (math::pow(10, sdb::decimals())),
             emission: 980,
             epoch: 0
         };

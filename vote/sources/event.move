@@ -2,37 +2,6 @@ module suiDouBashi_vote::event{
     use sui::event::emit;
     use sui::object::{ID};
 
-    // - VSDB
-    struct Deposit has copy, drop{
-        id: ID,
-        locked_value: u64,
-        unlock_time: u64
-    }
-    public fun deposit(id: ID, locked_value: u64, unlock_time: u64){
-        emit(
-           Deposit{
-                id,
-                locked_value,
-                unlock_time
-           }
-        )
-    }
-
-    struct Withdraw has copy, drop{
-        id: ID,
-        unlocked_value: u64,
-        ts: u64
-    }
-    public fun withdraw(id: ID, unlocked_value: u64, ts: u64){
-        emit(
-           Withdraw{
-                id,
-                unlocked_value,
-                ts
-           }
-        )
-    }
-
     // - Bribe
     struct ClaimReward has copy, drop{
         claimer: address,
@@ -48,30 +17,12 @@ module suiDouBashi_vote::event{
     }
 
     struct NotifyRewards<phantom T> has copy, drop{
-        from: address,
         value: u64
     }
-    public fun notify_reward<T>(from: address, value: u64){
+    public fun notify_reward<T>(value: u64){
         emit(
             NotifyRewards<T>{
-                from,
                 value
-            }
-        )
-    }
-
-    // - Gague
-    struct ClaimFees has copy, drop{
-        from: address,
-        claimed_x: u64,
-        claimed_y: u64
-    }
-    public fun claim_fees(from: address, claimed_x: u64, claimed_y: u64){
-        emit(
-            ClaimFees{
-                from,
-                claimed_x,
-                claimed_y
             }
         )
     }
@@ -120,19 +71,6 @@ module suiDouBashi_vote::event{
        )
     }
 
-    struct Abstain<phantom X, phantom Y> has copy, drop{
-        vsdb: ID,
-        amount: u64
-    }
-    public fun abstain<X,Y>(vsdb: ID, amount:u64){
-        emit(
-            Abstain<X,Y>{
-                vsdb,
-                amount
-            }
-        )
-    }
-
     struct Voted<phantom X, phantom Y> has copy, drop{
         vsdb: ID,
         amount: u64
@@ -146,20 +84,20 @@ module suiDouBashi_vote::event{
         )
     }
 
-    struct DistributeReward<phantom X, phantom Y> has copy, drop{
-        from: address,
+    struct Abstain<phantom X, phantom Y> has copy, drop{
+        vsdb: ID,
         amount: u64
     }
-    public fun distribute_reward<X,Y>(from: address, amount: u64){
+
+    public fun abstain<X,Y>(vsdb: ID, amount:u64){
         emit(
-            DistributeReward<X,Y>{
-                from,
+            Abstain<X,Y>{
+                vsdb,
                 amount
             }
         )
     }
 
-    // - Mint
     struct Mint has copy, drop{
         from: address,
         weekly: u64,
@@ -173,18 +111,6 @@ module suiDouBashi_vote::event{
                 weekly,
                 circulating_supply,
                 circulating_emission
-            }
-        )
-    }
-
-    // - Distribute Fee
-    struct VoterNotifyReward has copy, drop{
-        amount: u64
-    }
-    public fun voter_notify_reward(amount: u64){
-        emit(
-            VoterNotifyReward{
-                amount
             }
         )
     }

@@ -30,4 +30,30 @@ module suiDouBashi_vsdb::event{
            }
         )
     }
+
+    struct LevelUp has copy, drop{
+        id: ID,
+        level: u8
+    }
+    public fun level_up(id: ID, level: u8){
+        emit(
+            LevelUp{
+                id,
+                level
+            }
+        )
+    }
+
+    struct EarnXP has copy, drop{
+        id: ID,
+        exp: u64
+    }
+    public fun earn_xp(id: ID, exp: u64){
+        emit(
+            EarnXP{
+                id,
+                exp
+            }
+        )
+    }
 }

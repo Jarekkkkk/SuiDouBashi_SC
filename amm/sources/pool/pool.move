@@ -149,7 +149,7 @@ module suiDouBashi_amm::pool{
         vsdb::df_add(AMM_SDB{}, reg, vsdb, value);
     }
 
-    fun earn_xp(vsdb: &mut Vsdb, clock: &Clock){
+    fun earn_xp_(vsdb: &mut Vsdb, clock: &Clock){
         let ts = unix_timestamp(clock);
         let amm_state = amm_state_borrow_mut(vsdb);
 
@@ -332,7 +332,7 @@ module suiDouBashi_amm::pool{
         (quote(lp_supply, reserve_x, value_lp), quote(lp_supply, reserve_y, value_lp))
     }
 
-    fun unix_timestamp(clock: &Clock):u64 { clock::timestamp_ms(clock)/ 1000 }
+    fun unix_timestamp(clock: &Clock):u64 { clock::timestamp_ms(clock) / 1000 }
 
     public entry fun add_liquidity<X,Y>(
         self: &mut Pool<X,Y>,
@@ -390,7 +390,7 @@ module suiDouBashi_amm::pool{
         assert_pool_unlocked(self);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
-        earn_xp(vsdb, clock);
+        earn_xp_(vsdb, clock);
         let level = vsdb::level(vsdb);
 
         let fee_deduction = if(self.stable){
@@ -449,7 +449,7 @@ module suiDouBashi_amm::pool{
         assert_pool_unlocked(self);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
-        earn_xp(vsdb, clock);
+        earn_xp_(vsdb, clock);
         let level = vsdb::level(vsdb);
 
         let fee_deduction = if(self.stable){
@@ -745,6 +745,8 @@ module suiDouBashi_amm::pool{
         balance::join<Y>(&mut self.reserve_y,  coin::into_balance(coin_y));
 
         event::liquidity_added<X,Y>(deposit_x, deposit_y, lp_output);
+        let (reserve_x_, reserve_y_, _) = get_reserves(self);
+        event::sync<X,Y>(reserve_x_, reserve_y_);
 
         balance::increase_supply<LP_TOKEN<X, Y>>(&mut self.lp_supply, lp_output)
     }
@@ -774,6 +776,8 @@ module suiDouBashi_amm::pool{
         balance::decrease_supply<LP_TOKEN<X, Y>>(&mut self.lp_supply,coin::into_balance(lp_token));
 
         event::liquidity_removed<X,Y>( withdrawl_x, withdrawl_y, lp_value);
+        let (reserve_x_, reserve_y_, _) = get_reserves(self);
+        event::sync<X,Y>(reserve_x_, reserve_y_);
 
         return (
             coin::take<X>(&mut self.reserve_x, withdrawl_x, ctx),
@@ -813,14 +817,16 @@ module suiDouBashi_amm::pool{
         coin::put(&mut self.fee.fee_x, coin::take(&mut self.reserve_x, fee_x, ctx));
         update_fee_index_x_(self, fee_x);
 
+        let (reserve_x_, reserve_y_, _) = get_reserves(self);
         if(self.stable){
             let (scale_x, scale_y) = ( math::pow(10, self.decimal_x), math::pow(10, self.decimal_y) );
             assert!(amm_math::k_(reserve_x + value_x, reserve_y, scale_x, scale_y) >= amm_math::k_(reserve_x, reserve_y, scale_x, scale_y), E_K);
         }else{
-            assert!(((reserve_x + value_x) as u128 ) * (reserve_y as u128) >= (reserve_x as u128) * (reserve_y as u128), E_K);
+            assert!(((reserve_x_) as u128 ) * (reserve_y_ as u128) >= (reserve_x as u128) * (reserve_y as u128), E_K);
         };
 
         event::swap<X,Y>(value_x, output_y);
+        event::sync<X,Y>(reserve_x_, reserve_y_);
 
         coin::take<Y>(&mut self.reserve_y, output_y, ctx)
     }
@@ -857,14 +863,16 @@ module suiDouBashi_amm::pool{
         coin::put(&mut self.fee.fee_y, coin::take(&mut self.reserve_y, fee_y, ctx));
         update_fee_index_y_(self, fee_y);
 
+        let (reserve_x_, reserve_y_, _) = get_reserves(self);
         if(self.stable){
             let (scale_x, scale_y) = ( math::pow(10, self.decimal_x), math::pow(10, self.decimal_y) );
             assert!(amm_math::k_(reserve_x, reserve_y + value_y, scale_x, scale_y) >= amm_math::k_(reserve_x, reserve_y, scale_x, scale_y), E_K);
         }else{
-            assert!(((reserve_x) as u128 ) * ((reserve_y + value_y) as u128) >= (reserve_x as u128) * (reserve_y as u128), E_K);
+            assert!(((reserve_x_) as u128 ) * ((reserve_y_) as u128) >= (reserve_x as u128) * (reserve_y as u128), E_K);
         };
 
         event::swap<X,Y>(value_y, output_x);
+        event::sync<X,Y>(reserve_x_, reserve_y_);
 
         coin::take<X>(&mut self.reserve_x, output_x, ctx)
     }

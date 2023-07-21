@@ -187,7 +187,7 @@ module test::main{
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
-            voter::notify_reward_amount_(&mut voter, mint<SDB>(setup::stake_1(), ctx(s)));
+            voter::deposit_sdb(&mut voter, mint<SDB>(setup::stake_1(), ctx(s)));
             voter::update_for(&voter, &mut gauge_a);
             voter::update_for(&voter, &mut gauge_b);
 
@@ -441,37 +441,43 @@ module test::main{
 
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut minter, &mut gauge, &mut rewards, &mut pool, &mut vsdb_reg, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
+                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                add_time(clock, 1);
+            };
+            {
+                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 add_time(clock, 1);
             };
 

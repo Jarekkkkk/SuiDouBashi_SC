@@ -366,7 +366,6 @@ module suiDouBashi_vote::bribe{
         rewards: &mut Rewards<X,Y>,
         coin: Coin<T>,
         clock: &Clock,
-        ctx: &mut TxContext
     ){
         assert!(rewards.version == package_version(), E_WRONG_VERSION);
         assert_rewards_type<X,Y,T>();
@@ -384,7 +383,7 @@ module suiDouBashi_vote::bribe{
             table::add(&mut reward.rewards_per_epoch, epoch_ts, value);
         };
 
-        event::notify_reward<T>(tx_context::sender(ctx), value);
+        event::notify_reward<T>(value);
     }
 
     public entry fun get_all_rewards<X,Y>(

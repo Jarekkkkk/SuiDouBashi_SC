@@ -2,9 +2,6 @@ module suiDouBashi_amm::event{
     use sui::event::emit;
     use sui::object::{ID};
 
-    // == event ==
-
-    // - AMM
     struct PoolCreated<phantom X, phantom Y> has copy, drop{
         pool_id: ID,
         creator: address
@@ -40,7 +37,6 @@ module suiDouBashi_amm::event{
         amount_y: u64
     }
 
-    // - AMM
     public fun pool_created <X, Y>(pool_id: ID, creator: address){
         emit(
             PoolCreated<X,Y>{

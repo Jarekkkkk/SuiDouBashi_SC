@@ -96,7 +96,7 @@ module suiDouBashi_farm::farm{
     }
 
     fun init(ctx: &mut TxContext){
-        let reg = FarmReg{
+        let reg = FarmReg {
             id: object::new(ctx),
             initialized: false,
             governor: tx_context::sender(ctx),

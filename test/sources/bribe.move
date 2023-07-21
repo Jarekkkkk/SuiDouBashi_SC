@@ -28,8 +28,8 @@ module test::bribe_test{
             gauge::distribute_emissions(&mut gauge_a, &mut rewards_a, &mut pool_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
             gauge::distribute_emissions(&mut gauge_b, &mut rewards_b, &mut pool_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
             // bribe
-            bribe::bribe(&mut rewards_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
-            bribe::bribe(&mut rewards_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock, ctx);
+            bribe::bribe(&mut rewards_a, mint_sdb(&mut minter, setup::stake_1(), ctx), clock);
+            bribe::bribe(&mut rewards_b, mint_sdb(&mut minter, setup::stake_1(), ctx), clock);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);

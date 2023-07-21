@@ -342,6 +342,32 @@ module suiDouBashi_vsdb::vsdb{
         event::deposit(object::id(self), locked_balance(self), end_);
     }
 
+    /// Revive expired NFT, extend the unlocked period to at maximum 24 weeks
+    public entry fun revive(
+        reg: &mut VSDBRegistry,
+        self: &mut Vsdb,
+        clock: &Clock
+    ){
+        assert!(reg.version == VERSION, E_WRONG_VERSION);
+
+        let locked_bal = locked_balance(self);
+        let locked_end = locked_end(self);
+        let ts = unix_timestamp(clock);
+        let id = object::id(self);
+
+        assert!(ts >= locked_end , E_LOCK);
+        assert!(locked_bal > 0, E_EMPTY_BALANCE);
+
+        checkpoint_(true, reg, locked_bal, locked_end, 0, 0, clock);
+
+        locked_end = round_down_week(ts + max_time());
+
+        extend(self, option::none<Coin<SDB>>(), locked_end, clock);
+        checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
+
+        event::deposit(id, locked_bal, locked_end);
+    }
+
     /// Withdraw all the unlocked coin when due date is expired
     public entry fun unlock(
         reg: &mut VSDBRegistry,
@@ -370,32 +396,6 @@ module suiDouBashi_vsdb::vsdb{
         transfer::public_transfer(coin, tx_context::sender(ctx));
 
         event::withdraw(id, withdrawl, ts);
-    }
-
-    /// Revive expired NFT, extend the unlocked period to at maximum 24 weeks
-    public entry fun revive(
-        reg: &mut VSDBRegistry,
-        self: &mut Vsdb,
-        clock: &Clock
-    ){
-        assert!(reg.version == VERSION, E_WRONG_VERSION);
-
-        let locked_bal = locked_balance(self);
-        let locked_end = locked_end(self);
-        let ts = unix_timestamp(clock);
-        let id = object::id(self);
-
-        assert!(ts >= locked_end , E_LOCK);
-        assert!(locked_bal > 0, E_EMPTY_BALANCE);
-
-        checkpoint_(true, reg, locked_bal, locked_end, 0, 0, clock);
-
-        locked_end = round_down_week(ts + max_time());
-
-        extend(self, option::none<Coin<SDB>>(), locked_end, clock);
-        checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
-
-        event::deposit(id, locked_bal, locked_end);
     }
 
     // ===== VSDB =====
@@ -706,6 +706,7 @@ module suiDouBashi_vsdb::vsdb{
     public fun earn_xp<T: copy + store + drop>(_witness: T, self: &mut Vsdb, value: u64){
         assert!(vec::contains(&self.modules, &type_name::get<T>()), E_NOT_REGISTERED);
         self.experience = self.experience + value;
+        event::earn_xp(object::id(self), value);
     }
 
     public fun upgrade(self: &mut Vsdb){
@@ -715,6 +716,7 @@ module suiDouBashi_vsdb::vsdb{
             self.level = self.level + 1;
             required_xp = required_xp(self.level + 1, self.level);
         };
+        event::level_up(object::id(self), self.level);
     }
     /// Required Exp for under each level
     /// Formula: (Level/ 0.2) ^ 2
