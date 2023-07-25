@@ -55,6 +55,7 @@ module test::e_bribe_test{
 
         next_tx(s,a);{ // VSDB A holder voting
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 // pool_a
@@ -74,11 +75,11 @@ module test::e_bribe_test{
                     vec::push_back(&mut pools, object::id_to_address(&pool_id_b));
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
-                    let potato =  voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
+                    let potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
+                    let potato =  voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     potato = voter::vote_entry(potato,&mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -89,6 +90,7 @@ module test::e_bribe_test{
                 test::return_shared(bribe_b);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
         };
 

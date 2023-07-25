@@ -184,16 +184,18 @@ module test::main{
 
         next_tx(s,a);{ // Action: protocol distribute weekly emissions
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
             voter::deposit_sdb(&mut voter, mint<SDB>(setup::stake_1(), ctx(s)));
-            voter::update_for(&voter, &mut gauge_a);
-            voter::update_for(&voter, &mut gauge_b);
+            voter::update_for(&mut voter, &mut gauge_b, &mut minter);
+            voter::update_for(&mut voter, &mut gauge_a, &mut minter);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
             test::return_shared(voter);
+            test::return_shared(minter);
         };
         next_tx(s,a);{ // Assertion: voter state is successfully updated
             let voter = test::take_shared<Voter>(s);

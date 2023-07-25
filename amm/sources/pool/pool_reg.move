@@ -22,7 +22,6 @@ module suiDouBashi_amm::pool_reg{
     struct PoolReg has key {
         id: UID,
         pools: Table<String, ID>,
-        guardian: address
     }
 
     fun assert_fee(stable: bool, fee: u8){
@@ -37,8 +36,7 @@ module suiDouBashi_amm::pool_reg{
     fun init(ctx:&mut TxContext){
         let pool_gov = PoolReg{
             id: object::new(ctx),
-            pools: table::new<String, ID>(ctx),
-            guardian: tx_context::sender(ctx)
+            pools: table::new<String, ID>(ctx)
         };
         transfer::share_object(
             pool_gov

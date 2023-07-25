@@ -150,6 +150,7 @@ module suiDouBashi_vote::voter{
     }
 
     // ===== Entry =====
+
     fun init(ctx: &mut TxContext){
         let voter = Voter{
             id: object::new(ctx),
@@ -263,6 +264,7 @@ module suiDouBashi_vote::voter{
     public fun reset_<X,Y>(
         potato: Potato,
         self: &mut Voter,
+        minter: &mut Minter,
         vsdb: &mut Vsdb,
         gauge: &mut Gauge<X,Y>,
         bribe: &mut Bribe<X,Y>,
@@ -277,7 +279,7 @@ module suiDouBashi_vote::voter{
 
             assert!(pool_weight > 0, E_NOT_RESET);
 
-            update_for(self, gauge);
+            update_for(self, gauge, minter);
 
             *table::borrow_mut(&mut self.pool_weights, pool_id) = *table::borrow(&self.pool_weights, pool_id) - pool_weight;
 
@@ -294,6 +296,7 @@ module suiDouBashi_vote::voter{
     public fun vote_<X,Y>(
         potato: Potato,
         self: &mut Voter,
+        minter: &mut Minter,
         vsdb: &mut Vsdb,
         gauge: &mut Gauge<X,Y>,
         bribe: &mut Bribe<X,Y>,
@@ -311,7 +314,7 @@ module suiDouBashi_vote::voter{
             let pool_weight = ((weights as u128) * (vsdb::voting_weight(vsdb, clock) as u128) / (potato.total_weight as u128) as u64);
 
             assert!(pool_weight > 0, E_EMPTY_VALUE);
-            update_for(self, gauge);
+            update_for(self, gauge, minter);
 
             let voting_state_mut = voting_state_borrow_mut(vsdb);
             vec_map::insert(&mut voting_state_mut.pool_votes, pool_id, pool_weight);
@@ -344,14 +347,14 @@ module suiDouBashi_vote::voter{
         table::add(&mut self.registry, object::id(pool), created);
         table::add(&mut self.pool_weights, object::id(pool), 0);
 
-        update_for(self, &mut gauge);
+        gauge::update_voting_index(&mut gauge, self.index);
 
         transfer::public_share_object(gauge);
 
         event::gauge_created<X,Y>(object::id(pool), gauge_id, bribe, rewards);
     }
 
-    entry fun update_gauge_is_alive<X,Y>(
+    public entry fun update_gauge_is_alive<X,Y>(
         _cap: &VoterCap,
         gauge: &mut Gauge<X,Y>,
         is_alive: bool
@@ -382,7 +385,8 @@ module suiDouBashi_vote::voter{
         bribe::get_all_rewards<X,Y>(bribe, rewards, vsdb, clock, ctx);
     }
 
-    /// Voted Gauge
+    // ===== Entry =====
+
     public fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
@@ -401,7 +405,7 @@ module suiDouBashi_vote::voter{
         };
         option::destroy_none(coin_option);
 
-        update_for(self, gauge);
+        update_for(self, gauge, minter);
 
         let claimable = gauge::claimable(gauge);
         if(claimable > gauge::left(gauge, clock) && claimable > DURATION){
@@ -412,19 +416,22 @@ module suiDouBashi_vote::voter{
         }
     }
 
-    public fun update_for<X,Y>(self: &Voter, gauge: &mut Gauge<X,Y>){
+    public fun update_for<X,Y>(self: &mut Voter, gauge: &mut Gauge<X,Y>, minter: &mut Minter){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+
         let gauge_weights = *table::borrow(&self.pool_weights, gauge::pool_id(gauge));
+
         if(gauge_weights > 0){
             let s_idx = gauge::voting_index(gauge);
-            let index_ = self.index;
 
-            let delta = index_ - s_idx;
+            let delta = self.index - s_idx;
             if(delta > 0){
-                let share = (gauge_weights as u256) * (delta as u256) / SCALE_FACTOR;
+                let share = ((gauge_weights as u256) * (delta as u256) / SCALE_FACTOR as u64);
                 if(gauge::is_alive(gauge)){
-                    let updated = (share as u64) + gauge::claimable(gauge);
+                    let updated = share + gauge::claimable(gauge);
                     gauge::update_claimable(gauge, updated);
+                }else{
+                     minter::join(minter, balance::split(&mut self.balance, share));
                 }
             };
         };
@@ -433,6 +440,7 @@ module suiDouBashi_vote::voter{
 
     public fun deposit_sdb(self: &mut Voter, sdb: Coin<SDB>){
         assert!(self.version == package_version(), E_WRONG_VERSION);
+
         let value = coin::value(&sdb);
         let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
         if(ratio > 0){
@@ -443,7 +451,11 @@ module suiDouBashi_vote::voter{
         event::notify_reward<SDB>(value);
     }
 
+    // ====== UTILS ======
+
     public fun unix_timestamp(clock: &Clock):u64 { clock::timestamp_ms(clock) / 1000 }
+
+    // ====== UTILS ======
 
      #[test_only]
      public fun init_for_testing(ctx: &mut TxContext){

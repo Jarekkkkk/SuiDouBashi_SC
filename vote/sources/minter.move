@@ -172,6 +172,10 @@ module suiDouBashi_vote::minter{
         option::none()
     }
 
+    public fun join(self: &mut Minter, sdb: Balance<SDB>){
+        balance::join(&mut self.balance, sdb);
+    }
+
     public fun buyback(_cap: &MinterCap, self: &mut Minter, sdb: Coin<SDB>){
         assert!(self.verison == VERSION, E_WRONG_VERSION);
         balance::decrease_supply(&mut self.supply, coin::into_balance(sdb));

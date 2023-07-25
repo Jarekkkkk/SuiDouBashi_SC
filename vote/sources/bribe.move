@@ -282,7 +282,8 @@ module suiDouBashi_vote::bribe{
         let _bal = checkpoints::balance(bp);
         let _ts = checkpoints::balance_ts(bp);
         start_ts = math::max(start_ts, round_down_week(_ts));
-        let num_epoch = (math::min(round_down_week(ts), round_down_week(vsdb::locked_end(vsdb))) - start_ts) / WEEK;
+
+        let num_epoch = (round_down_week(math::min(ts, vsdb::locked_end(vsdb))) - start_ts) / WEEK;
         if( num_epoch > 0 ){
             let i = 0;
             while( i < num_epoch ){

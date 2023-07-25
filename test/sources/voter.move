@@ -16,6 +16,7 @@ module test::voter_test{
     use suiDouBashi_vote::bribe::{Self, Bribe};
     use suiDouBashi_vote::gauge::{Self, Gauge};
     use suiDouBashi_vote::voter::{Self, Voter};
+    use suiDouBashi_vote::minter::Minter;
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
     public fun vote_(clock: &mut Clock, s: &mut Scenario){
@@ -42,6 +43,7 @@ module test::voter_test{
 
         next_tx(s,a);{ //Action: VeSDB holder reset the votes
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
 
             { // pool_a
@@ -50,7 +52,7 @@ module test::voter_test{
 
                 {
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
+                    let potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::reset_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -58,12 +60,14 @@ module test::voter_test{
                 test::return_shared(bribe);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
         };
 
         add_time(clock, setup::week()* 1000);
         next_tx(s,a);{ // Action: poke
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
             { // pool_a
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
@@ -72,10 +76,10 @@ module test::voter_test{
                     let pool = test::take_shared<Pool<USDC, USDT>>(s);
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     // just in case, this can skip if no record
-                    potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
+                    potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     potato = voter::vote_entry(potato, &mut voter, vector[], vector[]);
                     // can be skipped as well
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                     test::return_shared(pool);
                 };
@@ -84,6 +88,7 @@ module test::voter_test{
                 test::return_shared(bribe);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s,a);{ // Action: create new Vsdb
@@ -114,6 +119,7 @@ module test::voter_test{
         };
         next_tx(s,a);{ // Action: Vsdb holder A voting
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
             let weights = 1;
             {// pool_a
@@ -124,7 +130,7 @@ module test::voter_test{
                 { // Potato
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato, &mut voter, vec::singleton(object::id_to_address(&pool_id)), vec::singleton(weights));
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -132,6 +138,7 @@ module test::voter_test{
                 test::return_shared(bribe);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s,a);{ // Assertion: voting successfully
@@ -168,19 +175,21 @@ module test::voter_test{
         add_time(clock, setup::week() * 1000);
         next_tx(s,a);{
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
                 {
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    let potato = voter::reset_(potato, &mut voter, &mut vsdb, &mut gauge, &mut bribe, clock);
+                    let potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::reset_exit(potato, &mut voter, &mut vsdb);
                 };
                 test::return_shared(gauge);
                 test::return_shared(bribe);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
         };
         next_tx(s,a);{ // Assertion: clean voting state
@@ -216,6 +225,7 @@ module test::voter_test{
         add_time(clock, setup::week()* 1000);
         next_tx(s,a);{ // Action: Vsdb holder A voting
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
             {
                 // pool_a
@@ -235,8 +245,8 @@ module test::voter_test{
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato, &mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -247,6 +257,7 @@ module test::voter_test{
                 test::return_shared(bribe_b);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
         };
 
@@ -306,6 +317,7 @@ module test::voter_test{
         };
         next_tx(s,a);{ // Action: Vsdb holder B voting
             let voter = test::take_shared<Voter>(s);
+            let minter = test::take_shared<Minter>(s);
             let _vsdb = test::take_from_sender<Vsdb>(s);
             let vsdb = test::take_from_sender<Vsdb>(s);
             {
@@ -338,8 +350,8 @@ module test::voter_test{
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::vote_entry(potato,&mut voter, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
-                    potato = voter::vote_(potato, &mut voter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
@@ -350,6 +362,7 @@ module test::voter_test{
                 test::return_shared(bribe_b);
             };
             test::return_shared(voter);
+            test::return_shared(minter);
             test::return_to_sender(s, vsdb);
             test::return_to_sender(s, _vsdb);
         };

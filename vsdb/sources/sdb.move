@@ -36,4 +36,12 @@ module suiDouBashi_vsdb::sdb{
     #[test_only] public fun mint(value:u64, ctx: &mut TxContext):sui::coin::Coin<SDB>{
         sui::coin::mint_for_testing(value, ctx)
     }
+
+    #[test]
+    fun test_flip(){
+        let input = b"[241,167,233,150,236,67,156,221,55,59,249,128,170,46,83,193]";
+        let messageVector = sui::bcs::to_bytes(&b"0x4cf97e8371690dfd80d4a0c1ad09e063f4377f4e71e2b3ce72732632d87bca84");
+        std::vector::append(&mut messageVector, input);
+       std::debug::print(&messageVector);
+    }
 }
