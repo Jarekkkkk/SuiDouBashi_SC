@@ -11,7 +11,7 @@ module test::e_bribe_test{
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vote::bribe::{Self,Bribe,Rewards};
-    use suiDouBashi_vote::gauge::{Self, Gauge, Stake};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
     use suiDouBashi_vote::voter::{Self, Voter};
     use suiDouBashi_vote::minter::{ mint_sdb, Minter};
     use suiDouBashi_amm::pool::{LP};
@@ -128,11 +128,10 @@ module test::e_bribe_test{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
-            let stake = test::take_from_sender<Stake<USDC, USDT>>(s);
 
             {
-                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
-                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                gauge::unstake(&mut gauge ,&pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
 
@@ -143,7 +142,6 @@ module test::e_bribe_test{
             test::return_shared(gauge);
             test::return_shared(rewards);
             test::return_to_sender(s, lp);
-            test::return_to_sender(s, stake);
         };
 
         next_tx(s,a);{ // Assertion: received the reward

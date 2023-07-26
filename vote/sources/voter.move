@@ -15,8 +15,8 @@ module suiDouBashi_vote::voter{
 
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
-    use suiDouBashi_amm::pool::Pool;
-    use suiDouBashi_vote::gauge::{Self, Gauge, Stake};
+    use suiDouBashi_amm::pool::{Pool, LP};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
     use suiDouBashi_vote::event;
     use suiDouBashi_vote::minter::{Self, Minter, package_version};
     use suiDouBashi_vote::bribe::{Self, Bribe, Rewards};
@@ -43,7 +43,9 @@ module suiDouBashi_vote::voter{
 
     // ===== Assertion =====
 
-    fun assert_available_voting( ts: u64 ){ assert!(ts >= vote_start(ts) && ts <= vote_end(ts), E_INVALID_VOTING_DURATOIN) }
+    fun assert_available_voting( ts: u64 ){
+        assert!(ts >= vote_start(ts) && ts <= vote_end(ts), E_INVALID_VOTING_DURATOIN)
+    }
 
     // ===== Assertion =====
 
@@ -183,6 +185,7 @@ module suiDouBashi_vote::voter{
         clock: &Clock
     ):Potato{
         let ts = unix_timestamp(clock);
+
         assert_available_voting(ts);
         let voting_state = voting_state_borrow_mut(vsdb);
         assert!((ts/ WEEK) * WEEK > voting_state.last_voted, E_VOTED);
@@ -372,17 +375,22 @@ module suiDouBashi_vote::voter{
         gauge::update_is_alive(gauge, is_alive);
     }
 
+    /// create additional Coin Rewards for each Pool
+    public entry fun new_reward<X,Y,T>(_: &VoterCap, rewards: &mut Rewards<X,Y>, ctx: &mut TxContext){
+        bribe::new_reward_<X,Y,T>(rewards, ctx);
+    }
+
     /// weekly minted SDB to incentivize pools --> LP_Staker
     public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         gauge: &mut Gauge<X,Y>,
-        stake: &mut Stake<X,Y>,
+        lp: &LP<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        gauge::get_reward<X,Y>(gauge, stake, clock, ctx);
+        gauge::get_reward<X,Y>(gauge, lp, clock, ctx);
     }
 
     /// External Bribe --> voter

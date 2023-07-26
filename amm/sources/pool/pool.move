@@ -46,6 +46,7 @@ module suiDouBashi_amm::pool{
     const E_INSUFFICIENT_LOAN: u64 = 106;
     const E_INVALID_REPAY: u64 = 107;
     const E_REMAINED_CLAIMABLE: u64 = 108;
+    const E_EXPIRED_VSDB: u64 = 109;
 
     // ====== Error =======
 
@@ -392,6 +393,7 @@ module suiDouBashi_amm::pool{
         assert_pool_unlocked(self);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
+        assert!(!vsdb::is_expired(vsdb, clock), E_EXPIRED_VSDB);
         earn_xp_(vsdb, clock);
         let level = vsdb::level(vsdb);
 
@@ -451,6 +453,7 @@ module suiDouBashi_amm::pool{
         assert_pool_unlocked(self);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
+        assert!(!vsdb::is_expired(vsdb, clock), E_EXPIRED_VSDB);
         earn_xp_(vsdb, clock);
         let level = vsdb::level(vsdb);
 
@@ -803,11 +806,10 @@ module suiDouBashi_amm::pool{
         assert!(reserve_x > 0 && reserve_y > 0, E_EMPTY_RESERVE);
 
         let _fee_percentage = if(option::is_some(&fee_percentage)){
-            option::extract(&mut fee_percentage)
+            option::destroy_some(fee_percentage)
         }else{
             self.fee.fee_percentage
         };
-        option::destroy_none(fee_percentage);
         let fee_x = calculate_fee(value_x, _fee_percentage);
 
         let dx = value_x - fee_x;
@@ -849,11 +851,10 @@ module suiDouBashi_amm::pool{
         assert!(value_y > 0, E_EMPTY_INPUT);
 
         let _fee_percentage = if(option::is_some(&fee_percentage)){
-            option::extract(&mut fee_percentage)
+            option::destroy_some(fee_percentage)
         }else{
             self.fee.fee_percentage
         };
-        option::destroy_none(fee_percentage);
         let fee_y = calculate_fee(value_y, _fee_percentage);
 
         let dy = value_y - fee_y;

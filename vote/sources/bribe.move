@@ -81,7 +81,8 @@ module suiDouBashi_vote::bribe{
     }
 
     // - Reward
-    fun new_reward_<X,Y,T>(rewards: &mut Rewards<X,Y>, ctx: &mut TxContext){
+
+    public (friend) fun new_reward_<X,Y,T>(rewards: &mut Rewards<X,Y>, ctx: &mut TxContext){
         let reward =  Reward<X,Y,T>{
             balance: balance::zero<T>(),
             rewards_per_epoch: table::new<u64, u64>(ctx),

@@ -372,6 +372,7 @@ module suiDouBashi_vsdb::vsdb{
 
         extend(self, option::none<Coin<SDB>>(), locked_end, clock);
         let sdb = coin::take(&mut self.balance, withdrawl, ctx);
+        reg.locked_total = reg.locked_total - withdrawl;
 
         checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
 

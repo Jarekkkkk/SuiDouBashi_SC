@@ -1,6 +1,6 @@
 module test::bribe_test{
     use suiDouBashi_vote::bribe::{Self, Rewards};
-    use suiDouBashi_vote::gauge::{Self, Gauge, Stake};
+    use suiDouBashi_vote::gauge::{Self, Gauge};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
@@ -77,31 +77,27 @@ module test::bribe_test{
         next_tx(s,a);{ // Action: LP A unstake & claim rewards
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
-            let stake_a = test::take_from_sender<Stake<USDC, USDT>>(s);
-            let stake_b = test::take_from_sender<Stake<SDB, USDC>>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
-            assert!(gauge::pending_sdb(&gauge_a, &stake_a, clock) == idx * setup::day() , 404);
-            assert!(gauge::pending_sdb(&gauge_b, &stake_b, clock) == idx * setup::day() , 404);
+            assert!(gauge::pending_sdb(&gauge_a, &lp_a, clock) == idx * setup::day() , 404);
+            assert!(gauge::pending_sdb(&gauge_b, &lp_b, clock) == idx * setup::day() , 404);
 
-            gauge::unstake(&mut gauge_a, &mut stake_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
-            gauge::unstake(&mut gauge_b, &mut stake_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
+            gauge::unstake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
+            gauge::unstake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
 
-            gauge::get_reward(&mut gauge_a, &mut stake_a, clock, ctx(s));
-            gauge::get_reward(&mut gauge_b, &mut stake_b, clock, ctx(s));
+            gauge::get_reward(&mut gauge_a, &lp_a, clock, ctx(s));
+            gauge::get_reward(&mut gauge_b, &lp_b, clock, ctx(s));
 
-            assert!(gauge::pending_sdb(&gauge_a, &stake_a, clock) == 0 , 404);
-            assert!(gauge::pending_sdb(&gauge_b, &stake_b, clock) == 0 , 404);
+            assert!(gauge::pending_sdb(&gauge_a, &lp_a, clock) == 0 , 404);
+            assert!(gauge::pending_sdb(&gauge_b, &lp_b, clock) == 0 , 404);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
             test::return_to_sender(s, lp_a);
             test::return_to_sender(s, lp_b);
-            test::return_to_sender(s, stake_a);
-            test::return_to_sender(s, stake_b);
             test::return_shared(pool_a);
             test::return_shared(pool_b);
         };
@@ -117,22 +113,18 @@ module test::bribe_test{
         next_tx(s,a);{// Action: LP A Stake back
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
-            let stake_a = test::take_from_sender<Stake<USDC, USDT>>(s);
-            let stake_b = test::take_from_sender<Stake<SDB, USDC>>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
-            gauge::stake(&mut gauge_a, &mut stake_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
-            gauge::stake(&mut gauge_b, &mut stake_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
+            gauge::stake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
+            gauge::stake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
             test::return_to_sender(s, lp_a);
             test::return_to_sender(s, lp_b);
-            test::return_to_sender(s, stake_a);
-            test::return_to_sender(s, stake_b);
             test::return_shared(pool_a);
             test::return_shared(pool_b);
         };
