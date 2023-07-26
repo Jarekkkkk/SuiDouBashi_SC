@@ -174,10 +174,10 @@ module test::main{
         }
     }
 
-    use suiDouBashi_vote::gauge::{Self, Gauge};
+    use suiDouBashi_vote::gauge::{Self, Gauge, Stake};
     use suiDouBashi_vote::voter::{Self, Voter};
     use suiDouBashi_amm::pool::{Self, LP};
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 10e18
+    const SCALE_FACTOR: u128 = 1_000_000_000_000_000_000;
 
     fun distribute_fees_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, c ) = setup::people();
@@ -200,14 +200,14 @@ module test::main{
         next_tx(s,a);{ // Assertion: voter state is successfully updated
             let voter = test::take_shared<Voter>(s);
             let total_voting_weight = voter::total_weight(&voter);
-            let index = (setup::stake_1() as u256) * SCALE_FACTOR / (total_voting_weight as u256);
+            let index = (setup::stake_1() as u128) * SCALE_FACTOR / (total_voting_weight as u128);
             // voter
             assert!(voter::index(&voter) == index, 404);
             assert!(voter::sdb_balance(&voter) == setup::stake_1(), 404);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge= test::take_shared<Gauge<USDC, USDT>>(s);
-                let gauge_weights =( voter::pool_weights(&voter, &pool) as u256);
+                let gauge_weights =( voter::pool_weights(&voter, &pool) as u128);
                 assert!(gauge::voting_index(&gauge) == index, 404);
                 assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
 
@@ -217,7 +217,7 @@ module test::main{
             {// pool_b
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
                 let gauge= test::take_shared<Gauge<SDB, USDC>>(s);
-                let gauge_weights =( voter::pool_weights(&voter, &pool) as u256);
+                let gauge_weights =( voter::pool_weights(&voter, &pool) as u128);
 
                 assert!(gauge::voting_index(&gauge) == index, 404);
                 assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
@@ -262,8 +262,12 @@ module test::main{
 
         next_tx(s,a);{ // Action: staker A withdraw weekly emissions
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            gauge::get_reward(&mut gauge, clock, ctx(s));
+            let stake = test::take_from_sender<Stake<USDC, USDT>>(s);
+
+            gauge::get_reward(&mut gauge, &mut stake, clock, ctx(s));
+
             test::return_shared(gauge);
+            test::return_to_sender(s, stake);
         };
 
         next_tx(s,a);{ // Assertion:
@@ -287,8 +291,12 @@ module test::main{
         next_tx(s,a);
         let opt_emission = { // Action: staker A withdraw weekly emissions after a week
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let earned = gauge::pending_sdb(&gauge, a, clock);
-            gauge::get_reward(&mut gauge, clock, ctx(s));
+            let stake = test::take_from_sender<Stake<USDC, USDT>>(s);
+
+            let earned = gauge::pending_sdb(&gauge, &stake, clock);
+            gauge::get_reward(&mut gauge, &mut stake, clock, ctx(s));
+
+            test::return_to_sender(s, stake);
             test::return_shared(gauge);
 
             earned
@@ -403,31 +411,35 @@ module test::main{
 
         next_tx(s,a);{
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
+            let stake_a = test::take_from_sender<Stake<USDC, USDT>>(s);
             let pool_a = test::take_shared<Pool<USDC, USDT>>(s);
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
 
-            gauge::unstake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
+            gauge::unstake(&mut gauge_a, &mut stake_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
             add_time(clock, 1);
-            gauge::stake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
+            gauge::stake(&mut gauge_a, &mut stake_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
 
             test::return_shared(gauge_a);
             test::return_to_sender(s, lp_a);
+            test::return_to_sender(s, stake_a);
             test::return_shared(pool_a);
         };
 
         next_tx(s,a);{ // Staker claim the rewards
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+            let stake = test::take_from_sender<Stake<USDC, USDT>>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
 
-            gauge::get_reward(&mut gauge, clock, ctx(s));
-            gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+            gauge::get_reward(&mut gauge, &mut stake, clock, ctx(s));
+            gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
             add_time(clock, 1);
-            let prev_earned = gauge::pending_sdb(&gauge, a, clock);
+            let prev_earned = gauge::pending_sdb(&gauge, &stake, clock);
             assert!(prev_earned == 0, 404);
 
             test::return_shared(gauge);
             test::return_to_sender(s, lp);
+            test::return_to_sender(s, stake);
             test::return_shared(pool);
         };
 
@@ -440,48 +452,51 @@ module test::main{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
+            let stake = test::take_from_sender<Stake<USDC, USDT>>(s);
 
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
-                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
+                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
-                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
+                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
-                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
+                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
-                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
+                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
-                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
+                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
-                gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
+                gauge::unstake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
+            // stake back
             {
-                gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
+                gauge::stake(&mut gauge, &mut stake, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, &mut stake, clock, ctx(s));
                 add_time(clock, 1);
             };
+
 
             let post_sdb = {
                 let sdb = test::take_from_sender<Coin<SDB>>(s);
@@ -497,6 +512,7 @@ module test::main{
             test::return_shared(gauge);
             test::return_shared(rewards);
             test::return_to_sender(s, lp);
+            test::return_to_sender(s, stake);
 
             post_sdb
         };

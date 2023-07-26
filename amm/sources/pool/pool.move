@@ -27,7 +27,7 @@ module suiDouBashi_amm::pool{
 
     const FEE_SCALING: u64 = 10000;
     const PERIOD_SIZE: u64 = 1800; // 30 minutes TWAP
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const DURATION: u64 = { 7 * 86400 };
     const MINIMUM_LIQUIDITY: u64 = 1_000;
 
@@ -45,6 +45,7 @@ module suiDouBashi_amm::pool{
     const E_K: u64 = 105;
     const E_INSUFFICIENT_LOAN: u64 = 106;
     const E_INVALID_REPAY: u64 = 107;
+    const E_REMAINED_CLAIMABLE: u64 = 108;
 
     // ====== Error =======
 
@@ -240,9 +241,10 @@ module suiDouBashi_amm::pool{
             lp_balance,
             index_x: _,
             index_y: _,
-            claimable_x: _,
-            claimable_y: _
+            claimable_x,
+            claimable_y
         } = lp;
+        assert!(claimable_x == 0 && claimable_y == 0 ,E_REMAINED_CLAIMABLE);
         balance::destroy_zero(lp_balance);
         object::delete(id);
     }
@@ -255,7 +257,7 @@ module suiDouBashi_amm::pool{
         if(lp_balance > 0){
             let delta = self.fee.index_x - lp.index_x;
             if(delta > 0){
-                let share = (lp_balance as u256) * delta / SCALE_FACTOR;
+                let share = (lp_balance as u256) * delta / PRECISION;
                 claimable_x = claimable_x + (share as u64);
             };
         };
@@ -268,7 +270,7 @@ module suiDouBashi_amm::pool{
         if(lp_balance > 0){
             let delta = self.fee.index_y - lp.index_y;
             if(delta > 0){
-                let share = (lp_balance as u256) * delta / SCALE_FACTOR;
+                let share = (lp_balance as u256) * delta / PRECISION;
                 claimable_y = claimable_y + (share as u64);
             };
         };
@@ -910,10 +912,10 @@ module suiDouBashi_amm::pool{
             let delta_y = self.fee.index_y - lp_position.index_y;
 
             if(delta_x > 0){
-                lp_position.claimable_x = lp_position.claimable_x + ((lp_balance as u256) * delta_x / SCALE_FACTOR as u64);
+                lp_position.claimable_x = lp_position.claimable_x + ((lp_balance as u256) * delta_x / PRECISION as u64);
             };
             if(delta_y > 0){
-                lp_position.claimable_y = lp_position.claimable_y + ((lp_balance as u256) * delta_y / SCALE_FACTOR as u64);
+                lp_position.claimable_y = lp_position.claimable_y + ((lp_balance as u256) * delta_y / PRECISION as u64);
             };
         };
         lp_position.index_x = self.fee.index_x;
@@ -921,12 +923,12 @@ module suiDouBashi_amm::pool{
     }
 
     fun update_fee_index_x_<X,Y>(self: &mut Pool<X,Y>, fee_x: u64 ){
-        self.fee.index_x = self.fee.index_x + (fee_x as u256) * SCALE_FACTOR / (lp_supply(self) as u256);
+        self.fee.index_x = self.fee.index_x + (fee_x as u256) * PRECISION / (lp_supply(self) as u256);
         event::fee<X>(fee_x);
     }
 
     fun update_fee_index_y_<X,Y>(self: &mut Pool<X,Y>, fee_y: u64 ){
-        self.fee.index_y = self.fee.index_y + (fee_y as u256) * SCALE_FACTOR / (lp_supply(self) as u256);
+        self.fee.index_y = self.fee.index_y + (fee_y as u256) * PRECISION / (lp_supply(self) as u256);
         event::fee<Y>(fee_y);
     }
 

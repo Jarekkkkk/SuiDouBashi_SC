@@ -9,7 +9,6 @@ module suiDouBashi_vote::gauge{
     use sui::transfer;
     use sui::clock::{Self, Clock};
     use sui::math;
-    use sui::table::{Self, Table};
 
     use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vote::event;
@@ -22,7 +21,7 @@ module suiDouBashi_vote::gauge{
     // ====== Constants =======
 
     const WEEK: u64 = { 7 * 86400 };
-    const PRECISION: u256 = 1_000_000_000_000_000_000;
+    const PRECISION: u128 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     // ====== Constants =======
@@ -71,23 +70,30 @@ module suiDouBashi_vote::gauge{
         /// period finish time
         period_finish: u64,
         /// accumlating distribution for SDB rewards per casted votes
-        voting_index: u256,
+        voting_index: u128,
         /// claimable SDB amount
         claimable: u64,
         /// total staked liquidity
         total_stakes: LP<X,Y>,
         /// accumlating distribution SDB rewards per lp balance
-        staking_index: u256,
-        /// staked liquidity from LPs
-        lp_infos: Table<address, LPInfo>
+        staking_index: u128,
     }
 
-    struct LPInfo has store{
+    struct Stake<phantom X, phantom Y> has key, store{
+        id: UID,
         stakes: u64,
-        staking_index: u256,
+        staking_index: u128,
         pending_sdb: u64
     }
 
+    public fun new_stake<X,Y>(self: &Gauge<X,Y>, ctx: &mut TxContext):Stake<X,Y>{
+        Stake{
+            id: object::new(ctx),
+            stakes: 0,
+            staking_index: self.staking_index,
+            pending_sdb: 0
+        }
+    }
     public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
 
     public (friend) fun update_is_alive<X,Y>(self: &mut Gauge<X,Y>, alive: bool ){
@@ -101,9 +107,9 @@ module suiDouBashi_vote::gauge{
 
     public fun period_finish<X,Y>(self: &Gauge<X,Y>): u64 { self.period_finish }
 
-    public fun voting_index<X,Y>(self: &Gauge<X,Y>):u256{ self.voting_index }
+    public fun voting_index<X,Y>(self: &Gauge<X,Y>):u128{ self.voting_index }
 
-    public (friend) fun update_voting_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){
+    public (friend) fun update_voting_index<X,Y>(self: &mut Gauge<X,Y>, v: u128){
         assert_pkg_version(self);
         self.voting_index = v;
     }
@@ -119,11 +125,11 @@ module suiDouBashi_vote::gauge{
 
     public fun total_stakes<X,Y>(self: &Gauge<X,Y>):&LP<X,Y>{ &self.total_stakes }
 
-    public fun lp_stakes<X,Y>(self: &Gauge<X,Y>, staker: address): u64{
-        table::borrow(&self.lp_infos, staker).stakes
+    public fun lp_stakes<X,Y>(stake: &Stake<X,Y>): u64{
+        stake.stakes
     }
 
-    public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u256{ self.staking_index }
+    public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u128{ self.staking_index }
 
 
     public (friend) fun new<X,Y>(
@@ -132,9 +138,8 @@ module suiDouBashi_vote::gauge{
     ):(Gauge<X,Y>, ID, ID){
         let (bribe, rewards) = bribe::new<X,Y>(ctx);
 
-        let id = object::new(ctx);
         let gauge = Gauge<X,Y>{
-            id,
+            id: object::new(ctx),
             version: package_version(),
             is_alive: true,
             pool: object::id(pool),
@@ -147,8 +152,7 @@ module suiDouBashi_vote::gauge{
             voting_index: 0,
             claimable: 0,
             total_stakes: pool::create_lp(pool, ctx),
-            staking_index: 0,
-            lp_infos: table::new<address, LPInfo>(ctx),
+            staking_index: 0
         };
 
         (gauge, bribe, rewards)
@@ -156,17 +160,14 @@ module suiDouBashi_vote::gauge{
 
     // ====== GETTER ======
 
-    public fun pending_sdb<X,Y>(self: &Gauge<X,Y>, staker: address, clock: &Clock): u64{
-        if(!table::contains(&self.lp_infos, staker)) return 0;
-
-        let lp_info = table::borrow(&self.lp_infos, staker);
+    public fun pending_sdb<X,Y>(self: &Gauge<X,Y>, stake: &Stake<X,Y>, clock: &Clock): u64{
         let ts = unix_timestamp(clock);
-        let pending_sdb = lp_info.pending_sdb;
+        let pending_sdb = stake.pending_sdb;
 
-        if(ts > self.last_update_time && lp_info.stakes > 0){
-            let delta = cal_staking_index(self, clock) - lp_info.staking_index;
+        if( ts > self.last_update_time && stake.stakes > 0){
+            let delta = cal_staking_index(self, clock) - stake.staking_index;
             if(delta > 0){
-                let share = (lp_info.stakes as u256) * delta / PRECISION;
+                let share = (stake.stakes as u128) * delta / PRECISION;
                 pending_sdb = pending_sdb + (share as u64);
             };
         };
@@ -180,22 +181,21 @@ module suiDouBashi_vote::gauge{
 
     public entry fun get_reward<X,Y>(
         self: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.lp_infos, staker), E_INVALID_STAKER);
 
         update_gauge_(self, clock);
-        update_lp_(self, staker);
+        update_lp_(self, stake);
 
-        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
-        let pending = lp_info.pending_sdb;
+        let pending = stake.pending_sdb;
         if(pending > 0){
             transfer::public_transfer(coin::take(&mut self.sdb_balance, pending, ctx), staker);
         };
-        lp_info.pending_sdb = 0;
+        stake.pending_sdb = 0;
 
         event::claim_reward(staker, pending);
     }
@@ -203,6 +203,7 @@ module suiDouBashi_vote::gauge{
     /// Stake LP_TOKEN
     public entry fun stake_all<X,Y>(
         self: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         clock: &Clock,
@@ -210,11 +211,13 @@ module suiDouBashi_vote::gauge{
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
         let balance = pool::lp_balance(lp);
-        stake(self, pool, lp, balance, clock, ctx);
+        assert!(balance > 0, E_EMPTY_VALUE);
+        stake(self, stake, pool, lp, balance, clock, ctx);
     }
 
     public entry fun stake<X,Y>(
         self: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         value: u64,
@@ -227,24 +230,12 @@ module suiDouBashi_vote::gauge{
         assert!(lp_value >= value, E_EMPTY_VALUE);
         assert!(value > 0, E_EMPTY_VALUE);
 
-        let staker = tx_context::sender(ctx);
-        if(!table::contains(&self.lp_infos, staker)){
-            table::add(&mut self.lp_infos,
-                staker,
-                LPInfo{
-                    stakes: 0,
-                    staking_index: 0,
-                    pending_sdb: 0
-                }
-            );
-        };
         update_gauge_(self, clock);
-        update_lp_(self, staker);
+        update_lp_(self, stake);
 
         pool::join_lp(pool, &mut self.total_stakes, lp, value);
 
-        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
-        lp_info.stakes = lp_info.stakes + value;
+        stake.stakes = stake.stakes + value;
 
         event::deposit_lp<X,Y>(tx_context::sender(ctx), value);
     }
@@ -252,18 +243,20 @@ module suiDouBashi_vote::gauge{
     /// LP unstake lp
     public entry fun unstake_all<X,Y>(
         self: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
-        let bal = lp_stakes(self, tx_context::sender(ctx));
-        unstake(self, pool, lp, bal, clock, ctx);
+        let bal = lp_stakes(stake);
+        unstake(self, stake, pool, lp, bal, clock, ctx);
     }
 
     public entry fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         value: u64,
@@ -272,22 +265,17 @@ module suiDouBashi_vote::gauge{
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.lp_infos, staker), E_INVALID_STAKER);
-
         update_gauge_(self, clock);
-        update_lp_(self, staker);
+        update_lp_(self, stake);
 
-        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
-        assert!(value <= lp_info.stakes, E_INSUFFICENT_BALANCE);
+        assert!(value <= stake.stakes, E_INSUFFICENT_BALANCE);
 
         pool::join_lp(pool, lp, &mut self.total_stakes, value);
-        lp_info.stakes = lp_info.stakes - value;
+        stake.stakes = stake.stakes - value;
 
         event::withdraw_lp<X,Y>(tx_context::sender(ctx), value);
     }
 
-    // TODO: add friend constraint
     public fun distribute_emissions<X,Y>(
         self: &mut Gauge<X,Y>,
         rewards: &mut Rewards<X,Y>,
@@ -332,11 +320,11 @@ module suiDouBashi_vote::gauge{
     public fun cal_staking_index<X,Y>(
         self: &Gauge<X,Y>,
         clock: &Clock
-    ): u256{
+    ): u128{
         let total_stakes = pool::lp_balance(&self.total_stakes);
         if(total_stakes == 0) return self.staking_index;
 
-        self.staking_index + ((last_time_reward_applicable(self,clock) - self.last_update_time) as u256) * (self.reward_rate as u256) * PRECISION / (total_stakes as u256)
+        self.staking_index + ((last_time_reward_applicable(self,clock) - self.last_update_time) as u128) * (self.reward_rate as u128) * PRECISION / (total_stakes as u128)
     }
 
     fun unix_timestamp(clock: &Clock): u64 { clock::timestamp_ms(clock) / 1000 }
@@ -371,20 +359,19 @@ module suiDouBashi_vote::gauge{
     }
 
     fun update_lp_<X,Y>(
-        self: &mut Gauge<X,Y>,
-        staker: address
+        self: &Gauge<X,Y>,
+        stake: &mut Stake<X,Y>
     ){
-        let lp_info = table::borrow_mut(&mut self.lp_infos, staker);
-        let staked = lp_info.stakes;
+        let staked = stake.stakes;
         if(staked > 0){
-            let delta = self.staking_index - lp_info.staking_index;
+            let delta = self.staking_index - stake.staking_index;
 
             if(delta > 0){
-                let share = (staked as u256) * delta / PRECISION;
-                lp_info.pending_sdb = lp_info.pending_sdb + (share as u64);
+                let share = (staked as u128) * delta / PRECISION;
+                stake.pending_sdb = stake.pending_sdb + (share as u64);
             }
         };
-        lp_info.staking_index = self.staking_index;
+        stake.staking_index = self.staking_index;
     }
 
     // TODO: add friend module

@@ -2,18 +2,18 @@ module suiDouBashi_amm::amm_math{
     use std::type_name;
     use sui::math;
 
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
 
     const ERR_INVALD_FEE:u64 = 001;
 
     public fun k_(res_x: u64, res_y: u64, scale_x: u64, scale_y: u64): u256 {
         // x^3y + xy^3 = k
-        let _x = (res_x as u256) * SCALE_FACTOR / (scale_x as u256);
-        let _y = (res_y as u256) * SCALE_FACTOR / (scale_y as u256);
-        let _a = (_x * _y ) / SCALE_FACTOR;
-        let _b =(( _x * _x) / SCALE_FACTOR) + (( _y * _y) / SCALE_FACTOR) ;
+        let _x = (res_x as u256) * PRECISION / (scale_x as u256);
+        let _y = (res_y as u256) * PRECISION / (scale_y as u256);
+        let _a = (_x * _y ) / PRECISION;
+        let _b =(( _x * _x) / PRECISION) + (( _y * _y) / PRECISION) ;
 
-        (_a * _b / SCALE_FACTOR)
+        (_a * _b / PRECISION)
     }
 
     public fun get_output_<X,Y,T>(
@@ -63,13 +63,13 @@ module suiDouBashi_amm::amm_math{
         let scale_y = ( _scale_y as u256);
         let xy = k_(_res_x, _res_y, _scale_x, _scale_y);
 
-        let res_x_ = (( _res_x as u256)  * SCALE_FACTOR) / scale_x ;
-        let res_y_ = (( _res_y as u256)  * SCALE_FACTOR) / scale_y ;
+        let res_x_ = (( _res_x as u256)  * PRECISION) / scale_x ;
+        let res_y_ = (( _res_y as u256)  * PRECISION) / scale_y ;
 
-        let input_x_ = (( dx as u256)  * SCALE_FACTOR ) / scale_x ;
+        let input_x_ = (( dx as u256)  * PRECISION ) / scale_x ;
         let output_y = res_y_ -  get_y(input_x_ + res_x_, xy, res_y_);
 
-        output_y * scale_y  / SCALE_FACTOR
+        output_y * scale_y  / PRECISION
     }
 
     /// Calculate optimized one-side adding liquidity ( Variable Pool )
@@ -102,10 +102,10 @@ module suiDouBashi_amm::amm_math{
             let prev_y = y;
 
             if( k < xy ){
-                let dy = ((xy - k)* SCALE_FACTOR / d(x0, y)) ;
+                let dy = ((xy - k)* PRECISION / d(x0, y)) ;
                 y = y + dy;
             }else{
-                let dy = ((k - xy) * SCALE_FACTOR / d(x0, y));
+                let dy = ((k - xy) * PRECISION / d(x0, y));
                 y = y - dy;
             };
 
@@ -126,12 +126,12 @@ module suiDouBashi_amm::amm_math{
     }
 
     fun f(x0: u256, y: u256): u256 {
-        x0 * (y * y / SCALE_FACTOR * y / SCALE_FACTOR) / SCALE_FACTOR + (x0 * x0 / SCALE_FACTOR * x0 / SCALE_FACTOR) * y / SCALE_FACTOR
+        x0 * (y * y / PRECISION * y / PRECISION) / PRECISION + (x0 * x0 / PRECISION * x0 / PRECISION) * y / PRECISION
         //x0*y^3 + x0^3*y
     }
 
     fun d(x0: u256, y: u256): u256 {
-        3 * x0 * (y * y/ SCALE_FACTOR) / SCALE_FACTOR + (x0 * x0 / SCALE_FACTOR * x0 / SCALE_FACTOR)
+        3 * x0 * (y * y/ PRECISION) / PRECISION + (x0 * x0 / PRECISION * x0 / PRECISION)
         //3*x0*y^2 + x0^3
     }
 

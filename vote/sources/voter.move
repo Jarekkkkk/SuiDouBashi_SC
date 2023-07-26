@@ -16,15 +16,17 @@ module suiDouBashi_vote::voter{
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
     use suiDouBashi_amm::pool::Pool;
-    use suiDouBashi_vote::gauge::{Self, Gauge};
+    use suiDouBashi_vote::gauge::{Self, Gauge, Stake};
     use suiDouBashi_vote::event;
     use suiDouBashi_vote::minter::{Self, Minter, package_version};
     use suiDouBashi_vote::bribe::{Self, Bribe, Rewards};
 
     // ====== Constants =======
 
-    const DURATION: u64 = { 7 * 86400 };
-    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000; // 1e18
+    const WEEK: u64 = { 7 * 86400 };
+    const HOUR: u64 = 3600;
+    const PRECISION: u128 = 1_000_000_000_000_000_000;
+
 
     // ====== Constants =======
 
@@ -35,8 +37,15 @@ module suiDouBashi_vote::voter{
     const E_VOTED: u64 = 101;
     const E_NOT_RESET: u64 = 102;
     const E_NOT_VOTE: u64 = 103;
+    const E_INVALID_VOTING_DURATOIN: u64 = 104;
 
     // ====== Error =======
+
+    // ===== Assertion =====
+
+    fun assert_available_voting( ts: u64 ){ assert!(ts >= vote_start(ts) && ts <= vote_end(ts), E_INVALID_VOTING_DURATOIN) }
+
+    // ===== Assertion =====
 
     /// Capability of Voter package
     struct VoterCap has key { id: UID }
@@ -55,10 +64,10 @@ module suiDouBashi_vote::voter{
         /// registered members [gauge, bribe, rewards] for each pool
         registry: Table<ID, VecSet<ID>>,
         /// accumulating distribution of weekly SDB emissions
-        index: u256
+        index: u128
     }
 
-    public fun index(self: &Voter): u256 { self.index }
+    public fun index(self: &Voter): u128 { self.index }
 
     public fun sdb_balance(self: &Voter): u64 { balance::value(&self.balance) }
 
@@ -173,9 +182,10 @@ module suiDouBashi_vote::voter{
         vsdb: &mut Vsdb,
         clock: &Clock
     ):Potato{
-        let voting_state = voting_state_borrow_mut(vsdb);
         let ts = unix_timestamp(clock);
-        assert!((ts/ DURATION) * DURATION > voting_state.last_voted, E_VOTED);
+        assert_available_voting(ts);
+        let voting_state = voting_state_borrow_mut(vsdb);
+        assert!((ts/ WEEK) * WEEK > voting_state.last_voted, E_VOTED);
         voting_state.last_voted = ts;
         // copy and clear pool_votes fields
         let weights = voting_state.pool_votes;
@@ -366,12 +376,13 @@ module suiDouBashi_vote::voter{
     public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         gauge: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        gauge::get_reward<X,Y>(gauge, clock, ctx);
+        gauge::get_reward<X,Y>(gauge, stake, clock, ctx);
     }
 
     /// External Bribe --> voter
@@ -408,7 +419,7 @@ module suiDouBashi_vote::voter{
         update_for(self, gauge, minter);
 
         let claimable = gauge::claimable(gauge);
-        if(claimable > gauge::left(gauge, clock) && claimable > DURATION){
+        if(claimable > gauge::left(gauge, clock) && claimable > WEEK){
             gauge::update_claimable(gauge, 0);
             let coin_sdb = coin::take(&mut self.balance, claimable, ctx);
 
@@ -426,7 +437,7 @@ module suiDouBashi_vote::voter{
 
             let delta = self.index - s_idx;
             if(delta > 0){
-                let share = ((gauge_weights as u256) * (delta as u256) / SCALE_FACTOR as u64);
+                let share = ((gauge_weights as u128) * (delta as u128) / PRECISION as u64);
                 if(gauge::is_alive(gauge)){
                     let updated = share + gauge::claimable(gauge);
                     gauge::update_claimable(gauge, updated);
@@ -442,9 +453,9 @@ module suiDouBashi_vote::voter{
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
         let value = coin::value(&sdb);
-        let ratio = (value as u256) * SCALE_FACTOR / (self.total_weight as u256) ;
+        let ratio = (value as u128) * PRECISION / (self.total_weight as u128) ;
         if(ratio > 0){
-            self.index = self.index + (ratio as u256);
+            self.index = self.index + (ratio as u128);
         };
         coin::put(&mut self.balance, sdb);
 
@@ -455,7 +466,26 @@ module suiDouBashi_vote::voter{
 
     public fun unix_timestamp(clock: &Clock):u64 { clock::timestamp_ms(clock) / 1000 }
 
+    public fun round_down_week(ts: u64):u64 { ts / WEEK * WEEK }
+
+    public fun vote_start(ts: u64): u64 { round_down_week(ts) + HOUR }
+
+    public fun vote_end(ts: u64): u64 { round_down_week(ts) + WEEK - HOUR }
+
     // ====== UTILS ======
+
+    #[test]
+    fun test_voting(){
+        let ts = 1690349951;
+        assert_available_voting(ts);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = E_INVALID_VOTING_DURATOIN)]
+    fun test_err_voting(){
+        let ts = 1673913427200;
+        assert_available_voting(ts);
+    }
 
      #[test_only]
      public fun init_for_testing(ctx: &mut TxContext){
