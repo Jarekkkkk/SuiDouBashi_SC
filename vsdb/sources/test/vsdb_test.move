@@ -1,6 +1,6 @@
 #[test_only]
 module suiDouBashi_vsdb::vsdb_test{
-    use sui::coin::{ mint_for_testing as mint};
+    use sui::coin::{Self, Coin, mint_for_testing as mint};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use suiDouBashi_vsdb::vsdb;
@@ -247,17 +247,21 @@ module suiDouBashi_vsdb::vsdb_test{
         next_tx(s,a);{ // revive the expired NFT
             let vsdb = test::take_from_sender< Vsdb>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::revive(&mut reg, &mut vsdb, clock);
+            vsdb::revive(&mut reg, &mut vsdb, sui_1M(), vsdb::max_time(), clock, ctx(s));
             test::return_shared(reg);
             test::return_to_sender(s, vsdb);
         };
 
         next_tx(s,a);{
-            let vsdb = test::take_from_sender< Vsdb>(s);
+            let vsdb = test::take_from_sender<Vsdb>(s);
             let _end = vsdb::round_down_week(get_time(clock)/1000 + vsdb::max_time());
+            let coin_sdb = test::take_from_sender<Coin<SDB>>(s);
+
             assert!(vsdb::locked_end(&vsdb) == _end, 404);
-            assert!(vsdb::locked_balance(&vsdb) == sui_100M(), 404);
+            assert!(vsdb::locked_balance(&vsdb) == sui_100M() - sui_1M(), 404);
+            assert!(coin::burn_for_testing(coin_sdb) == sui_1M(), 404);
             test::return_to_sender(s, vsdb);
+
         };
     }
     use sui::math;

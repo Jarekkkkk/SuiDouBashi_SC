@@ -948,7 +948,7 @@ module suiDouBashi_vsdb::art{
         calc_attributes(&mut bond);
         calc_derived_data(&mut bond);
         let _data = get_metadata_json(&bond);
-       std::debug::print(&_data);
+       //std::debug::print(&_data);
         object::delete(id);
     }
 

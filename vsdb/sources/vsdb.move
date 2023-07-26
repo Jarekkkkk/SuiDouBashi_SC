@@ -15,13 +15,14 @@ module suiDouBashi_vsdb::vsdb{
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use sui::coin::{Self, Coin};
+    use sui::math;
     use sui::clock::{Self, Clock};
     use sui::package;
     use sui::display;
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
 
-    use suiDouBashi_vsdb::sdb::SDB;
+    use suiDouBashi_vsdb::sdb::{Self, SDB};
     use suiDouBashi_vsdb::point::{Self, Point};
     use suiDouBashi_vsdb::event;
     use suiDouBashi_vsdb::i128::{Self, I128};
@@ -38,13 +39,14 @@ module suiDouBashi_vsdb::vsdb{
     const E_WRONG_VERSION: u64 = 001;
 
     const E_INVALID_UNLOCK_TIME: u64 = 100;
-    const E_LOCK: u64 = 101;
-    const E_ALREADY_REGISTERED: u64 = 102;
-    const E_ZERO_INPUT: u64 = 103;
-    const E_EMPTY_BALANCE: u64 = 104;
-    const E_NOT_REGISTERED: u64 = 105;
-    const E_NOT_PURE: u64 = 106;
-    const E_INVALID_LEVEL: u64 = 107;
+    const E_INSUFFICIENT_AMOUNT: u64 = 101;
+    const E_LOCK: u64 = 102;
+    const E_ALREADY_REGISTERED: u64 = 103;
+    const E_ZERO_INPUT: u64 = 104;
+    const E_EMPTY_BALANCE: u64 = 105;
+    const E_NOT_REGISTERED: u64 = 106;
+    const E_NOT_PURE: u64 = 107;
+    const E_INVALID_LEVEL: u64 = 108;
 
     // ====== Error =======
 
@@ -105,6 +107,8 @@ module suiDouBashi_vsdb::vsdb{
     public fun point_history(reg: &VSDBRegistry):&TableVec<Point> { &reg.point_history }
 
     public fun get_global_point_history(reg: &VSDBRegistry, epoch: u64): &Point{ table_vec::borrow(&reg.point_history, epoch) }
+
+    public fun is_expired(self: &Vsdb, clock: &Clock):bool { unix_timestamp(clock) > self.end }
 
     public fun total_VeSDB(reg: &VSDBRegistry, clock: &Clock): u64{ total_VeSDB_at(reg, unix_timestamp(clock)) }
 
@@ -346,26 +350,33 @@ module suiDouBashi_vsdb::vsdb{
     public entry fun revive(
         reg: &mut VSDBRegistry,
         self: &mut Vsdb,
-        clock: &Clock
+        withdrawl: u64,
+        extended_duration: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
     ){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
 
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let ts = unix_timestamp(clock);
-        let id = object::id(self);
 
         assert!(ts >= locked_end , E_LOCK);
         assert!(locked_bal > 0, E_EMPTY_BALANCE);
+        // each Vsdb should keep at least 1 SDB Coin
+        assert!(withdrawl + (math::pow(10, sdb::decimals())) <= locked_bal, E_INSUFFICIENT_AMOUNT);
 
         checkpoint_(true, reg, locked_bal, locked_end, 0, 0, clock);
 
-        locked_end = round_down_week(ts + max_time());
+        locked_end = round_down_week(ts + extended_duration);
 
         extend(self, option::none<Coin<SDB>>(), locked_end, clock);
+        let sdb = coin::take(&mut self.balance, withdrawl, ctx);
+
         checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
 
-        event::deposit(id, locked_bal, locked_end);
+        transfer::public_transfer(sdb, tx_context::sender(ctx));
+        event::deposit(object::id(self), locked_bal, locked_end);
     }
 
     /// Withdraw all the unlocked coin when due date is expired
@@ -470,6 +481,8 @@ module suiDouBashi_vsdb::vsdb{
     // ===== Main =====
     fun new(locked_sdb: Coin<SDB>, unlock_time: u64, clock: &Clock, ctx: &mut TxContext): Vsdb {
         let amount = coin::value(&locked_sdb);
+        assert!(amount >= (math::pow(10, sdb::decimals())), E_INSUFFICIENT_AMOUNT);
+
         let ts = unix_timestamp(clock);
         let player_point_history = table_vec::singleton(point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts), ctx);
         let vsdb = Vsdb {
