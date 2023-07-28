@@ -90,7 +90,7 @@ module suiDouBashi_amm::pool{
         fee_y: Balance<Y>,
         index_x: u256,
         index_y: u256,
-        fee_percentage: u8,
+        fee_percentage: u8
     }
 
     public fun name<X, Y>(self: &Pool<X,Y>):String{ self.name }

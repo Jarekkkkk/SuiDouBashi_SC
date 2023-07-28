@@ -9,6 +9,8 @@ module suiDouBashi_amm::pool_reg{
     use sui::coin::CoinMetadata;
     use sui::transfer;
     use std::vector;
+    use std::type_name::{get, borrow_string};
+    use std::bcs;
 
     use suiDouBashi_amm::event;
     use suiDouBashi_amm::pool::{Self, Pool};
@@ -17,12 +19,15 @@ module suiDouBashi_amm::pool_reg{
     const ERR_INVALD_FEE: u64 = 0;
     const ERR_INVALD_PAIR: u64 = 0;
 
+
+
     struct PoolCap has key { id: UID }
 
     struct PoolReg has key {
         id: UID,
-        pools: Table<String, ID>,
+        pools: Table<vector<u8>, ID>,
     }
+
 
     fun assert_fee(stable: bool, fee: u8){
         if(stable){
@@ -36,7 +41,7 @@ module suiDouBashi_amm::pool_reg{
     fun init(ctx:&mut TxContext){
         let pool_gov = PoolReg{
             id: object::new(ctx),
-            pools: table::new<String, ID>(ctx)
+            pools: table::new<vector<u8>, ID>(ctx)
         };
         transfer::share_object(
             pool_gov
@@ -62,11 +67,16 @@ module suiDouBashi_amm::pool_reg{
         assert_fee(stable, fee_percentage);
         let name = get_pool_name<X,Y>(metadata_x, metadata_y);
         let pool_id = pool::new<X,Y>(name, stable, metadata_x, metadata_y, fee_percentage, ctx);
-        table::add(&mut self.pools, name, pool_id);
+
+        let hash = bcs::to_bytes(borrow_string(&get<X>()));
+        vector::append(&mut hash, bcs::to_bytes(borrow_string(&get<Y>())));
+        hash = std::hash::sha2_256(hash);
+
+        table::add(&mut self.pools, hash, pool_id);
         event::pool_created<X,Y>(pool_id, tx_context::sender(ctx))
     }
 
-    entry fun lock_pool<X,Y>(
+    entry fun update_pool<X,Y>(
         _cap: &PoolCap,
         pool: &mut Pool<X, Y>,
         locked: bool
