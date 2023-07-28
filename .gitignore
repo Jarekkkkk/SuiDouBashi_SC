@@ -2,3 +2,5 @@ build
 coni_flip.move
 .coverage_map.mvcov
 .trace
+
+sui.log*

@@ -939,7 +939,7 @@ module suiDouBashi_vsdb::art{
             has_card_gradient: false,
             card_gradient: vector[b"", b""]
         };
-        let border_dna = ( 90 * ((1 << 32) - 1) / 100);
+        let border_dna = ( 30 * ((1 << 32) - 1) / 100);
         let card_dna = (40 * ((1 << 32) - 1) / 100) << 32;
         let shell_dna = ( 100 * ((1 << 32) - 1) / 100) << 64;
         let dna = border_dna | card_dna | shell_dna;
@@ -948,7 +948,7 @@ module suiDouBashi_vsdb::art{
         calc_attributes(&mut bond);
         calc_derived_data(&mut bond);
         let _data = get_metadata_json(&bond);
-       //std::debug::print(&_data);
+        std::debug::print(&_data);
         object::delete(id);
     }
 

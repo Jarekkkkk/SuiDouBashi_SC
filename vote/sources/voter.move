@@ -375,7 +375,7 @@ module suiDouBashi_vote::voter{
         gauge::update_is_alive(gauge, is_alive);
     }
 
-    /// create additional Coin Rewards for each Pool
+    /// create additional types of Bribe Rewards for each Pool
     public entry fun new_reward<X,Y,T>(_: &VoterCap, rewards: &mut Rewards<X,Y>, ctx: &mut TxContext){
         bribe::new_reward_<X,Y,T>(rewards, ctx);
     }

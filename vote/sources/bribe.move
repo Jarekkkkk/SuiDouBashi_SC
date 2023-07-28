@@ -245,6 +245,7 @@ module suiDouBashi_vote::bribe{
                 upper = _center -1 ;
             }
         };
+
         return lower
     }
 

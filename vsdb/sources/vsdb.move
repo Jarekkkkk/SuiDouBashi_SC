@@ -242,7 +242,7 @@ module suiDouBashi_vsdb::vsdb{
 
         event::deposit(object::id(&vsdb), amount, unlock_time);
 
-        transfer::public_transfer(vsdb, recipient);
+        transfer::transfer(vsdb, recipient);
     }
 
     public entry fun increase_unlock_time(
