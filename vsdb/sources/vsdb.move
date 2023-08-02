@@ -3,13 +3,13 @@ module suiDouBashi_vsdb::vsdb{
     /// Package Version
     const VERSION: u64 = 1;
 
-    use std::vector as vec;
     use std::type_name::{Self, TypeName};
     use std::option::{Self, Option};
     use std::string::utf8;
 
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID};
+    use sui::vec_set::{Self, VecSet};
     use sui::transfer;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
@@ -53,6 +53,9 @@ module suiDouBashi_vsdb::vsdb{
     /// One-time witness of Vesting NFT
     struct VSDB has drop {}
 
+    /// Key of "VSDB" tp access dynamic field or object dyanmic fields state
+    struct VSDBKey<phantom T: drop> has copy, store, drop {}
+
     /// Vesting NFT of SuiDoBashi ecosystem. Any SDB holder can lock up their coins for specific duration at most 24 weeks and receive Vsdb NFT in exchange to SuiDoBashi contributor
     /// Additional actions like deposits and extending unlocked period are allowed anytime
     /// The logner the vesting time, the higher the governance power( voting power ) you are granted
@@ -72,7 +75,9 @@ module suiDouBashi_vsdb::vsdb{
         /// point history
         player_point_history: TableVec<Point>,
         /// registered modules
-        modules: vector<TypeName>
+        modules: VecSet<TypeName>
+        // TODO(?)
+        // age, or accumlating locked up weeks
     }
 
     /// Capability of Vsdb package, responsible for whitelisted modules
@@ -162,7 +167,7 @@ module suiDouBashi_vsdb::vsdb{
         table::add(&mut reg.modules, type, true);
     }
 
-    public fun whitelisted<T: copy + store + drop>(reg: &VSDBRegistry):bool {
+    public fun whitelisted<T: drop>(reg: &VSDBRegistry):bool {
         table::contains(&reg.modules, type_name::get<T>())
     }
 
@@ -300,7 +305,7 @@ module suiDouBashi_vsdb::vsdb{
         ctx: &mut TxContext
     ){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
-        assert!(vec::length(&self.modules) == 0, E_NOT_PURE);
+        assert!(vec_set::is_empty(&self.modules), E_NOT_PURE);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let level = level(&vsdb);
@@ -377,6 +382,7 @@ module suiDouBashi_vsdb::vsdb{
         checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
 
         transfer::public_transfer(sdb, tx_context::sender(ctx));
+
         event::deposit(object::id(self), locked_bal, locked_end);
     }
 
@@ -494,7 +500,7 @@ module suiDouBashi_vsdb::vsdb{
             end: unlock_time,
             player_epoch: 0,
             player_point_history,
-            modules: vec::empty<TypeName>(),
+            modules: vec_set::empty<TypeName>(),
         };
 
         vsdb
@@ -540,9 +546,9 @@ module suiDouBashi_vsdb::vsdb{
             modules,
         } = self;
 
+        assert!(vec_set::is_empty(&modules), E_NOT_PURE);
         table_vec::drop<Point>(player_point_history);
         balance::destroy_zero(balance);
-        vec::destroy_empty(modules);
         object::delete(id);
     }
 
@@ -714,11 +720,11 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     public fun module_exists<T>(self: &Vsdb):bool{
-        vec::contains(&self.modules, &type_name::get<T>())
+        vec_set::contains(&self.modules, &type_name::get<T>())
     }
 
-    public fun earn_xp<T: copy + store + drop>(_witness: T, self: &mut Vsdb, value: u64){
-        assert!(vec::contains(&self.modules, &type_name::get<T>()), E_NOT_REGISTERED);
+    public fun earn_xp<T: drop>(_: T, self: &mut Vsdb, value: u64){
+        assert!(vec_set::contains(&self.modules, &type_name::get<T>()), E_NOT_REGISTERED);
         self.experience = self.experience + value;
         event::earn_xp(object::id(self), value);
     }
@@ -744,69 +750,68 @@ module suiDouBashi_vsdb::vsdb{
     /// Authorized module can add dynamic fields into Vsdb
     /// Witness is the entry of dyanmic fields , be careful of your generated witness
     /// otherwise your registered state is exposed to the public
-    public fun df_add<T: copy + store + drop, V: store>(
-        witness: T, // Witness stands for Entry point
+    public fun df_add<T: drop, V: store + drop>(
+        _: T,
         reg: &VSDBRegistry,
         self: &mut Vsdb,
         value: V
     ){
         let type = type_name::get<T>();
         assert!(table::contains(&reg.modules, type), E_NOT_REGISTERED);
-        vec::push_back(&mut self.modules, type);
-        df::add(&mut self.id, witness, value);
+        vec_set::insert(&mut self.modules, type);
+        df::add(&mut self.id, VSDBKey<T>{}, value);
     }
 
-    public fun df_exists<T: copy + drop + store>(
+    public fun df_exists<T: drop>(
         self: &Vsdb,
-        witness: T,
+        _: T,
     ): bool{
-        df::exists_(&self.id, witness)
+        df::exists_(&self.id, VSDBKey<T>{})
     }
 
-    public fun df_exists_with_type<T: copy + store + drop, V: store>(
+    public fun df_exists_with_type<T: drop, V: store + drop>(
         self: &Vsdb,
-        witness: T,
+        _: T,
     ):bool{
-        df::exists_with_type<T, V>(&self.id, witness)
+        df::exists_with_type<VSDBKey<T>, V>(&self.id, VSDBKey<T>{})
     }
 
-    public fun df_borrow<T: copy + drop + store, V: store>(
+    public fun df_borrow<T: drop, V: store + drop>(
         self: &Vsdb,
-        witness: T,
+        _: T,
     ): &V{
-        df::borrow(&self.id, witness)
+        df::borrow(&self.id, VSDBKey<T>{})
     }
 
-    public fun df_borrow_mut<T: copy + drop + store, V: store>(
+    public fun df_borrow_mut<T: drop, V: store + drop>(
         self: &mut Vsdb,
-        witness: T,
+        _: T,
     ): &mut V{
-        df::borrow_mut(&mut self.id, witness)
+        df::borrow_mut(&mut self.id, VSDBKey<T>{})
     }
 
-    public fun df_remove_if_exists<T: copy + store + drop, V: store>(
+    public fun df_remove_if_exists<T: drop, V: store + drop>(
         self: &mut Vsdb,
-        witness: T,
+        _: T,
     ):Option<V>{
-        let (success, idx) = vec::index_of(&self.modules, &type_name::get<T>());
-        assert!(success, E_NOT_REGISTERED);
-        vec::remove(&mut self.modules, idx);
-        df::remove_if_exists(&mut self.id, witness)
+        let opt = df::remove_if_exists(&mut self.id, VSDBKey<T>{});
+        if(option::is_some(&opt)){
+            vec_set::remove(&mut self.modules, &type_name::get<T>());
+        };
+        opt
     }
 
-    public fun df_remove<T: copy + store + drop, V: store>(
-        witness: T,
+    public fun df_remove<T: drop, V: drop + store>(
+        _: T,
         self: &mut Vsdb,
     ):V{
-        let (success, idx) = vec::index_of(&self.modules, &type_name::get<T>());
-        assert!(success, E_NOT_REGISTERED);
-        vec::remove(&mut self.modules, idx);
-        df::remove(&mut self.id, witness)
+        vec_set::remove(&mut self.modules, &type_name::get<T>());
+        df::remove(&mut self.id, VSDBKey<T>{})
     }
 
     // - dof
-    public fun dof_add<T: copy + store + drop, V: key + store>(
-        witness: T, // Witness stands for Entry point
+    public fun dof_add<T: drop, V: key + store>(
+        _: T,
         reg: & VSDBRegistry,
         self: &mut Vsdb,
         value: V
@@ -815,46 +820,44 @@ module suiDouBashi_vsdb::vsdb{
         let type = type_name::get<T>();
         assert!(table::contains(&reg.modules, type), E_NOT_REGISTERED);
 
-        vec::push_back(&mut self.modules, type);
-        dof::add(&mut self.id, witness, value);
+        vec_set::insert(&mut self.modules, type);
+        dof::add(&mut self.id, VSDBKey<T>{}, value);
     }
 
-    public fun dof_exists<T: copy + drop + store>(
+    public fun dof_exists<T: drop>(
         self: &Vsdb,
-        witness: T,
+        _: T,
     ): bool{
-        dof::exists_(&self.id, witness)
+        dof::exists_(&self.id, VSDBKey<T>{})
     }
 
-    public fun dof_exists_with_type<T: copy + store + drop, V: key + store>(
+    public fun dof_exists_with_type<T: drop, V: key + store>(
         self: &Vsdb,
-        witness: T,
+        _: T,
     ):bool{
-        dof::exists_with_type<T, V>(&self.id, witness)
+        dof::exists_with_type<VSDBKey<T>, V>(&self.id, VSDBKey<T>{})
     }
 
-    public fun dof_borrow<T: copy + drop + store, V: key + store>(
+    public fun dof_borrow<T: drop, V: key + store>(
         self: &Vsdb,
-        witness: T,
+        _: T,
     ): &V{
-        dof::borrow(&self.id, witness)
+        dof::borrow(&self.id, VSDBKey<T>{})
     }
 
-    public fun dof_borrow_mut<T: copy + drop + store, V: key + store>(
+    public fun dof_borrow_mut<T: drop, V: key + store>(
         self: &mut Vsdb,
-        witness: T,
+        _: T,
     ): &mut V{
-        dof::borrow_mut(&mut self.id, witness)
+        dof::borrow_mut(&mut self.id, VSDBKey<T>{})
     }
 
-    public fun dof_remove<T: copy + store + drop, V: key + store>(
-        witness: T,
+    public fun dof_remove<T: drop, V: key + store>(
         self: &mut Vsdb,
+        _: T
     ):V{
-        let (success, idx) = vec::index_of(&self.modules, &type_name::get<T>());
-        assert!(success, E_NOT_REGISTERED);
-        vec::remove(&mut self.modules, idx);
-        dof::remove(&mut self.id, witness)
+        vec_set::remove(&mut self.modules, &type_name::get<T>());
+        dof::remove(&mut self.id, VSDBKey<T>{})
     }
 
     #[test_only]

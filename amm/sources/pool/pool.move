@@ -131,16 +131,16 @@ module suiDouBashi_amm::pool{
     }
 
     /// Entry of dynamic fields/ dynamic object fields of Vsdb Vesting NFT
-    struct AMM_SDB has copy, store, drop {}
+    struct VSDB has drop {}
 
     /// The state we are going to record on Vsdb
-    struct AMMState has store{
+    struct AMMState has drop, store{
         last_swap: u64,
         earneed_times: u8
     }
 
     public fun is_initialized(vsdb: &Vsdb): bool{
-        vsdb::df_exists(vsdb, AMM_SDB {})
+        vsdb::df_exists<VSDB>(vsdb, VSDB{})
     }
 
     public entry fun initialize(reg: &VSDBRegistry, vsdb: &mut Vsdb){
@@ -148,7 +148,7 @@ module suiDouBashi_amm::pool{
             last_swap: 0,
             earneed_times: 0
         };
-        vsdb::df_add(AMM_SDB{}, reg, vsdb, value);
+        vsdb::df_add(VSDB{}, reg, vsdb, value);
     }
 
     fun earn_xp_(vsdb: &mut Vsdb, clock: &Clock){
@@ -160,12 +160,12 @@ module suiDouBashi_amm::pool{
 
         if(amm_state.earneed_times < 3){
             amm_state.earneed_times = amm_state.earneed_times + 1;
-            vsdb::earn_xp(AMM_SDB{}, vsdb, 2);
+            vsdb::earn_xp(VSDB{}, vsdb, 2);
         };
     }
 
     public fun clear(vsdb: &mut Vsdb){
-        let amm_state:AMMState = vsdb::df_remove(AMM_SDB{}, vsdb );
+        let amm_state:AMMState = vsdb::df_remove(VSDB{}, vsdb );
         let AMMState{
             last_swap:_,
             earneed_times: _
@@ -173,11 +173,11 @@ module suiDouBashi_amm::pool{
     }
 
     public fun amm_state_borrow(vsdb: &Vsdb):&AMMState{
-        vsdb::df_borrow(vsdb, AMM_SDB {})
+        vsdb::df_borrow(vsdb, VSDB {})
     }
 
     fun amm_state_borrow_mut(vsdb: &mut Vsdb):&mut AMMState{
-        vsdb::df_borrow_mut(vsdb, AMM_SDB {})
+        vsdb::df_borrow_mut(vsdb, VSDB {})
     }
 
     // - Oracle

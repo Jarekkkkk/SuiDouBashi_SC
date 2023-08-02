@@ -73,9 +73,9 @@ module suiDouBashi_vote::voter{
 
     public fun sdb_balance(self: &Voter): u64 { balance::value(&self.balance) }
 
-    struct VOTER_SDB has copy, store, drop {}
+    struct VSDB has drop {}
 
-    struct VotingState has store{
+    struct VotingState has drop, store{
         /// voted pools & amount of votes
         pool_votes: VecMap<ID, u64>,
         /// determine whether NFT is voted
@@ -87,7 +87,7 @@ module suiDouBashi_vote::voter{
     }
 
     public fun is_initialized(vsdb: &Vsdb): bool{
-        vsdb::df_exists(vsdb, VOTER_SDB{})
+        vsdb::df_exists(vsdb, VSDB{})
     }
 
     public entry fun initialize(reg: &VSDBRegistry, vsdb: &mut Vsdb){
@@ -97,11 +97,11 @@ module suiDouBashi_vote::voter{
             used_weights: 0,
             last_voted: 0
         };
-        vsdb::df_add(VOTER_SDB{}, reg, vsdb, value);
+        vsdb::df_add(VSDB{}, reg, vsdb, value);
     }
 
     public fun clear(vsdb: &mut Vsdb){
-        let voting_state:VotingState = vsdb::df_remove(VOTER_SDB{}, vsdb);
+        let voting_state:VotingState = vsdb::df_remove(VSDB{}, vsdb);
         let VotingState{
             pool_votes,
             voted,
@@ -113,11 +113,11 @@ module suiDouBashi_vote::voter{
     }
 
     public fun voting_state_borrow(vsdb: &Vsdb):&VotingState{
-        vsdb::df_borrow(vsdb, VOTER_SDB {})
+        vsdb::df_borrow(vsdb, VSDB {})
     }
 
     fun voting_state_borrow_mut(vsdb: &mut Vsdb):&mut VotingState{
-        vsdb::df_borrow_mut(vsdb, VOTER_SDB {})
+        vsdb::df_borrow_mut(vsdb, VSDB {})
     }
 
     public fun pool_votes(vsdb: &Vsdb, pool_id: &ID):u64 {
@@ -265,7 +265,7 @@ module suiDouBashi_vote::voter{
         } = potato;
         assert!(reset && vec_map::size(&weights) == 0, E_NOT_VOTE);
 
-        vsdb::earn_xp(VOTER_SDB{}, vsdb, 6);
+        vsdb::earn_xp(VSDB{}, vsdb, 6);
         let voting_state = voting_state_borrow_mut(vsdb);
 
         voting_state.used_weights = used_weight;

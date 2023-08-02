@@ -8,7 +8,7 @@ module suiDouBashi_vsdb::test_whitelist{
 
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
-    struct VotingState has store{
+    struct VotingState has drop, store{
         attachments: u64,
         pool_votes: VecMap<ID, u64>, // pool -> voting weight
         voted: bool,
@@ -17,22 +17,20 @@ module suiDouBashi_vsdb::test_whitelist{
     }
 
     /// Witness + Capability + DF/DOF Entry
-    struct MOCK has copy, store, drop {}
+    struct MOCK has drop {}
 
     struct Foo has key{
-        id: UID,
-        witness: MOCK
+        id: UID
     }
 
     fun init(ctx: &mut TxContext){
         let foo = Foo {
-            id: object::new(ctx),
-            witness: MOCK{}
+            id: object::new(ctx)
         };
         transfer::share_object(foo);
     }
 
-    public fun add_pool_votes(self: &Foo, reg: &VSDBRegistry, vsdb: &mut Vsdb){
+    public fun add_pool_votes(_: &Foo, reg: &VSDBRegistry, vsdb: &mut Vsdb){
         let value = VotingState{
             attachments: 1000,
             pool_votes: vec_map::empty(),
@@ -40,11 +38,11 @@ module suiDouBashi_vsdb::test_whitelist{
             used_weights: 990,
             last_voted: 1230
         };
-        vsdb::df_add(self.witness, reg, vsdb, value);
+        vsdb::df_add(MOCK{}, reg, vsdb, value);
     }
 
     public fun update_pool_votes(self: &Foo, vsdb: &mut Vsdb){
-        let voting_mut:&mut VotingState = vsdb::df_borrow_mut(vsdb, self.witness);
+        let voting_mut:&mut VotingState = vsdb::df_borrow_mut(vsdb, MOCK{});
 
         vec_map::insert(&mut voting_mut.pool_votes, object::id(self), 1321321);
 

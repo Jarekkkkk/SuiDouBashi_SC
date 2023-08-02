@@ -400,8 +400,8 @@ module suiDouBashi_amm::amm_test{
         }
     }
 
-    use suiDouBashi_amm::pool::AMM_SDB;
-    use suiDouBashi_vsdb::vsdb::{Self, Vsdb,VSDBRegistry};
+    use suiDouBashi_amm::pool::VSDB;
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::vsdb_test;
     public fun test_vsdb_<X,Y>(clock: &mut Clock, s: &mut Scenario){
         let (a, _, _) = people();
@@ -410,7 +410,7 @@ module suiDouBashi_amm::amm_test{
         next_tx(s,a);{
             let cap = test::take_from_sender<vsdb::VSDBCap>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::register_module<AMM_SDB>(&cap, &mut vsdb_reg);
+            vsdb::register_module<VSDB>(&cap, &mut vsdb_reg);
 
             test::return_to_sender(s, cap);
             test::return_shared(vsdb_reg);

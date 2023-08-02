@@ -256,6 +256,7 @@ module suiDouBashi_vote::bribe{
         clock: &Clock
     ):u64{
         assert_rewards_type<X,Y,T>();
+
         let id = object::id(vsdb);
         let ts = unix_timestamp(clock);
         let reward = borrow_reward<X,Y,T>(rewards);
@@ -414,7 +415,7 @@ module suiDouBashi_vote::bribe{
         };
     }
 
-    public entry fun get_reward<X, Y, T>(
+    public entry fun get_reward<X,Y,T>(
         self: &mut Bribe<X,Y>,
         rewards: &mut Rewards<X,Y>,
         vsdb: &Vsdb,
