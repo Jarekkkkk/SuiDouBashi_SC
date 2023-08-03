@@ -39,6 +39,7 @@ module test::setup{
         sdb::deploy_coin(ctx(s));
     }
 
+    /// Mint USDC & USDT
     public fun mint_stable(s: &mut Scenario){
         let (a, b, c) = people();
         let owners = vec::singleton(a);
@@ -62,8 +63,7 @@ module test::setup{
         vec::destroy_empty(owners);
     }
 
-
-    use suiDouBashi_vote::minter::{Self, Minter};
+    use suiDouBashi_vote::minter::{Self, Minter, mint_sdb};
     use suiDouBashi_vsdb::vsdb::VSDBRegistry;
 
     public fun deploy_minter(clock: &mut Clock, s: &mut Scenario){
@@ -82,6 +82,12 @@ module test::setup{
             minter::set_team(&mut minter, c, ctx(s));
             test::return_shared(minter);
         };
+
+        next_tx(s, a);{
+            let minter = test::take_shared<Minter>(s);
+            transfer::public_transfer(mint_sdb(&mut minter, 18 * sui_1B(), ctx(s)), a);
+            test::return_shared(minter);
+        }
     }
 
     use suiDouBashi_vote::voter::{Self, Voter, VSDB};
