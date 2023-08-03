@@ -26,7 +26,6 @@ module suiDouBashi_vote::bribe{
     // ====== Constants =======
 
     const WEEK: u64 = { 7 * 86400 };
-    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_REWARD_TOKENS: u64 = 16;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
@@ -242,7 +241,7 @@ module suiDouBashi_vote::bribe{
             }else if ( _sp_ts < ts){
                 lower = _center;
             }else{
-                upper = _center -1 ;
+                upper = _center - 1 ;
             }
         };
 
@@ -260,7 +259,7 @@ module suiDouBashi_vote::bribe{
         let id = object::id(vsdb);
         let ts = unix_timestamp(clock);
         let reward = borrow_reward<X,Y,T>(rewards);
-        if(!table::contains(&self.checkpoints, id) || table::length(&reward.rewards_per_epoch) == 0 ){
+        if(!table::contains(&self.checkpoints, id) || table::length(&reward.rewards_per_epoch) == 0){
             return 0
         };
 

@@ -122,4 +122,22 @@ module test::vsdb_test{
             test::return_shared(reg);
         }
     }
+
+    public fun vsdb_decay(clock: &mut Clock, s: &mut Scenario){
+        let ( a, _, _ ) = setup::people();
+
+        add_time(clock, vsdb::max_time() * 1000);
+
+        next_tx(s,a);{ // Decay the vsdb
+            let vsdb = test::take_from_sender<Vsdb>(s);
+            let vsdb_1 = test::take_from_sender<Vsdb>(s);
+            let vsdb_reg = test::take_shared<VSDBRegistry>(s);
+            assert!(vsdb::voting_weight(&vsdb, clock) == 0, 404);
+            vsdb::total_VeSDB(&vsdb_reg, clock);
+            assert!(vsdb::total_VeSDB(&vsdb_reg, clock) == 0, 404);
+            test::return_to_sender(s, vsdb);
+            test::return_to_sender(s, vsdb_1);
+            test::return_shared(vsdb_reg);
+        };
+    }
 }

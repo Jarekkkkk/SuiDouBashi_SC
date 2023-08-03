@@ -278,7 +278,7 @@ module test::gauge_test{
 
     const SCALE_FACTOR: u128 = 1_000_000_000_000_000_000;
 
-    public fun distribute_fees_(clock: &mut Clock, s: &mut Scenario){
+    public fun distribute_emissions_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, c ) = setup::people();
 
         next_tx(s,a);{ // Action: protocol distribute weekly emissions

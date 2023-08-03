@@ -210,7 +210,6 @@ module test::pool_test{
             let pool_b = test::take_shared<Pool<SDB, USDC>>(s);
             let lp_a = test::take_from_sender<LP<USDC, USDT>>(s);
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
-            // user's fee
             let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
             let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
 
@@ -326,5 +325,3 @@ module test::pool_test{
         };
     }
 }
-
-

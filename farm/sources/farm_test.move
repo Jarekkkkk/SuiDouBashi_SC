@@ -8,7 +8,7 @@ module suiDouBashi_farm::farm_test{
     use suiDouBashi_amm::amm_test;
     use coin_list::mock_usdt::{MOCK_USDT as USDT};
     use coin_list::mock_usdc::{MOCK_USDC as USDC};
-    use suiDouBashi_amm::pool::{Self, Pool,LP, AMM_SDB};
+    use suiDouBashi_amm::pool::{Self, Pool,LP, VSDB};
     use suiDouBashi_vsdb::sdb::{SDB};
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
 
@@ -27,7 +27,6 @@ module suiDouBashi_farm::farm_test{
         // vsdb
         vsdb_setup(&mut clock, &mut s);
         // farm
-        create_reg(&mut s);
         add_farm(&mut clock, &mut s);
 
         clock::destroy_for_testing(clock);
@@ -58,7 +57,7 @@ module suiDouBashi_farm::farm_test{
         next_tx(s,a);{
             let cap = test::take_from_sender<vsdb::VSDBCap>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::register_module<AMM_SDB>(&cap, &mut vsdb_reg);
+            vsdb::register_module<VSDB>(&cap, &mut vsdb_reg);
 
             test::return_to_sender(s, cap);
             test::return_shared(vsdb_reg);
@@ -74,18 +73,13 @@ module suiDouBashi_farm::farm_test{
         };
     }
 
-    fun create_reg(s: &mut Scenario){
+    fun add_farm(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = people();
+        std::debug::print(&get_time(clock));
 
         next_tx(s,a);{
             farm::init_for_testing(ctx(s));
         };
-    }
-
-    fun add_farm(clock: &mut Clock, s: &mut Scenario){
-        let ( a, _, _ ) = people();
-
-        std::debug::print(&get_time(clock));
 
         next_tx(s,a);{ // Action: initialize reg
             let reg = test::take_shared<FarmReg>(s);
@@ -159,13 +153,11 @@ module suiDouBashi_farm::farm_test{
                 test::return_shared(pool);
                 test::return_shared(farm);
            };
-
            test::return_shared(reg);
         };
 
         next_tx(s,a);{
             let reg = test::take_shared<FarmReg>(s);
-
             {
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
                 assert!(farm::get_farm_lp(&farm) == 50 * setup::usdc_1M(), 404);
@@ -207,7 +199,6 @@ module suiDouBashi_farm::farm_test{
                 assert!(farm::pending_rewards(&farm, &reg, a, clock) == 0, 404);
                 test::return_shared(farm);
             };
-
             test::return_shared(reg);
         };
 
