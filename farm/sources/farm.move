@@ -5,7 +5,7 @@ module suiDouBashi_farm::farm{
     use std::string::String;
     use std::option;
     use sui::event::emit;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::{Self, TxContext, sender};
     use sui::object::{Self, ID, UID};
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
@@ -32,28 +32,27 @@ module suiDouBashi_farm::farm{
     const E_INVALID_PERIOD: u64 = 010;
 
     // EVENT
-    struct Stake<phantom X, phantom Y> has copy, drop{
-        player: address,
+    struct Deposit<phantom X, phantom Y> has copy, drop{
+        id: ID,
         amount: u64
     }
     struct Unstake<phantom X, phantom Y> has copy, drop{
-        player: address,
+        id: ID,
         amount: u64
     }
     struct Harvest<phantom X, phantom Y> has copy, drop{
-        player: address,
+        sender: address,
         reward: u64
     }
 
     // assert
-    fun assert_governor(reg: &FarmReg, ctx: &TxContext){
-        assert!(reg.governor == tx_context::sender(ctx), ERR_NOT_GOV);
-    }
     fun assert_setup(reg: &FarmReg){
         assert!(reg.total_acc_points == TOTAL_ALLOC_POINT, ERR_NOT_SETUP);
     }
 
-    struct FARM_SDB has copy, store, drop {}
+    struct VSDB has drop {}
+
+    struct FarmCap has key { id: UID }
 
     struct FarmReg has key{
         id: UID,
@@ -73,7 +72,7 @@ module suiDouBashi_farm::farm{
     public fun get_start_time(reg: &FarmReg):u64 {reg.start_time }
     public fun get_end_time(reg: &FarmReg):u64 {reg.end_time }
     public fun sdb_per_second(reg: &FarmReg): u64 { reg.sdb_per_second }
-    public fun total_pending(reg: &FarmReg, player: address): u64 { *table::borrow(&reg.total_pending, player )}
+    public fun total_pending(reg: &FarmReg, id: address): u64 { *table::borrow(&reg.total_pending, id )}
 
     struct Farm<phantom X, phantom Y> has key{
         id: UID,
@@ -81,19 +80,16 @@ module suiDouBashi_farm::farm{
         alloc_point: u64,
         last_reward_time: u64,
         index: u256,
-        player_infos: Table<address, PlayerInfo>,
+        lp_stake: Table<ID, Stake>,
     }
 
-    struct PlayerInfo has store{
+    struct Stake has store{
         amount: u64,
         index: u256,
         pending_reward: u64
     }
 
-    public fun get_farm_lp<X,Y>(self: &Farm<X,Y>): u64 { pool::lp_balance(&self.lp_balance)}
-    public fun get_player_info<X,Y>(self: &Farm<X,Y>, player: address): &PlayerInfo {
-        table::borrow(&self.player_infos, player)
-    }
+    public fun farm_lp<X,Y>(self: &Farm<X,Y>):&LP<X,Y> { &self.lp_balance }
 
     fun init(ctx: &mut TxContext){
         let reg = FarmReg {
@@ -110,17 +106,18 @@ module suiDouBashi_farm::farm{
             claimed_vsdb: table::new<address, ID>(ctx)
         };
         transfer::share_object(reg);
+
+        transfer::transfer(FarmCap{ id: object::new(ctx) }, sender(ctx));
     }
 
     public fun initialize(
         reg: &mut FarmReg,
-        start_time: u64, // ts
-        duration: u64, // ts
+        _: &FarmCap,
+        start_time: u64,
+        duration: u64,
         sdb: Coin<SDB>,
-        clock: &Clock,
-        ctx: &mut TxContext
+        clock: &Clock
     ){
-        assert_governor(reg, ctx);
         assert!(!reg.initialized, ERR_INITIALIZED);
         assert!(start_time > clock::timestamp_ms(clock) / 1000 && duration != 0, ERR_INVALID_TIME);
 
@@ -139,12 +136,12 @@ module suiDouBashi_farm::farm{
     /// 2. total alloc points have to be fully distributed before start_time
     public fun add_farm<X,Y>(
         reg: &mut FarmReg,
+        _: &FarmCap,
         pool: &Pool<X,Y>,
         alloc_point: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert_governor(reg, ctx);
         assert!(alloc_point <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);
 
         let ts = clock::timestamp_ms(clock) / 1000;
@@ -160,7 +157,7 @@ module suiDouBashi_farm::farm{
             alloc_point,
             last_reward_time,
             index:0,
-            player_infos: table::new<address, PlayerInfo>(ctx),
+            lp_stake: table::new<ID, Stake>(ctx),
         };
 
         let pool_name = pool::name<X,Y>(pool);
@@ -187,11 +184,12 @@ module suiDouBashi_farm::farm{
         }
     }
 
-    public fun pending_rewards<X,Y>(self: &Farm<X,Y>, reg: &FarmReg, player: address, clock: &Clock): u64{
-        if(!table::contains(&self.player_infos, player)) return 0;
+    public fun pending_rewards<X,Y>(self: &Farm<X,Y>, reg: &FarmReg, lp: &LP<X,Y>, clock: &Clock): u64{
+        let id = object::id(lp);
+        if(!table::contains(&self.lp_stake, id)) return 0;
 
         let ts = clock::timestamp_ms(clock) / 1000;
-        let player_info = table::borrow(&self.player_infos, player);
+        let stake = table::borrow(&self.lp_stake, id);
         let index = self.index;
         let lp_balance = pool::lp_balance(&self.lp_balance);
 
@@ -201,7 +199,7 @@ module suiDouBashi_farm::farm{
             index = index + ((sdb_reward as u256) * SCALE_FACTOR / (lp_balance as u256))
         };
 
-        return (((player_info.amount as u256) * ( index - player_info.index ) / SCALE_FACTOR ) as u64 ) + player_info.pending_reward
+        return (((stake.amount as u256) * ( index - stake.index ) / SCALE_FACTOR ) as u64 ) + stake.pending_reward
     }
 
     /// settle accumulated rewards
@@ -223,18 +221,19 @@ module suiDouBashi_farm::farm{
         self.last_reward_time = ts;
     }
 
-    fun update_player<X,Y>(self: &mut Farm<X,Y>, player: address){
-        let player_info = table::borrow_mut(&mut self.player_infos, player);
-        let staked = player_info.amount;
+    fun update_player<X,Y>(self: &mut Farm<X,Y>, lp: &LP<X,Y>){
+        let id = object::id(lp);
+        let stake = table::borrow_mut(&mut self.lp_stake, id);
+        let staked = stake.amount;
         if(staked > 0){
-            let delta = self.index - player_info.index;
+            let delta = self.index - stake.index;
 
             if(delta > 0){
                 let share = (staked as u256) * delta / SCALE_FACTOR;
-                player_info.pending_reward = player_info.pending_reward + (share as u64);
+                stake.pending_reward = stake.pending_reward + (share as u64);
             };
         };
-        player_info.index = self.index;
+        stake.index = self.index;
     }
 
     public fun stake_all<X,Y>(
@@ -242,11 +241,10 @@ module suiDouBashi_farm::farm{
         self: &mut Farm<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
-        clock: &Clock,
-        ctx:&mut TxContext
+        clock: &Clock
     ){
         let lp_balance = pool::lp_balance(lp);
-        stake(reg, self, pool, lp, lp_balance, clock, ctx);
+        stake(reg, self, pool, lp, lp_balance, clock);
     }
 
     public fun stake<X,Y>(
@@ -255,32 +253,31 @@ module suiDouBashi_farm::farm{
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         value: u64,
-        clock: &Clock,
-        ctx:&mut TxContext
+        clock: &Clock
     ){
         assert_setup(reg);
         let lp_balance = pool::lp_balance(lp);
+        let id = object::id(lp);
         assert!(lp_balance >= value, ERR_INSUFFICIENT_LP);
 
-        let player = tx_context::sender(ctx);
-        if(!table::contains(&self.player_infos, player)){
-            let player_info = PlayerInfo{
+        if(!table::contains(&self.lp_stake, id)){
+            let stake = Stake{
                 amount: 0,
                 index: 0,
                 pending_reward: 0
             };
-            table::add(&mut self.player_infos, player, player_info);
+            table::add(&mut self.lp_stake, id, stake);
         };
         update_farm(reg, self, clock);
-        update_player(self, player);
+        update_player(self, lp);
 
-        let player_info = table::borrow_mut(&mut self.player_infos, player);
+        let stake = table::borrow_mut(&mut self.lp_stake, id);
         pool::join_lp(pool, &mut self.lp_balance, lp, value);
-        player_info.amount = player_info.amount + value;
+        stake.amount = stake.amount + value;
 
         emit(
-            Stake<X,Y>{
-                player,
+            Deposit<X,Y>{
+                id,
                 amount: value
             }
         );
@@ -292,24 +289,23 @@ module suiDouBashi_farm::farm{
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
         value: u64,
-        clock:&Clock,
-        ctx:&mut TxContext
+        clock:&Clock
     ){
         assert_setup(reg);
-        let player = tx_context::sender(ctx);
-        assert!(table::contains(&self.player_infos, player), ERR_NOT_PLAYER);
+        let id = object::id(lp);
+        assert!(table::contains(&self.lp_stake, id), ERR_NOT_PLAYER);
 
         update_farm(reg, self, clock);
-        update_player(self, player);
+        update_player(self, lp);
 
-        let player_info = table::borrow_mut(&mut self.player_infos, player);
-        assert!(player_info.amount >= value, ERR_INSUFFICIENT_LP);
-        player_info.amount = player_info.amount - value;
+        let stake = table::borrow_mut(&mut self.lp_stake, id);
+        assert!(stake.amount >= value, ERR_INSUFFICIENT_LP);
+        stake.amount = stake.amount - value;
         pool::join_lp(pool, lp, &mut self.lp_balance, value);
 
         emit(
             Unstake<X,Y>{
-                player,
+                id,
                 amount: value
             }
         );
@@ -320,41 +316,42 @@ module suiDouBashi_farm::farm{
         self: &mut Farm<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
-        clock:&Clock,
-        ctx:&mut TxContext
+        clock:&Clock
     ){
-        let player = tx_context::sender(ctx);
-        let player_info = table::borrow(&mut self.player_infos, player);
-        unstake(reg, self, pool, lp, player_info.amount, clock, ctx);
+        let id = object::id(lp);
+        let stake = table::borrow(&mut self.lp_stake, id);
+        unstake(reg, self, pool, lp, stake.amount, clock);
     }
 
     public fun harvest<X,Y>(
         reg: &mut FarmReg,
         self: &mut Farm<X,Y>,
         clock: &Clock,
+        lp: &LP<X,Y>,
         ctx: &mut TxContext
     ){
         assert_setup(reg);
-        let player = tx_context::sender(ctx);
-        assert!(table::contains(&self.player_infos, player), ERR_NOT_PLAYER);
+        let id = object::id(lp);
+        let sender = sender(ctx);
+        assert!(table::contains(&self.lp_stake, id), ERR_NOT_PLAYER);
 
         update_farm(reg, self, clock);
-        update_player(self, player);
+        update_player(self, lp);
 
-        let player_info = table::borrow_mut(&mut self.player_infos, player);
-        let pending = player_info.pending_reward;
+        let stake = table::borrow_mut(&mut self.lp_stake, id);
+        let pending = stake.pending_reward;
         if(pending > 0){
-            if(!table::contains(&reg.total_pending, player)){
-                table::add(&mut reg.total_pending, player, pending);
+            if(!table::contains(&reg.total_pending, sender)){
+                table::add(&mut reg.total_pending, sender, pending);
             }else{
-                *table::borrow_mut(&mut reg.total_pending, player) = *table::borrow(&reg.total_pending, player) + pending;
+                *table::borrow_mut(&mut reg.total_pending, sender) = *table::borrow(&reg.total_pending, sender) + pending;
             };
         };
-        player_info.pending_reward = 0;
+        stake.pending_reward = 0;
 
         emit(
             Harvest<X,Y>{
-                player,
+                sender,
                 reward: pending
             }
         )
@@ -378,8 +375,8 @@ module suiDouBashi_farm::farm{
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        let player = tx_context::sender(ctx);
-        assert!(!table::contains(&reg.claimed_vsdb, player), E_ALREADY_CLAIMED);
+        let id = tx_context::sender(ctx);
+        assert!(!table::contains(&reg.claimed_vsdb, id), E_ALREADY_CLAIMED);
         let ts = clock::timestamp_ms(clock) / 1000;
         assert!(ts >= reg.end_time && ts <= reg.end_time * WEEK, E_INVALID_PERIOD);
         let sdb = claim_(reg, ctx);
@@ -394,7 +391,7 @@ module suiDouBashi_farm::farm{
             earn_xp_(vsdb_reg, vsdb, 5);
         };
 
-        table::add(&mut reg.claimed_vsdb, player, object::id(vsdb));
+        table::add(&mut reg.claimed_vsdb, id, object::id(vsdb));
     }
 
     fun claim_(
@@ -402,9 +399,9 @@ module suiDouBashi_farm::farm{
         ctx: &mut TxContext
     ):Coin<SDB>{
         assert_setup(reg);
-        let player = tx_context::sender(ctx);
-        assert!(table::contains(&reg.total_pending, player) && *table::borrow(&reg.total_pending, player) > 0, ERR_NO_REWARD);
-        let reward = table::remove(&mut reg.total_pending, player);
+        let id = tx_context::sender(ctx);
+        assert!(table::contains(&reg.total_pending, id) && *table::borrow(&reg.total_pending, id) > 0, ERR_NO_REWARD);
+        let reward = table::remove(&mut reg.total_pending, id);
         coin::take(&mut reg.sdb_balance, reward, ctx)
     }
 
@@ -413,30 +410,28 @@ module suiDouBashi_farm::farm{
         vsdb: &mut Vsdb,
         exp: u64
     ){
-        vsdb::df_add(FARM_SDB{}, vsdb_reg, vsdb, true);
-        vsdb::earn_xp(FARM_SDB{}, vsdb, exp);
-        vsdb::df_remove<FARM_SDB, bool>(FARM_SDB{}, vsdb);
+        vsdb::df_add(VSDB{}, vsdb_reg, vsdb, true);
+        vsdb::earn_xp(VSDB{}, vsdb, exp);
+        vsdb::df_remove<VSDB, bool>(VSDB{}, vsdb);
     }
 
     /// Claim the accumulated fees during farming campaign and deposit it into pool
     public entry fun claim_pool_fees<X,Y>(
         reg: &FarmReg,
+        _: &FarmCap,
         self: &mut Farm<X,Y>,
         pool: &mut Pool<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        assert_governor(reg, ctx);
         assert!(clock::timestamp_ms(clock) / 1000 >= reg.end_time, ERR_NOT_FINISH);
         let (coin_x, coin_y, _, _) = pool::claim_fees_dev(pool, &mut self.lp_balance, ctx);
 
         if(option::is_some(&coin_x)){
-            let coin_x = option::extract(&mut coin_x);
-            pool::zap_x(pool, coin_x, &mut self.lp_balance, 0, 0, clock, ctx);
+            transfer::public_transfer(option::extract(&mut coin_x), sender(ctx));
         };
         if(option::is_some(&coin_y)){
-            let coin_y = option::extract(&mut coin_y);
-            pool::zap_y(pool, coin_y, &mut self.lp_balance, 0, 0, clock, ctx);
+            transfer::public_transfer(option::extract(&mut coin_y), sender(ctx));
         };
 
         option::destroy_none(coin_x);
