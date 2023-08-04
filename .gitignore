@@ -2,6 +2,7 @@ build
 coni_flip.move
 .coverage_map.mvcov
 .trace
+.DS_Store
 
 sui.log*
 *.svg
