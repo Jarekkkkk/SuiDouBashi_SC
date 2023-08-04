@@ -387,6 +387,7 @@ module suiDouBashi_farm::farm_test{
             pool::swap_for_x_vsdb(&mut pool, mint<USDT>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
             pool::swap_for_x_vsdb(&mut pool, mint<USDT>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
             pool::swap_for_x_vsdb(&mut pool, mint<USDT>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
+            pool::swap_for_x_vsdb(&mut pool, mint<USDT>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
             test::return_to_sender(s, vsdb);
             test::return_shared(pool);
         };
@@ -455,7 +456,8 @@ module suiDouBashi_farm::farm_test{
             let reward_b = ( 28 - 0 ) * 86400 * 258349867 * 3 / 10;
             let reward_c = ( 28 - 0 ) * 86400 * 258349867 * 5 / 10;
             assert!(vsdb::locked_balance(&vsdb) == setup::sui_100M() + reward_a + reward_b + reward_c, 404);
-            assert!(vsdb::experience(&vsdb) == 23, 404);
+            assert!(vsdb::locked_end(&vsdb) == 1701302400, 404);
+            assert!(vsdb::experience(&vsdb) == 50, 404);
             test::return_to_sender(s, vsdb);
         };
 
@@ -467,7 +469,7 @@ module suiDouBashi_farm::farm_test{
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
                 let farm_lp = farm::farm_lp(&farm);
 
-                assert!( pool::claimable_y(&pool, farm_lp) == 4, 404);
+                assert!( pool::claimable_y(&pool, farm_lp) == 5, 404);
                 farm::claim_pool_fees(&reg, &cap, &mut farm, &mut pool, clock, ctx(s));
 
                 test::return_to_sender(s, cap);
@@ -477,7 +479,7 @@ module suiDouBashi_farm::farm_test{
             test::return_shared(reg);
         };
         next_tx(s,a);{
-            assert!(burn(test::take_from_sender<Coin<USDT>>(s)) == 4, 404);
+            assert!(burn(test::take_from_sender<Coin<USDT>>(s)) == 5, 404);
         };
     }
 

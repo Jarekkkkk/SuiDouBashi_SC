@@ -25,7 +25,8 @@ module suiDouBashi_vote::voter{
 
     const WEEK: u64 = { 7 * 86400 };
     const HOUR: u64 = 3600;
-    const PRECISION: u128 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
+    const SCALING: u64 = 10000;
 
 
     // ====== Constants =======
@@ -66,13 +67,14 @@ module suiDouBashi_vote::voter{
         /// registered members [gauge, bribe, rewards] for each pool
         registry: Table<ID, VecSet<ID>>,
         /// accumulating distribution of weekly SDB emissions
-        index: u128
+        index: u256
     }
 
-    public fun index(self: &Voter): u128 { self.index }
+    public fun index(self: &Voter): u256 { self.index }
 
     public fun sdb_balance(self: &Voter): u64 { balance::value(&self.balance) }
 
+    /// Key to VSDB dynamic fields
     struct VSDB has drop {}
 
     struct VotingState has drop, store{
@@ -228,6 +230,7 @@ module suiDouBashi_vote::voter{
     public fun vote_entry(
         potato: Potato,
         self: &mut Voter,
+        vsdb: &Vsdb,
         pools: vector<address>,
         weights: vector<u64>
     ):Potato{
@@ -239,6 +242,7 @@ module suiDouBashi_vote::voter{
         let (i, len) = (0, vec::length(&weights));
         while(i < len){
             let weight = vec::pop_back(&mut weights);
+            weight = weight + weight * (vsdb::level(vsdb) % 2 as u64)/ SCALING;
             let pool = vec::pop_back(&mut pools);
             total_weight = total_weight + weight;
             vec_map::insert(&mut potato.weights, object::id_from_address(pool), weight);
@@ -265,7 +269,7 @@ module suiDouBashi_vote::voter{
         } = potato;
         assert!(reset && vec_map::size(&weights) == 0, E_NOT_VOTE);
 
-        vsdb::earn_xp(VSDB{}, vsdb, 6);
+        vsdb::earn_xp(VSDB{}, vsdb, 10);
         let voting_state = voting_state_borrow_mut(vsdb);
 
         voting_state.used_weights = used_weight;
@@ -324,7 +328,7 @@ module suiDouBashi_vote::voter{
             let (_, weights) = vec_map::remove(&mut potato.weights, &pool_id);
 
             assert!(weights > 0, E_NOT_VOTE);
-            let pool_weight = ((weights as u128) * (vsdb::voting_weight(vsdb, clock) as u128) / (potato.total_weight as u128) as u64);
+            let pool_weight = ((weights as u256) * (vsdb::voting_weight(vsdb, clock) as u256) / (potato.total_weight as u256) as u64);
 
             assert!(pool_weight > 0, E_EMPTY_VALUE);
             update_for(self, gauge, minter);
@@ -445,7 +449,7 @@ module suiDouBashi_vote::voter{
 
             let delta = self.index - s_idx;
             if(delta > 0){
-                let share = ((gauge_weights as u128) * (delta as u128) / PRECISION as u64);
+                let share = ((gauge_weights as u256) * (delta as u256) / PRECISION as u64);
                 if(gauge::is_alive(gauge)){
                     let updated = share + gauge::claimable(gauge);
                     gauge::update_claimable(gauge, updated);
@@ -461,9 +465,9 @@ module suiDouBashi_vote::voter{
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
         let value = coin::value(&sdb);
-        let ratio = (value as u128) * PRECISION / (self.total_weight as u128) ;
+        let ratio = (value as u256) * PRECISION / (self.total_weight as u256) ;
         if(ratio > 0){
-            self.index = self.index + (ratio as u128);
+            self.index = self.index + (ratio as u256);
         };
         coin::put(&mut self.balance, sdb);
 

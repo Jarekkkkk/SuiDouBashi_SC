@@ -276,7 +276,7 @@ module test::gauge_test{
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
     use suiDouBashi_vsdb::vsdb::VSDBRegistry;
 
-    const SCALE_FACTOR: u128 = 1_000_000_000_000_000_000;
+    const SCALE_FACTOR: u256 = 1_000_000_000_000_000_000;
 
     public fun distribute_emissions_(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, c ) = setup::people();
@@ -299,14 +299,14 @@ module test::gauge_test{
         next_tx(s,a);{ // Assertion: voter state is successfully updated
             let voter = test::take_shared<Voter>(s);
             let total_voting_weight = voter::total_weight(&voter);
-            let index = (setup::stake_1() as u128) * SCALE_FACTOR / (total_voting_weight as u128);
+            let index = (setup::stake_1() as u256) * SCALE_FACTOR / (total_voting_weight as u256);
             // voter
             assert!(voter::index(&voter) == index, 404);
             assert!(voter::sdb_balance(&voter) == setup::stake_1(), 404);
             {// pool_a
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let gauge= test::take_shared<Gauge<USDC, USDT>>(s);
-                let gauge_weights =( voter::pool_weights(&voter, &pool) as u128);
+                let gauge_weights =( voter::pool_weights(&voter, &pool) as u256);
                 assert!(gauge::voting_index(&gauge) == index, 404);
                 assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);
 
@@ -316,7 +316,7 @@ module test::gauge_test{
             {// pool_b
                 let pool = test::take_shared<Pool<SDB, USDC>>(s);
                 let gauge= test::take_shared<Gauge<SDB, USDC>>(s);
-                let gauge_weights =( voter::pool_weights(&voter, &pool) as u128);
+                let gauge_weights =( voter::pool_weights(&voter, &pool) as u256);
 
                 assert!(gauge::voting_index(&gauge) == index, 404);
                 assert!(gauge::claimable(&gauge) == ((index * gauge_weights / SCALE_FACTOR )as u64), 404);

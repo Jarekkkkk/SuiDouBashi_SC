@@ -158,9 +158,9 @@ module suiDouBashi_amm::pool{
         if( ts / DURATION * DURATION > amm_state.last_swap) amm_state.earneed_times = 0;
         amm_state.last_swap = ts;
 
-        if(amm_state.earneed_times < 3){
+        if(amm_state.earneed_times < 5){
             amm_state.earneed_times = amm_state.earneed_times + 1;
-            vsdb::earn_xp(VSDB{}, vsdb, 2);
+            vsdb::earn_xp(VSDB{}, vsdb, 3);
         };
     }
 

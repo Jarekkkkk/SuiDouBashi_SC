@@ -25,7 +25,7 @@ module suiDouBashi_amm::pool_reg{
 
     struct PoolReg has key {
         id: UID,
-        pools: Table<vector<u8>, ID>,
+        pools: Table<vector<u8>, ID>
     }
 
 

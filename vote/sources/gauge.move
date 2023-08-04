@@ -22,7 +22,7 @@ module suiDouBashi_vote::gauge{
     // ====== Constants =======
 
     const WEEK: u64 = { 7 * 86400 };
-    const PRECISION: u128 = 1_000_000_000_000_000_000;
+    const PRECISION: u256 = 1_000_000_000_000_000_000;
     const MAX_U64: u64 = 18446744073709551615_u64;
 
     // ====== Constants =======
@@ -72,20 +72,20 @@ module suiDouBashi_vote::gauge{
         /// period finish time
         period_finish: u64,
         /// accumlating distribution for SDB rewards per casted votes
-        voting_index: u128,
+        voting_index: u256,
         /// claimable SDB amount
         claimable: u64,
         /// total staked liquidity
         total_stakes: LP<X,Y>,
         /// accumlating distribution SDB rewards per lp balance
-        staking_index: u128,
+        staking_index: u256,
         /// staking information for LP object
         lp_stake: Table<ID, Stake>
     }
 
     struct Stake has store{
         stakes: u64,
-        staking_index: u128,
+        staking_index: u256,
         pending_sdb: u64
     }
 
@@ -102,9 +102,9 @@ module suiDouBashi_vote::gauge{
 
     public fun period_finish<X,Y>(self: &Gauge<X,Y>): u64 { self.period_finish }
 
-    public fun voting_index<X,Y>(self: &Gauge<X,Y>):u128{ self.voting_index }
+    public fun voting_index<X,Y>(self: &Gauge<X,Y>):u256{ self.voting_index }
 
-    public (friend) fun update_voting_index<X,Y>(self: &mut Gauge<X,Y>, v: u128){
+    public (friend) fun update_voting_index<X,Y>(self: &mut Gauge<X,Y>, v: u256){
         assert_pkg_version(self);
         self.voting_index = v;
     }
@@ -124,7 +124,7 @@ module suiDouBashi_vote::gauge{
         table::borrow(&self.lp_stake, object::id(lp)).stakes
     }
 
-    public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u128{ self.staking_index }
+    public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u256{ self.staking_index }
 
 
     public (friend) fun new<X,Y>(
@@ -167,7 +167,7 @@ module suiDouBashi_vote::gauge{
         if( ts > self.last_update_time && stake.stakes > 0){
             let delta = cal_staking_index(self, clock) - stake.staking_index;
             if(delta > 0){
-                let share = (stake.stakes as u128) * delta / PRECISION;
+                let share = (stake.stakes as u256) * delta / PRECISION;
                 pending_sdb = pending_sdb + (share as u64);
             };
         };
@@ -326,11 +326,11 @@ module suiDouBashi_vote::gauge{
     public fun cal_staking_index<X,Y>(
         self: &Gauge<X,Y>,
         clock: &Clock
-    ): u128{
+    ): u256{
         let total_stakes = pool::lp_balance(&self.total_stakes);
         if(total_stakes == 0) return self.staking_index;
 
-        self.staking_index + ((last_time_reward_applicable(self,clock) - self.last_update_time) as u128) * (self.reward_rate as u128) * PRECISION / (total_stakes as u128)
+        self.staking_index + ((last_time_reward_applicable(self,clock) - self.last_update_time) as u256) * (self.reward_rate as u256) * PRECISION / (total_stakes as u256)
     }
 
     fun unix_timestamp(clock: &Clock): u64 { clock::timestamp_ms(clock) / 1000 }
@@ -374,7 +374,7 @@ module suiDouBashi_vote::gauge{
             let delta = self.staking_index - stake.staking_index;
 
             if(delta > 0){
-                let share = (staked as u128) * delta / PRECISION;
+                let share = (staked as u256) * delta / PRECISION;
                 stake.pending_sdb = stake.pending_sdb + (share as u64);
             }
         };

@@ -9,6 +9,7 @@ module test::main{
     use suiDouBashi_vsdb::vsdb;
 
 
+
     #[test] fun main(){
         let (a,_,_) = setup::people();
         let s = test::begin(a);

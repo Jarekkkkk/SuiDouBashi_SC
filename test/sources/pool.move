@@ -2,14 +2,13 @@ module test::pool_test{
     use suiDouBashi_amm::pool::{Self, Pool, LP};
     use test::setup;
     use sui::coin::{ Self, mint_for_testing as mint, Coin, burn_for_testing as burn};
+    use sui::clock::{Clock};
+    use sui::transfer;
+    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
 
     use suiDouBashi_vsdb::sdb::SDB;
     use coin_list::mock_usdt::{MOCK_USDT as USDT};
     use coin_list::mock_usdc::{MOCK_USDC as USDC};
-    use sui::clock::{Clock};
-    use sui::transfer;
-
-    use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
 
     public fun pool_(clock: &mut Clock, s: &mut Scenario){
         let (a, b, _) = setup::people();

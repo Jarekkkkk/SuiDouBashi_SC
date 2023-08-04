@@ -357,7 +357,7 @@ module suiDouBashi_farm::farm{
         )
     }
 
-    public fun claim(
+    public entry fun claim(
         reg: &mut FarmReg,
         vsdb_reg: &mut VSDBRegistry,
         clock: &Clock,
@@ -368,7 +368,7 @@ module suiDouBashi_farm::farm{
         vsdb::lock(vsdb_reg, sdb, vsdb::max_time(), clock, ctx);
     }
 
-    public fun claim_vsdb(
+    public entry fun claim_vsdb(
         reg: &mut FarmReg,
         vsdb_reg: &mut VSDBRegistry,
         vsdb: &mut Vsdb,
@@ -381,14 +381,15 @@ module suiDouBashi_farm::farm{
         assert!(ts >= reg.end_time && ts <= reg.end_time * WEEK, E_INVALID_PERIOD);
         let sdb = claim_(reg, ctx);
         vsdb::increase_unlock_amount(vsdb_reg, vsdb, sdb, clock);
+        vsdb::increase_unlock_time(vsdb_reg, vsdb, vsdb::max_time(), clock);
 
         let exp = vsdb::experience(vsdb);
-        if(exp >= 24){
+        if(exp >= 40){
+            earn_xp_(vsdb_reg, vsdb, 40);
+        }else if(exp >= 30){
             earn_xp_(vsdb_reg, vsdb, 20);
         }else if(exp >= 20){
             earn_xp_(vsdb_reg, vsdb, 10);
-        }else if(exp >= 16){
-            earn_xp_(vsdb_reg, vsdb, 5);
         };
 
         table::add(&mut reg.claimed_vsdb, id, object::id(vsdb));
