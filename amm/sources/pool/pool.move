@@ -196,7 +196,7 @@ module suiDouBashi_amm::pool{
     }
 
     // OTW of LP_TOKEN
-    struct LP_TOKEN<phantom X, phantom Y> has drop {}
+    struct LP_TOKEN<phantom X, phantom Y> has drop {
 
     /// LP position NFT, liquidity provider needs to own the LP NFT first to deposit/ withdraw liquidity
     struct LP<phantom X, phantom Y> has key, store{

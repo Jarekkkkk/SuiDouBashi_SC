@@ -4,3 +4,6 @@ coni_flip.move
 .trace
 
 sui.log*
+*.svg
+*.yaml
+*.md
