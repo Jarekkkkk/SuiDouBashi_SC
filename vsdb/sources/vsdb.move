@@ -56,9 +56,9 @@ module suiDouBashi_vsdb::vsdb{
     /// Key of "VSDB" tp access dynamic field or object dyanmic fields state
     struct VSDBKey<phantom T: drop> has copy, store, drop {}
 
-    /// Vesting NFT of SuiDoBashi ecosystem. Any SDB holder can lock up their coins for specific duration at most 24 weeks and receive Vsdb NFT in exchange to SuiDoBashi contributor
+    /// Vesting NFT of SuiDoBashi ecosystem. Any SDB holder can lock up SDb coins for specific duration at most 24 weeks in exchagne for Vsdb NFT
     /// Additional actions like deposits and extending unlocked period are allowed anytime
-    /// The logner the vesting time, the higher the governance power( voting power ) you are granted
+    /// The logner the vesting time, the higher the governance power (voting power) you are granted
     /// As a VSDB holder, you can earn experiences by interacting with DAPPs on SuiDouBashi to enjoy the benefits in SuiDouBashi like fee deduction, or voting bonus
     struct Vsdb has key, store{
         id: UID,
@@ -76,8 +76,6 @@ module suiDouBashi_vsdb::vsdb{
         player_point_history: TableVec<Point>,
         /// registered modules
         modules: VecSet<TypeName>
-        // TODO(?)
-        // age, or accumlating locked up weeks
     }
 
     /// Capability of Vsdb package, responsible for whitelisted modules

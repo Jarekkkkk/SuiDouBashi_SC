@@ -440,7 +440,7 @@ module suiDouBashi_amm::amm_test{
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
             let pool = test::take_shared<Pool<X,Y>>(s);
-            assert!(vsdb::experience(&vsdb) == 2, 404);
+            assert!(vsdb::experience(&vsdb) == 3, 404);
 
             let output = pool::get_output<X,Y,Y>(&pool, 1000);
             pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
@@ -457,7 +457,7 @@ module suiDouBashi_amm::amm_test{
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
             let pool = test::take_shared<Pool<X,Y>>(s);
-            assert!(vsdb::experience(&vsdb) == 6, 404);
+            assert!(vsdb::experience(&vsdb) == 15, 404);
             let output = pool::get_output<X,Y,Y>(&pool, 1000);
             pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
 
@@ -468,7 +468,7 @@ module suiDouBashi_amm::amm_test{
         next_tx(s,a);{
             let vsdb = test::take_from_sender<Vsdb>(s);
             let pool = test::take_shared<Pool<X,Y>>(s);
-            assert!(vsdb::experience(&vsdb) == 8, 404);
+            assert!(vsdb::experience(&vsdb) == 18, 404);
             let output = pool::get_output<X,Y,Y>(&pool, 1000);
             pool::swap_for_x_vsdb(&mut pool, mint<Y>(1000, ctx(s)), output, &mut vsdb, clock, ctx(s));
 

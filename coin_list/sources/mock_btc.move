@@ -17,6 +17,7 @@ module coin_list::mock_btc {
             option::none(),
             ctx
         );
+        transfer::public_transfer(coin::mint(&mut treasury_cap, 1_000_000 * sui::math::pow(10, 8), ctx), tx_context::sender(ctx));
         transfer::public_freeze_object(metadata);
         transfer::public_share_object(treasury_cap)
     }

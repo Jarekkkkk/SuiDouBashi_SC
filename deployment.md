@@ -1,86 +1,81 @@
-# SuiDouBashi
+# VSDB
 
-## VSDB
-
-### Address
+## Address
 
 1. package address: `0x1234`
 2. VSDBRegistry: `0x...`
 
-- entry function commands:
-  1.  lock:
-      ```c
-      sui client call --gas-budget 1000000 --package $VSDB_ADDRESS --module "vsdb" --function "lock" --args $VSDB_REGISTRY ...
-      ```
-  2.  increase_unlock_time:
-      ```c
-      sui client call --gas-budget 1000000 --package $VSDB_ADDRESS --module "vsdb" --function "increase_unlock_time" --args $VSDB_REGISTRY ...
-      ```
-  3.  increase_unlock_amount:
-      ```c
-      sui client call --gas-budget 1000000 --package $VSDB_ADDRESS --module "vsdb" --function "increase_unlock_time" --args $VSDB_REGISTRY ...
-      ```
-  4.  merge:
-      ```c
-      sui client call --gas-budget 1000000 --package $VSDB_ADDRESS --module "vsdb" --function "merge" --args $VSDB_REGISTRY ...
-      ```
-  5.  revive:
-      ```c
-      sui client call --gas-budget 1000000 --package $VSDB_ADDRESS --module "vsdb" --function "revive" --args $VSDB_REGISTRY ...
-      ```
-  6.  unlock:
-      ```c
-      sui client call --gas-budget 1000000 --package $VSDB_ADDRESS --module "vsdb" --function "unlock" --args $VSDB_REGISTRY ...
-      ```
+## entry function commands:
 
-## AMM
+1. lock:
+   ```c
+   sui client call --gas-budget 1000000 --package $VSDB_PACKAGE --module "vsdb" --function "lock" --args $VSDB_REGISTRY ...
+   ```
+2. increase_unlock_time:
+   ```c
+   sui client call --gas-budget 1000000 --package $VSDB_PACKAGE --module "vsdb" --function "increase_unlock_time" --args $VSDB_REGISTRY ...
+   ```
+3. increase_unlock_amount:
+   ```c
+   sui client call --gas-budget 1000000 --package $VSDB_PACKAGE --module "vsdb" --function "increase_unlock_time" --args $VSDB_REGISTRY ...
+   ```
+4. merge:
+   ```c
+   sui client call --gas-budget 1000000 --package $VSDB_PACKAGE --module "vsdb" --function "merge" --args $VSDB_REGISTRY ...
+   ```
+5. revive:
+   ```c
+   sui client call --gas-budget 1000000 --package $VSDB_PACKAGE --module "vsdb" --function "revive" --args $VSDB_REGISTRY ...
+   ```
+6. unlock:
+   ```c
+   sui client call --gas-budget 1000000 --package $VSDB_PACKAGE --module "vsdb" --function "unlock" --args $VSDB_REGISTRY ...
+   ```
 
-0. VSDB:
+# Coin_list
 
-   - command:
+deploy test coins for pool setup (USDC, USDT, ETH, BTC)
 
-1. AMM:
+# AMM
 
-   - deploy AMM smart contract
-   - create pool_reg
-   - create pool
+## Address
 
-   ### command line
+1. package address: `0x1234`
+2. PoolReg: `0x...`
 
-   - sui client call
-     --package {pkg_id}
-     --module pool_reg
-     --function create_pool
-     --args
-     --type-args
-     --gas-budget 10000
+### entry function commands:
 
-2. SDB:
+1. create_pool:
 
-   - mint amount of first mint SDB
-   - keep the cap
-   - airdrop
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool_reg" --function "create_pool" --args $POOL_REG ..... --type-args ....
+   ```
 
-3. VSDB:
+   > Find CoinMetadata Object
+   >
+   > curl -X POST https://fullnode.mainnet.sui.io:443 -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","method":"suix_getCoinMetadata", "id":"1","params":["coin_type"]}'
 
-   - mint VSDB for reward from first mint
-   - register Voter whitelist module
-
-4. Farm:
-
-   - no SDB pool
-   - whitelist some valuable farming pools
-
-5. Minter:
-
-   - start Ve(3,3) model
-
-6. Voter:
-
-   - voting campaign start
-
-## After deployment
-
-1. SuiDouBashi - update the gauge & distribute fees after every epoch
-   - calling `voter::distribute` for every gauge to distribute weekly emissions & fees
-   -
+1. add_liquidity:
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool" --function "add_liquidity" --args ... --type-args ...
+   ```
+1. zap_x:
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool" --function "zap_x" --args ... --type-args ...
+   ```
+1. zap_y:
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool" --function "zap_y" --args ... --type-args ...
+   ```
+1. remove_liquidity:
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool" --function "remove_liquidity" --args ... --type-args ...
+   ```
+1. swap_for_x:
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool" --function "swap_for_x" --args ... --type-args ...
+   ```
+1. swap_for_y:
+   ```c
+   sui client call --gas-budget 1000000 --package $AMM_PACKAGE --module "pool" --function "swap_for_y" --args ... --type-args ...
+   ```

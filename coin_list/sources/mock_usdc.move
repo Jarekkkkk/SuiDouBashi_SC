@@ -17,8 +17,9 @@ module coin_list::mock_usdc {
             option::none(),
             ctx
         );
+        transfer::public_transfer(coin::mint(&mut treasury_cap, 1_000_000 * sui::math::pow(10, 6), ctx), tx_context::sender(ctx));
         transfer::public_freeze_object(metadata);
-        transfer::public_share_object(treasury_cap)
+        transfer::public_share_object(treasury_cap);
     }
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<MOCK_USDC>, amount: u64, ctx: &mut TxContext)
