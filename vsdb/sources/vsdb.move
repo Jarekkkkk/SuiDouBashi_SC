@@ -186,7 +186,7 @@ module suiDouBashi_vsdb::vsdb{
         ];
         let values = vector[
             utf8(b"https://suidoubashi.io/vsdb"),
-            utf8(b"https://suidoubashi.io/vsdb/{level}"),
+            utf8(b"https://github.com/Jarekkkkk/SuiDouBashi_SC/blob/nfts/{level}.jpeg?raw=true"),
             utf8(b"A SuiDouBashi Ecosystem Member !"),
             utf8(b"https://suidoubashi.io"),
         ];
