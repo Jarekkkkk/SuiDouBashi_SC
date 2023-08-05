@@ -77,7 +77,7 @@ module test::voter_test{
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     // just in case, this can skip if no record
                     potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
-                    potato = voter::vote_entry(potato, &mut voter, vector[], vector[]);
+                    potato = voter::vote_entry(potato, &mut voter, &vsdb, vector[], vector[]);
                     // can be skipped as well
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
@@ -129,7 +129,7 @@ module test::voter_test{
 
                 { // Potato
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    potato = voter::vote_entry(potato, &mut voter, vec::singleton(object::id_to_address(&pool_id)), vec::singleton(weights));
+                    potato = voter::vote_entry(potato, &mut voter, &vsdb, vec::singleton(object::id_to_address(&pool_id)), vec::singleton(weights));
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge, &mut bribe, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
@@ -244,7 +244,7 @@ module test::voter_test{
                     vec::push_back(&mut pools, object::id_to_address(&pool_id_b));
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    potato = voter::vote_entry(potato, &mut voter, pools, weights);
+                    potato = voter::vote_entry(potato, &mut voter, &vsdb, pools, weights);
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
@@ -349,7 +349,7 @@ module test::voter_test{
                     vec::push_back(&mut pools, object::id_to_address(&pool_id_b));
 
                     let potato = voter::voting_entry(&mut vsdb, clock);
-                    potato = voter::vote_entry(potato,&mut voter, pools, weights);
+                    potato = voter::vote_entry(potato,&mut voter, &vsdb, pools, weights);
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);

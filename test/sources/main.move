@@ -1,6 +1,6 @@
 #[test_only]
 module test::main{
-    use sui::clock::{Self, Clock, increment_for_testing as add_time};
+    use sui::clock::{Self, Clock, increment_for_testing as add_time, timestamp_ms as get_time};
     use sui::test_scenario::{Self as test, Scenario, ctx};
 
     use test::setup;
@@ -37,6 +37,7 @@ module test::main{
     fun setup_(clock: &mut Clock, test: &mut Scenario){
         add_time(clock, setup::start_time() * 1000);
         std::debug::print(&std::ascii::string(b"start time: "));
+        std::debug::print(&(get_time(clock)/1000));
 
         setup::deploy_coins(test);
         setup::mint_stable(test);

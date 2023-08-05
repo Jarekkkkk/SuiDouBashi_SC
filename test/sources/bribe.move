@@ -284,7 +284,7 @@ module test::bribe_test{
                     let potato = voter::voting_entry(&mut vsdb, clock);
                     potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
                     potato =  voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
-                    potato = voter::vote_entry(potato,&mut voter, pools, weights);
+                    potato = voter::vote_entry(potato,&mut voter, &vsdb, pools, weights);
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
                     potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);

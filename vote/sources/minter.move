@@ -26,6 +26,7 @@ module suiDouBashi_vote::minter{
     const E_INVALID_TEAM: u64 = 100;
     const ERR_MAX_RATE:u64 = 101;
     const E_NOT_MATCH_LENGTH: u64 = 102;
+    const E_FIRST_MINT_AMOUNT: u64 = 103;
 
     friend suiDouBashi_vote::voter;
 
@@ -85,6 +86,9 @@ module suiDouBashi_vote::minter{
             epoch: 0
         };
         let sdb_balance = balance::increase_supply(&mut minter.supply, initial_amount);
+
+        // Assert first mint = 2.5M
+        //assert!(balance::supply_value(&minter.supply) == 2_500_000 * (sdb::decimals() as u64), E_FIRST_MINT_AMOUNT);
 
         // transfer VeNFT
         let i = 0;

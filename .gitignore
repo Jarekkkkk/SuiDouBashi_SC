@@ -8,3 +8,4 @@ sui.log*
 *.svg
 *.yaml
 *.md
+!deployment.md
