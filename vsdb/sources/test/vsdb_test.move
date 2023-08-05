@@ -190,7 +190,7 @@ module suiDouBashi_vsdb::vsdb_test{
             let reg_cap = test::take_from_sender<VSDBCap>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            vsdb::register_module<MOCK>(&reg_cap, &mut reg);
+            vsdb::register_module<MOCK>(&reg_cap, &mut reg, false);
             white::init_for_testing(ctx(s));
 
             test::return_shared(reg);

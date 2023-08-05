@@ -6,10 +6,11 @@ module suiDouBashi_vsdb::vsdb{
     use std::type_name::{Self, TypeName};
     use std::option::{Self, Option};
     use std::string::utf8;
+    use std::vector as vec;
 
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, UID};
-    use sui::vec_set::{Self, VecSet};
+    use sui::vec_map::{Self, VecMap};
     use sui::transfer;
     use sui::balance::{Self, Balance};
     use sui::table::{Self, Table};
@@ -74,8 +75,8 @@ module suiDouBashi_vsdb::vsdb{
         player_epoch: u64,
         /// point history
         player_point_history: TableVec<Point>,
-        /// registered modules
-        modules: VecSet<TypeName>
+        /// registered modules,
+        modules: VecMap<TypeName, bool>
     }
 
     /// Capability of Vsdb package, responsible for whitelisted modules
@@ -87,8 +88,8 @@ module suiDouBashi_vsdb::vsdb{
         id: UID,
         /// shared object version, used for future upgrade
         version: u64,
-        /// Registered modules, verifying which module is allowed to explore dynamic fieilds on our NFT
-        modules: Table<TypeName, bool>,
+        /// Registered modules, when mapping value of registered modules are true, the imported module must implement `clear` function to execute reset logic, it's useful to prevent some irretrievable consequences before Vsdb NFT is going to be deleted
+        modules: VecMap<TypeName, bool>,
         /// total Vsdb NFT
         minted_vsdb: u64,
         /// Total Locked up SDB Coin
@@ -157,21 +158,21 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     /// register whitelisted module
-    public entry fun register_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
+    public entry fun register_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry, reset: bool){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
 
         let type = type_name::get<T>();
-        assert!(!table::contains(&reg.modules, type), E_ALREADY_REGISTERED);
-        table::add(&mut reg.modules, type, true);
+        assert!(!vec_map::contains(&reg.modules, &type), E_ALREADY_REGISTERED);
+        vec_map::insert(&mut reg.modules, type, reset);
     }
 
     public fun whitelisted<T: drop>(reg: &VSDBRegistry):bool {
-        table::contains(&reg.modules, type_name::get<T>())
+        vec_map::contains(&reg.modules, &type_name::get<T>())
     }
 
     public entry fun remove_module<T>(_cap: &VSDBCap, reg: &mut VSDBRegistry){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
-        table::remove(&mut reg.modules, type_name::get<T>());
+        vec_map::remove(&mut reg.modules, &type_name::get<T>());
     }
 
     fun init(otw: VSDB, ctx: &mut TxContext){
@@ -184,10 +185,10 @@ module suiDouBashi_vsdb::vsdb{
             utf8(b"project_url"),
         ];
         let values = vector[
-            utf8(b"https://suidobashi.io/vsdb"),
-            utf8(b"https://suidobashi.io/vsdb/{level}"),
+            utf8(b"https://suidoubashi.io/vsdb"),
+            utf8(b"https://suidoubashi.io/vsdb/{level}"),
             utf8(b"A SuiDouBashi Ecosystem Member !"),
-            utf8(b"https://suidobashi.io"),
+            utf8(b"https://suidoubashi.io"),
         ];
         let display = display::new_with_fields<Vsdb>(&publisher, keys, values, ctx);
         display::update_version(&mut display);
@@ -200,7 +201,7 @@ module suiDouBashi_vsdb::vsdb{
             VSDBRegistry {
                 id: object::new(ctx),
                 version: VERSION,
-                modules: table::new<TypeName, bool>(ctx),
+                modules: vec_map::empty<TypeName, bool>(),
                 minted_vsdb: 0,
                 locked_total: 0,
                 epoch:0,
@@ -303,7 +304,7 @@ module suiDouBashi_vsdb::vsdb{
         ctx: &mut TxContext
     ){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
-        assert!(vec_set::is_empty(&self.modules), E_NOT_PURE);
+        assert!(vec_map::is_empty(&self.modules), E_NOT_PURE);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let level = level(&vsdb);
@@ -498,7 +499,7 @@ module suiDouBashi_vsdb::vsdb{
             end: unlock_time,
             player_epoch: 0,
             player_point_history,
-            modules: vec_set::empty<TypeName>(),
+            modules: vec_map::empty<TypeName, bool>(),
         };
 
         vsdb
@@ -544,7 +545,8 @@ module suiDouBashi_vsdb::vsdb{
             modules,
         } = self;
 
-        assert!(vec_set::is_empty(&modules), E_NOT_PURE);
+        let (_, values) = vec_map::into_keys_values(modules);
+        assert!(!vec::contains(&values, &true), E_NOT_PURE);
         table_vec::drop<Point>(player_point_history);
         balance::destroy_zero(balance);
         object::delete(id);
@@ -718,11 +720,11 @@ module suiDouBashi_vsdb::vsdb{
     }
 
     public fun module_exists<T>(self: &Vsdb):bool{
-        vec_set::contains(&self.modules, &type_name::get<T>())
+        vec_map::contains(&self.modules, &type_name::get<T>())
     }
 
     public fun earn_xp<T: drop>(_: T, self: &mut Vsdb, value: u64){
-        assert!(vec_set::contains(&self.modules, &type_name::get<T>()), E_NOT_REGISTERED);
+        assert!(vec_map::contains(&self.modules, &type_name::get<T>()), E_NOT_REGISTERED);
         self.experience = self.experience + value;
         event::earn_xp(object::id(self), value);
     }
@@ -755,8 +757,8 @@ module suiDouBashi_vsdb::vsdb{
         value: V
     ){
         let type = type_name::get<T>();
-        assert!(table::contains(&reg.modules, type), E_NOT_REGISTERED);
-        vec_set::insert(&mut self.modules, type);
+        assert!(vec_map::contains(&reg.modules, &type), E_NOT_REGISTERED);
+        vec_map::insert(&mut self.modules, type, *vec_map::get(&reg.modules, &type));
         df::add(&mut self.id, VSDBKey<T>{}, value);
     }
 
@@ -794,7 +796,7 @@ module suiDouBashi_vsdb::vsdb{
     ):Option<V>{
         let opt = df::remove_if_exists(&mut self.id, VSDBKey<T>{});
         if(option::is_some(&opt)){
-            vec_set::remove(&mut self.modules, &type_name::get<T>());
+            vec_map::remove(&mut self.modules, &type_name::get<T>());
         };
         opt
     }
@@ -803,7 +805,7 @@ module suiDouBashi_vsdb::vsdb{
         _: T,
         self: &mut Vsdb,
     ):V{
-        vec_set::remove(&mut self.modules, &type_name::get<T>());
+        vec_map::remove(&mut self.modules, &type_name::get<T>());
         df::remove(&mut self.id, VSDBKey<T>{})
     }
 
@@ -816,9 +818,9 @@ module suiDouBashi_vsdb::vsdb{
     ){
         // retrieve address from witness
         let type = type_name::get<T>();
-        assert!(table::contains(&reg.modules, type), E_NOT_REGISTERED);
+        assert!(vec_map::contains(&reg.modules, &type), E_NOT_REGISTERED);
 
-        vec_set::insert(&mut self.modules, type);
+        vec_map::insert(&mut self.modules, type, *vec_map::get(&reg.modules, &type));
         dof::add(&mut self.id, VSDBKey<T>{}, value);
     }
 
@@ -854,7 +856,7 @@ module suiDouBashi_vsdb::vsdb{
         self: &mut Vsdb,
         _: T
     ):V{
-        vec_set::remove(&mut self.modules, &type_name::get<T>());
+        vec_map::remove(&mut self.modules, &type_name::get<T>());
         dof::remove(&mut self.id, VSDBKey<T>{})
     }
 

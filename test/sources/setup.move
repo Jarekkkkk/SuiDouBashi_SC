@@ -108,7 +108,7 @@ module test::setup{
             let reg_cap = test::take_from_sender<VSDBCap>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
 
-            vsdb::register_module<VSDB>(&reg_cap, &mut reg);
+            vsdb::register_module<VSDB>(&reg_cap, &mut reg, true);
 
             test::return_shared(reg);
             test::return_to_sender(s, reg_cap);

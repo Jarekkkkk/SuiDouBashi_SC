@@ -410,7 +410,7 @@ module suiDouBashi_amm::amm_test{
         next_tx(s,a);{
             let cap = test::take_from_sender<vsdb::VSDBCap>(s);
             let vsdb_reg = test::take_shared<VSDBRegistry>(s);
-            vsdb::register_module<VSDB>(&cap, &mut vsdb_reg);
+            vsdb::register_module<VSDB>(&cap, &mut vsdb_reg, false);
 
             test::return_to_sender(s, cap);
             test::return_shared(vsdb_reg);
