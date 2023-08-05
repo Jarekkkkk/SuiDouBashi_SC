@@ -1,0 +1,12 @@
+[package]
+name = "suiDouBashiVSDB"
+version = "0.0.1"
+published-at = "0x123456"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
+SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
+
+[addresses]
+suiDouBashi_vsdb = "0x12345678"

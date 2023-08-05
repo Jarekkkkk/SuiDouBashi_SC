@@ -1,0 +1,17 @@
+[package]
+name = "suiDouBashiFarm"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
+SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
+
+suiDouBashiAmm = {local = "../amm"}
+coin_list = {local = "../coin_list"}
+test = { local = "../test" }
+
+
+
+[addresses]
+suiDouBashi_farm = "0x0"
