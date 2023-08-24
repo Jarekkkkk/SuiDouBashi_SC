@@ -6,6 +6,7 @@ module suiDouBashi_vsdb::vsdb{
     use std::type_name::{Self, TypeName};
     use std::option::{Self, Option};
     use std::string::utf8;
+    use std::ascii::String;
     use std::vector as vec;
 
     use sui::tx_context::{Self, TxContext};
@@ -24,6 +25,7 @@ module suiDouBashi_vsdb::vsdb{
     use sui::dynamic_object_field as dof;
 
     use suiDouBashi_vsdb::sdb::{Self, SDB};
+    use suiDouBashi_vsdb::art;
     use suiDouBashi_vsdb::point::{Self, Point};
     use suiDouBashi_vsdb::event;
     use suiDouBashi_vsdb::i128::{Self, I128};
@@ -63,6 +65,8 @@ module suiDouBashi_vsdb::vsdb{
     /// As a VSDB holder, you can earn experiences by interacting with DAPPs on SuiDouBashi to enjoy the benefits in SuiDouBashi like fee deduction, or voting bonus
     struct Vsdb has key, store{
         id: UID,
+        // dynamic image for Vsdb NFT
+        image_url: String,
         /// Current level our NFT, corresponding to different images and bonus
         level: u8,
         /// Accrued experiences from interacting with SuiDouBashi ecosystem
@@ -185,9 +189,9 @@ module suiDouBashi_vsdb::vsdb{
             utf8(b"project_url"),
         ];
         let values = vector[
-            utf8(b"https://suidoubashi.io/vsdb"),
-            utf8(b"https://github.com/Jarekkkkk/SuiDouBashi_SC/blob/nfts/{level}.jpeg?raw=true"),
-            utf8(b"A SuiDouBashi Ecosystem Member !"),
+            utf8(b"https://suidoubashi.io/vest"),
+            utf8(b"image_url"),
+            utf8(b"VSDB NFT is used for governance. Any SDB holders can lock their tokens for up to 24 weeks to receive NFTs. NFT holders gain access to the ecosystem and enjoy additional benefits for becoming SuiDouBashi members !"),
             utf8(b"https://suidoubashi.io"),
         ];
         let display = display::new_with_fields<Vsdb>(&publisher, keys, values, ctx);
@@ -374,8 +378,9 @@ module suiDouBashi_vsdb::vsdb{
 
         locked_end = round_down_week(ts + extended_duration);
 
-        extend(self, option::none<Coin<SDB>>(), locked_end, clock);
         let sdb = coin::take(&mut self.balance, withdrawl, ctx);
+        extend(self, option::none<Coin<SDB>>(), locked_end, clock);
+
         reg.locked_total = reg.locked_total - withdrawl;
 
         checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
@@ -491,8 +496,11 @@ module suiDouBashi_vsdb::vsdb{
 
         let ts = unix_timestamp(clock);
         let player_point_history = table_vec::singleton(point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts), ctx);
+        let id = object::new(ctx);
+        let image_url = art::image_url(&id);
         let vsdb = Vsdb {
-            id: object::new(ctx),
+            id,
+            image_url,
             level: 0,
             experience: 0,
             balance: coin::into_balance(locked_sdb),
@@ -536,6 +544,7 @@ module suiDouBashi_vsdb::vsdb{
     fun destroy(self: Vsdb){
         let Vsdb{
             id,
+            image_url: _,
             level:_,
             experience: _,
             balance,
