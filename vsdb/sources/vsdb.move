@@ -190,7 +190,7 @@ module suiDouBashi_vsdb::vsdb{
         ];
         let values = vector[
             utf8(b"https://suidoubashi.io/vest"),
-            utf8(b"image_url"),
+            utf8(b"{image_url}"),
             utf8(b"VSDB NFT is used for governance. Any SDB holders can lock their tokens for up to 24 weeks to receive NFTs. NFT holders gain access to the ecosystem and enjoy additional benefits for becoming SuiDouBashi members !"),
             utf8(b"https://suidoubashi.io"),
         ];

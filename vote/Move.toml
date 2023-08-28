@@ -12,7 +12,7 @@ suiDouBashiVSDB = {local = "../vsdb"}
 
 
 [addresses]
-suiDouBashi_vote =  "0x00"
+suiDouBashi_vote =  "0xabcd"
 std = "0x1"
 sui =  "0x2"
 sui_system = "0x3"

@@ -16,7 +16,7 @@ module suiDouBashi_amm::amm_math{
         (_a * _b / PRECISION)
     }
 
-    public fun get_output_<X,Y,T>(
+    public fun get_output_<X,_Y,T>(
         stable: bool,
         dx: u64,
         reserve_x: u64,

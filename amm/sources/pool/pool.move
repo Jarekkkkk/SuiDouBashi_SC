@@ -300,6 +300,16 @@ module suiDouBashi_amm::pool{
         amm_math::get_output_<X,Y,T>(self.stable, input_x - calculate_fee(input_x, self.fee.fee_percentage), res_x, res_y, self.decimal_x, self.decimal_y)
     }
 
+    public fun get_output_fee<X,Y,T>(
+        self: &Pool<X,Y>,
+        input_x: u64,
+        fee_percentage: u8
+    ):u64{
+        assert_valid_type<X,Y,T>();
+        let (res_x, res_y, _) = get_reserves(self);
+        amm_math::get_output_<X,Y,T>(self.stable, input_x - calculate_fee(input_x, fee_percentage), res_x, res_y, self.decimal_x, self.decimal_y)
+    }
+
     public fun quote_add_liquidity<X,Y>(
         self: &Pool<X,Y>,
         value_x: u64,

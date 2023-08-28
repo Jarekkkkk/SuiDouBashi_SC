@@ -1,12 +1,10 @@
 [package]
 name = "coin_list"
 version = "0.0.1"
-published-at = "0x1e6b3a6357339e1e987a9c74ea095b18723ac86a2900754d1d21a73a88ead96b"
+published-at = "0x65a1f3a119cdfb8b5904067604bba6c17073bb2f2a40d7c087e76664d9a9297e"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
-MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
-SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
 
 [addresses]
-coin_list = "0x1e6b3a6357339e1e987a9c74ea095b18723ac86a2900754d1d21a73a88ead96b"
+coin_list = "0x65a1f3a119cdfb8b5904067604bba6c17073bb2f2a40d7c087e76664d9a9297e"

@@ -37,9 +37,7 @@ name = "coin_list"
 source = { local = "../coin_list" }
 
 dependencies = [
-  { name = "MoveStdlib" },
   { name = "Sui" },
-  { name = "SuiSystem" },
 ]
 
 [[move.package]]

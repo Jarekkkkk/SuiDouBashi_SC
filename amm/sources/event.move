@@ -20,10 +20,6 @@ module suiDouBashi_amm::event{
         input: u64,
         output: u64,
     }
-    struct OracleUpdated<phantom X, phantom Y> has copy, drop {
-        last_price_cumulative_x: u128,
-        last_price_cumulative_y: u128,
-    }
     struct Sync<phantom X, phantom Y> has copy, drop{
         res_x: u64,
         res_y: u64
