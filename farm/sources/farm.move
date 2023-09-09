@@ -20,16 +20,18 @@ module suiDouBashi_farm::farm{
 
     // ERROR
     const ERR_INITIALIZED: u64 = 000;
-    const ERR_NOT_GOV: u64 = 001;
-    const ERR_INVALID_TIME: u64 = 002;
-    const ERR_NOT_PLAYER: u64 = 003;
-    const ERR_INSUFFICIENT_LP: u64 = 004;
-    const ERR_NO_REWARD: u64 = 005;
-    const ERR_NOT_FINISH: u64 = 006;
-    const ERR_INVALID_POINT: u64 = 007;
-    const ERR_NOT_SETUP: u64 = 008;
-    const E_ALREADY_CLAIMED: u64 = 009;
-    const E_INVALID_PERIOD: u64 = 010;
+    const ERR_NOT_INITIALIZED: u64 = 001;
+    const ERR_NOT_GOV: u64 = 002;
+    const ERR_INVALID_TIME: u64 = 003;
+    const ERR_NOT_PLAYER: u64 = 004;
+    const ERR_INSUFFICIENT_LP: u64 = 005;
+    const ERR_NO_REWARD: u64 = 006;
+    const ERR_NOT_FINISH: u64 = 007;
+    const ERR_INVALID_POINT: u64 = 008;
+    const ERR_NOT_SETUP: u64 = 009;
+    const E_ALREADY_CLAIMED: u64 = 010;
+    const E_INVALID_PERIOD: u64 = 011;
+
 
     // EVENT
     struct Deposit<phantom X, phantom Y> has copy, drop{
@@ -118,7 +120,7 @@ module suiDouBashi_farm::farm{
         sdb: Coin<SDB>,
         clock: &Clock
     ){
-        assert!(!reg.initialized, ERR_INITIALIZED);
+        assert!(!reg.initialized, ERR_NOT_INITIALIZED);
         assert!(start_time > clock::timestamp_ms(clock) / 1000 && duration != 0, ERR_INVALID_TIME);
 
         let end_time = start_time + duration;
@@ -142,6 +144,7 @@ module suiDouBashi_farm::farm{
         clock: &Clock,
         ctx: &mut TxContext
     ){
+        assert!(reg.initialized, ERR_INITIALIZED);
         assert!(alloc_point <= TOTAL_ALLOC_POINT, ERR_INVALID_POINT);
 
         let ts = clock::timestamp_ms(clock) / 1000;
