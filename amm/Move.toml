@@ -1,6 +1,8 @@
 [package]
 name = "suiDouBashiAmm"
 version = "0.0.1"
+published-at = "0x1a2769b0a8974491d466733632a944d801a9a5984dd081a41a467ebf7e825445"
+
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
@@ -11,4 +13,4 @@ suiDouBashiVSDB = {local = "../vsdb"}
 coin_list = {local = "../coin_list"}
 
 [addresses]
-suiDouBashi_amm =  "0x00"
+suiDouBashi_amm =  "0x1a2769b0a8974491d466733632a944d801a9a5984dd081a41a467ebf7e825445"
