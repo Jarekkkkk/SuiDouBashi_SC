@@ -75,6 +75,7 @@ module suiDouBashi_farm::farm{
     public fun get_end_time(reg: &FarmReg):u64 {reg.end_time }
     public fun sdb_per_second(reg: &FarmReg): u64 { reg.sdb_per_second }
     public fun total_pending(reg: &FarmReg, id: address): u64 { *table::borrow(&reg.total_pending, id )}
+    public fun farm_stake_balance<X,Y>(farm: &Farm<X,Y>, lp: &LP<X,Y>): u64 {table::borrow(&farm.lp_stake, object::id(lp)).amount}
 
     struct Farm<phantom X, phantom Y> has key{
         id: UID,
