@@ -6,7 +6,7 @@ module suiDouBashi_vsdb::vsdb{
     use std::type_name::{Self, TypeName};
     use std::option::{Self, Option};
     use std::string::utf8;
-    use std::ascii::String;
+    use std::ascii::{Self, String};
     use std::vector as vec;
 
     use sui::tx_context::{Self, TxContext};
@@ -25,7 +25,6 @@ module suiDouBashi_vsdb::vsdb{
     use sui::dynamic_object_field as dof;
 
     use suiDouBashi_vsdb::sdb::{Self, SDB};
-    use suiDouBashi_vsdb::art;
     use suiDouBashi_vsdb::point::{Self, Point};
     use suiDouBashi_vsdb::event;
     use suiDouBashi_vsdb::i128::{Self, I128};
@@ -50,6 +49,11 @@ module suiDouBashi_vsdb::vsdb{
     const E_NOT_REGISTERED: u64 = 106;
     const E_NOT_PURE: u64 = 107;
     const E_INVALID_LEVEL: u64 = 108;
+    const E_INVALID_RND_LENGTH: u64 = 109;
+    const E_ALREADY_EXIST_ARTWORK: u64 = 110;
+    const E_NOT_EXIST_ARTWORK: u64 = 111;
+    const E_INCORRECT_FISH_TYPE_COUNT: u64 = 112;
+    const E_INCORRECT_FISH_COLOR_COUNT: u64 = 113;
 
     // ====== Error =======
 
@@ -71,6 +75,8 @@ module suiDouBashi_vsdb::vsdb{
         level: u8,
         /// Accrued experiences from interacting with SuiDouBashi ecosystem
         experience: u64,
+        /// fish type
+        scarcity: u8,
         /// Locked SDB Coin
         balance: Balance<SDB>,
         /// Unlocked date ( week-based )
@@ -80,7 +86,7 @@ module suiDouBashi_vsdb::vsdb{
         /// point history
         player_point_history: TableVec<Point>,
         /// registered modules,
-        modules: VecMap<TypeName, bool>
+        modules: VecMap<TypeName, bool>,
     }
 
     /// Capability of Vsdb package, responsible for whitelisted modules
@@ -103,7 +109,9 @@ module suiDouBashi_vsdb::vsdb{
         /// point history
         point_history: TableVec<Point>,
         /// Account for unlocked SDB coin amount for each week
-        slope_changes: Table<u64, I128>
+        slope_changes: Table<u64, I128>,
+        /// NFT URLS, there are 6 colors for 5 different type of fishes, resulting in a total of 30 different NFTs in each level
+        arts: Table<u8, vector<vector<String>>> // level -> [scarcity, color]
     }
 
     public fun minted_vsdb(reg: &VSDBRegistry): u64 { reg.minted_vsdb }
@@ -210,7 +218,8 @@ module suiDouBashi_vsdb::vsdb{
                 locked_total: 0,
                 epoch:0,
                 point_history: table_vec::singleton<Point>(point::new(i128::zero(), i128::zero(), tx_context::epoch_timestamp_ms(ctx) / 1000), ctx),
-                slope_changes: table::new<u64, I128>(ctx)
+                slope_changes: table::new<u64, I128>(ctx),
+                arts: table::new<u8, vector<vector<String>>>(ctx)
             }
         )
     }
@@ -243,7 +252,7 @@ module suiDouBashi_vsdb::vsdb{
         assert!(unlock_time > ts && unlock_time <= ts + MAX_TIME, E_INVALID_UNLOCK_TIME);
 
         let amount = coin::value(&sdb);
-        let vsdb = new( sdb,unlock_time, clock, ctx);
+        let vsdb = new(sdb,unlock_time, &reg.arts, clock, ctx);
         reg.minted_vsdb = reg.minted_vsdb + 1;
         reg.locked_total = reg.locked_total + amount;
         checkpoint_(true, reg, 0, 0, locked_balance(&vsdb), locked_end(&vsdb), clock);
@@ -321,6 +330,7 @@ module suiDouBashi_vsdb::vsdb{
         assert!(locked_end_ >= ts && locked_end >= ts, E_LOCK);
         assert!(locked_bal_ > 0 && locked_bal > 0, E_EMPTY_BALANCE);
 
+        // game
         let (level, exp) = if(level > level_){
             (level, self.experience)
         }else if(level == level_){
@@ -335,6 +345,15 @@ module suiDouBashi_vsdb::vsdb{
         };
         self.level = level;
         self.experience = exp;
+
+        // nft
+        let scarcity = if(self.scarcity > vsdb.scarcity){
+            self.scarcity
+        }else{
+            vsdb.scarcity
+        };
+        self.scarcity = scarcity;
+        self.image_url = image_url(&self.id, locked_bal + locked_bal_, self.level, (scarcity as u64), &reg.arts);
 
         let coin = withdraw(&mut vsdb, ctx);
         checkpoint_(true, reg, locked_bal_, locked_end_, locked_balance(&vsdb), locked_end(&vsdb), clock);
@@ -358,10 +377,8 @@ module suiDouBashi_vsdb::vsdb{
     public entry fun revive(
         reg: &mut VSDBRegistry,
         self: &mut Vsdb,
-        withdrawl: u64,
         extended_duration: u64,
-        clock: &Clock,
-        ctx: &mut TxContext
+        clock: &Clock
     ){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
 
@@ -371,21 +388,14 @@ module suiDouBashi_vsdb::vsdb{
 
         assert!(ts >= locked_end , E_LOCK);
         assert!(locked_bal > 0, E_EMPTY_BALANCE);
-        // each Vsdb should keep at least 1 SDB Coin
-        assert!(withdrawl + (math::pow(10, sdb::decimals())) <= locked_bal, E_INSUFFICIENT_AMOUNT);
 
         checkpoint_(true, reg, locked_bal, locked_end, 0, 0, clock);
 
         locked_end = round_down_week(ts + extended_duration);
 
-        let sdb = coin::take(&mut self.balance, withdrawl, ctx);
         extend(self, option::none<Coin<SDB>>(), locked_end, clock);
 
-        reg.locked_total = reg.locked_total - withdrawl;
-
-        checkpoint_(true, reg, 0, 0, locked_balance(self), locked_end(self), clock);
-
-        transfer::public_transfer(sdb, tx_context::sender(ctx));
+        checkpoint_(true, reg, 0, 0, locked_bal, locked_end(self), clock);
 
         event::deposit(object::id(self), locked_bal, locked_end);
     }
@@ -490,19 +500,21 @@ module suiDouBashi_vsdb::vsdb{
     public fun unix_timestamp(clock: &Clock): u64 { clock::timestamp_ms(clock)/ 1000}
 
     // ===== Main =====
-    fun new(locked_sdb: Coin<SDB>, unlock_time: u64, clock: &Clock, ctx: &mut TxContext): Vsdb {
+    fun new(locked_sdb: Coin<SDB>, unlock_time: u64, urls: &Table<u8, vector<vector<String>>>, clock: &Clock, ctx: &mut TxContext): Vsdb {
         let amount = coin::value(&locked_sdb);
         assert!(amount >= (math::pow(10, sdb::decimals())), E_INSUFFICIENT_AMOUNT);
 
         let ts = unix_timestamp(clock);
         let player_point_history = table_vec::singleton(point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts), ctx);
         let id = object::new(ctx);
-        let image_url = art::image_url(&id);
+        let scarcity = pick_scarcity(&id);
+        let image_url = image_url(&id, coin::value(&locked_sdb), 0, scarcity, urls);
         let vsdb = Vsdb {
             id,
             image_url,
             level: 0,
             experience: 0,
+            scarcity:(scarcity as u8),
             balance: coin::into_balance(locked_sdb),
             end: unlock_time,
             player_epoch: 0,
@@ -547,6 +559,7 @@ module suiDouBashi_vsdb::vsdb{
             image_url: _,
             level:_,
             experience: _,
+            scarcity: _,
             balance,
             end: _,
             player_epoch: _,
@@ -755,6 +768,136 @@ module suiDouBashi_vsdb::vsdb{
         let _to = (to_level as u64);
         let _from = (from_level as u64);
         return 25 * (_to * _to - _from * _from)
+    }
+
+    public fun image_url(
+        id: &UID,
+        locked_bal: u64,
+        level: u8,
+        scarcity: u64,
+        urls: &Table<u8, vector<vector<String>>>
+    ):String{
+        let _level = level;
+        let fish = table::borrow(urls, 0);
+        let colors = vec::borrow(fish, scarcity);
+        while( _level > 0){
+            if(table::contains(urls, _level)){
+                fish = table::borrow(urls, _level);
+                colors = vec::borrow(fish, scarcity);
+            };
+            _level = _level - 1;
+        };
+        *vec::borrow(colors, pick_color(locked_bal, id))
+    }
+
+    public fun add_image_url(
+        _cap: &VSDBCap,
+        reg: &mut VSDBRegistry,
+        level: u8,
+        art: vector<vector<vector<u8>>>
+    ){
+        assert!(!table::contains(&reg.arts, level), E_ALREADY_EXIST_ARTWORK);
+
+        let (i, len) = (0, vec::length(&art));
+        assert!(len == 5, E_INCORRECT_FISH_TYPE_COUNT);
+
+        let res: vector<vector<String>> = vector[];
+        while(i < len){
+            let colors = vec::borrow_mut(&mut art, i);
+            let (j, len_) = (0, vec::length(colors));
+            assert!(len_ == 6, E_INCORRECT_FISH_COLOR_COUNT);
+            let res_:vector<String> = vector[];
+            while(j < len_){
+                vec::push_back(&mut res_, ascii::string(vec::pop_back(colors)));
+                j = j + 1;
+            };
+            vec::reverse(&mut res_);
+            vec::push_back(&mut res, res_);
+
+            i = i + 1;
+        };
+
+        table::add(&mut reg.arts, level, res);
+    }
+
+    public fun edit_image_url(
+        _cap: &VSDBCap,
+        reg: &mut VSDBRegistry,
+        level: u8,
+        art: vector<vector<vector<u8>>>
+    ){
+        assert!(table::contains(&reg.arts, level), E_NOT_EXIST_ARTWORK);
+
+        let (i, len) = (0, vec::length(&art));
+        assert!(len == 5, E_INCORRECT_FISH_TYPE_COUNT);
+
+        let res: vector<vector<String>> = vector[];
+        while(i < len){
+            let colors = vec::borrow_mut(&mut art, i);
+            let (j, len_) = (0, vec::length(colors));
+            assert!(len_ == 6, E_INCORRECT_FISH_COLOR_COUNT);
+            let res_:vector<String> = vector[];
+            while(j < len_){
+                vec::push_back(&mut res_, ascii::string(vec::pop_back(colors)));
+                j = j + 1;
+            };
+            vec::reverse(&mut res_);
+            vec::push_back(&mut res, res_);
+
+            i = i + 1;
+        };
+
+        *table::borrow_mut(&mut reg.arts, level) = res;
+    }
+
+    fun pick_scarcity(id: &UID): u64{
+        let percentage = safe_selection(100, &object::uid_to_bytes(id));
+
+        if(percentage < 40){
+            0
+        }else if(percentage < 70){
+            1
+        }else if(percentage < 90){
+            2
+        }else if(percentage < 97){
+            3
+        }else{
+            4
+        }
+    }
+
+    fun pick_color(locked_bal: u64, id: &UID):u64{
+        if(locked_bal < 2_500_000_000_000){
+            0
+        }else if(locked_bal < 5_000_000_000_000){
+            let percentage = safe_selection(3, &object::uid_to_bytes(id));
+            if(percentage < 1){
+                1
+            }else if(percentage < 2){
+                2
+            }else{
+                3
+            }
+        }else if(locked_bal < 10_000_000_000_000){
+            4
+        }else{
+            5
+        }
+    }
+     public fun safe_selection(n: u64, rnd: &vector<u8>): u64 {
+        assert!(vec::length(rnd) >= 16, E_INVALID_RND_LENGTH);
+        let m: u128 = 0;
+        let i = 0;
+        while (i < 16) {
+            m = m << 8;
+            let curr_byte = *vec::borrow(rnd, i);
+            m = m + (curr_byte as u128);
+            i = i + 1;
+        };
+        let n_128 = (n as u128);
+        let module_128  = m % n_128;
+        let res = (module_128 as u64);
+        res
     }
     /// Authorized module can add dynamic fields into Vsdb
     /// Witness is the entry of dyanmic fields , be careful of your generated witness

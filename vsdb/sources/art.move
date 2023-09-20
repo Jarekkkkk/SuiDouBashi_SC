@@ -2,6 +2,7 @@ module suiDouBashi_vsdb::art{
     use std::vector as vec;
     use std::ascii::{Self, String};
     use sui::object::{Self, UID};
+    use sui::table::{Self, Table};
 
     use suiDouBashi_vsdb::to_string::to_string;
     use suiDouBashi_vsdb::encode::base64_encode as encode;
@@ -13,7 +14,7 @@ module suiDouBashi_vsdb::art{
     const LV2: vector<u8> = b"https://ucarecdn.com/a889238e-f759-4c7a-b288-a80e41ce6ead/LV2.png";
     const LV3: vector<u8> = b"https://ucarecdn.com/013ef661-dbf3-4b90-9578-9ccf7d7ecacf/LV3.png";
 
-    public fun image_url(id: &UID):String{
+    public fun image_url_(id: &UID):String{
         let bytes = object::uid_to_bytes(id);
         let value = *vec::borrow(&bytes, 0);
         let point = value - value / 4 * 4;
@@ -28,7 +29,8 @@ module suiDouBashi_vsdb::art{
     // ====== Error ======
 
     const E_NOT_INVALID_MONTH: u64 = 1;
-    const  E_OUT_OF_RANGE: u64 = 2;
+    const E_OUT_OF_RANGE: u64 = 2;
+    const E_INVALID_RND_LENGTH: u64 = 3;
 
     // ====== Error ======
 
@@ -74,7 +76,89 @@ module suiDouBashi_vsdb::art{
     // Weights
     const BORDER_WEIGHTS: vector<u8> = vector[30, 30, 15, 12, 8, 5]; // [6, 100 bps]
     const CARD_WEIGHTS: vector<u32> = vector[12, 12, 12, 11, 11, 7, 7, 7, 7, 5, 4, 3, 2]; // [13, 100 bps]
-    const SHELL_WEIGHTS: vector<u8> = vector[2, 10, 10, 11, 11, 11, 11, 11, 75, 7, 5, 25, 1]; // [13, 200 bps]
+    const SHELL_WEIGHTS: vector<u8> = vector[2, 10, 10, 11, 11, 11, 11, 11, 75, 7, 5, 25, 1]; // [13, 200 bps
+
+    const FISH_WEIGHTS: vector<u8> = vector[40, 30, 20, 7, 3]; // [5, 100]
+
+    struct Art has key{
+        id: UID,
+        urls: Table<u8, vector<vector<String>>> // 5 x 6, level -> [scarcity, color]
+    }
+
+    public fun image_url(
+        id: &UID,
+        locked_bal: u64,
+        level: u8,
+        urls: &Table<u8, vector<vector<String>>>
+    ):(u8, String){
+        let percentage = safe_selection(100, &object::uid_to_bytes(id));
+
+        let scarcity = if(percentage < 40){
+            0
+        }else if(percentage < 70){
+            1
+        }else if(percentage < 90){
+            2
+        }else if(percentage < 97){
+            3
+        }else{
+            4
+        };
+
+        let _level = level;
+        while( _level > 0){
+            if(table::contains(urls, _level)){
+                let fish = table::borrow(urls, _level);
+                let colors = vec::borrow(fish, scarcity);
+                return ((scarcity as u8), *vec::borrow(colors, pick_color(locked_bal, id)))
+            };
+            _level - 1;
+        };
+        return (0, ascii::string(b""))
+    }
+
+    fun pick_color(locked_bal: u64, id: &UID):u64{
+        if(locked_bal < 2_500_000_000_000){
+            0
+        }else if(locked_bal < 5_000_000_000_000){
+            let percentage = safe_selection(3, &object::uid_to_bytes(id));
+            if(percentage < 1){
+                1
+            }else if(percentage < 2){
+                2
+            }else{
+                3
+            }
+        }else if(locked_bal < 10_000_000_000_000){
+            4
+        }else{
+            5
+        }
+    }
+
+    // Since n is u64, the output is at most 2^{-64} biased assuming rnd is uniformly random.
+     public fun safe_selection(n: u64, rnd: &vector<u8>): u64 {
+        assert!(vec::length(rnd) >= 16, E_INVALID_RND_LENGTH);
+        let m: u128 = 0;
+        let i = 0;
+        while (i < 16) {
+            m = m << 8;
+            let curr_byte = *vec::borrow(rnd, i);
+            m = m + (curr_byte as u128);
+            i = i + 1;
+        };
+        let n_128 = (n as u128);
+        let module_128  = m % n_128;
+        let res = (module_128 as u64);
+        res
+    }
+
+    #[test]fun test_randome(){
+        let ctx = sui::tx_context::dummy();
+        let id = object::new(&mut ctx);
+        std::debug::print(&safe_selection(100, &object::uid_to_bytes(&id)));
+        object::delete(id);
+    }
 
     public fun img_url(id: vector<u8>, voting_weight: u256, locked_end: u256, locked_amount: u256): String {
         let vesdb = SVG_PREFIX;
@@ -168,8 +252,8 @@ module suiDouBashi_vsdb::art{
         }else{
             let i = 0;
             let card_weights = CARD_WEIGHTS;
-            while( i < vec::length(&CARD_WEIGHTS)){
-               std::debug::print(vec::borrow(&card_weights, i));
+            while(i < vec::length(&CARD_WEIGHTS)){
+                std::debug::print(vec::borrow(&card_weights, i));
                 *vec::borrow_mut(&mut card_weights, i) = *vec::borrow(&card_weights, i) * 10000;
 
                 i = i + 1;
