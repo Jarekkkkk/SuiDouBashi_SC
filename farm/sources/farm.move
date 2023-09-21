@@ -19,9 +19,8 @@ module suiDouBashi_farm::farm{
     const WEEK: u64 = { 7 * 86400 };
 
     // ERROR
-    const ERR_INITIALIZED: u64 = 000;
-    const ERR_NOT_INITIALIZED: u64 = 001;
-    const ERR_NOT_GOV: u64 = 002;
+    const ERR_INITIALIZED: u64 = 001;
+    const ERR_NOT_INITIALIZED: u64 = 002;
     const ERR_INVALID_TIME: u64 = 003;
     const ERR_NOT_PLAYER: u64 = 004;
     const ERR_INSUFFICIENT_LP: u64 = 005;

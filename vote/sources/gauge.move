@@ -30,15 +30,13 @@ module suiDouBashi_vote::gauge{
     // ====== Error =======
 
     const E_WRONG_VERSION: u64 = 001;
-    const E_ALREADY_STAKE: u64 = 100;
     const E_INVALID_STAKER: u64 = 101;
     const E_EMPTY_VALUE: u64 = 102;
     const E_INSUFFICENT_BALANCE: u64 = 103;
-    const E_DEAD_GAUGE: u64 = 104;
-    const E_INSUFFICENT_BRIBES: u64 = 105;
-    const E_INVALID_REWARD_RATE: u64 = 106;
-    const E_MAX_REWARD: u64 = 107;
-    const E_UNCLAIMED_REWARD: u64 = 108;
+    const E_INSUFFICENT_BRIBES: u64 = 104;
+    const E_INVALID_REWARD_RATE: u64 = 105;
+    const E_MAX_REWARD: u64 = 106;
+    const E_UNCLAIMED_REWARD: u64 = 107;
 
     // ====== Error =======
 
@@ -125,7 +123,6 @@ module suiDouBashi_vote::gauge{
     }
 
     public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u256{ self.staking_index }
-
 
     public (friend) fun new<X,Y>(
         pool: &Pool<X,Y>,

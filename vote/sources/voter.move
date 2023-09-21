@@ -39,6 +39,8 @@ module suiDouBashi_vote::voter{
     const E_NOT_RESET: u64 = 102;
     const E_NOT_VOTE: u64 = 103;
     const E_INVALID_VOTING_DURATOIN: u64 = 104;
+    const E_DEAD_GAUGE: u64 = 105;
+    const E_ALIVE_GAUGE: u64 = 106;
 
     // ====== Error =======
 
@@ -322,6 +324,7 @@ module suiDouBashi_vote::voter{
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
         assert!(potato.reset, E_NOT_VOTE);
+        assert!(gauge::is_alive(), E_DEAD_GAUGE);
         let pool_id = gauge::pool_id(gauge);
 
         if(vec_map::contains(&potato.weights, &pool_id)){
@@ -371,12 +374,26 @@ module suiDouBashi_vote::voter{
         event::gauge_created<X,Y>(object::id(pool), gauge_id, bribe, rewards);
     }
 
-    public entry fun update_gauge_is_alive<X,Y>(
+    public fun kill_gauge(
         _cap: &VoterCap,
-        gauge: &mut Gauge<X,Y>,
-        is_alive: bool
+        &mut Gauge<X,Y>,
+        &mut Minter
     ){
+        assert!(gauge::is_alive(), E_DEAD_GAUGE);
         gauge::update_is_alive(gauge, is_alive);
+        let claimable = gauge::claimable(gauge);
+        if(claimable > 0){
+            gauge::update_claimable(gauge, 0);
+            minter::join(minter, balance::split(&mut self.balance, claimable));
+        };
+        gauge::update_is_alive(gauge, false);
+    }
+
+    public fun revive_gauge(
+        _cap: &VoterCap
+    ){
+        assert!(gauge::is_alive(), E_ALIVE_GAUGE);
+        gauge::update_is_alive(gauge, true);
     }
 
     /// create additional types of Bribe Rewards for each Pool

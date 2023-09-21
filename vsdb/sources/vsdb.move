@@ -751,13 +751,14 @@ module suiDouBashi_vsdb::vsdb{
         event::earn_xp(object::id(self), value);
     }
 
-    public fun upgrade(self: &mut Vsdb){
+    public fun upgrade(reg: &VSDBRegistry, self: &mut Vsdb){
         let required_xp = required_xp(self.level + 1, self.level);
         while(self.experience >= required_xp){
             self.experience = self.experience - required_xp;
             self.level = self.level + 1;
             required_xp = required_xp(self.level + 1, self.level);
         };
+        self.image_url = image_url(&self.id, locked_balance(self), self.level, (self.scarcity as u64), &reg.arts);
         event::level_up(object::id(self), self.level);
     }
     /// Required Exp for under each level

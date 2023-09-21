@@ -15,7 +15,6 @@ module suiDouBashi_amm::pool_reg{
     use suiDouBashi_amm::event;
     use suiDouBashi_amm::pool::{Self, Pool};
 
-    const ERR_INVALD_GUARDIAN: u64 = 100;
     const ERR_INVALD_FEE: u64 = 0;
     const ERR_INVALD_PAIR: u64 = 0;
 

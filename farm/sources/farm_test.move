@@ -10,7 +10,7 @@ module suiDouBashi_farm::farm_test{
     use coin_list::mock_usdc::{MOCK_USDC as USDC};
     use suiDouBashi_amm::pool::{Self, Pool, LP, VSDB as AMM_VSDB};
     use suiDouBashi_vsdb::sdb::{SDB};
-    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry, VSDBCap};
 
     use test::setup;
     use suiDouBashi_farm::farm::{Self, FarmReg, Farm, VSDB, FarmCap};
@@ -49,6 +49,21 @@ module suiDouBashi_farm::farm_test{
     fun vsdb_setup(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = setup::people();
         vsdb::init_for_testing(ctx(s));
+
+        next_tx(s,a);{ // add image_url
+            let cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let art = vector[
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+            ];
+            vsdb::add_image_url(&cap, &mut reg, 0, art);
+            test::return_to_sender(s, cap);
+            test::return_shared(reg);
+        };
 
         next_tx(s,a);{
             let reg = test::take_shared<VSDBRegistry>(s);

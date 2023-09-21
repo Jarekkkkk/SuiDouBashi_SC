@@ -3,9 +3,7 @@ module suiDouBashi_amm::math_u128{
 
 /// @title math_u128
 /// @dev Standard math utilities missing in the Move language (for `u128`).
-    const ROUNDING_DOWN: u8 = 0; // Toward negative infinity
     const ROUNDING_UP: u8 = 0; // Toward infinity
-    const ROUNDING_ZERO: u8 = 0; // Toward zero
     const SCALAR: u128 = 1 << 32;
 
     /// @dev Returns the largest of two numbers.

@@ -5,6 +5,7 @@ module suiDouBashi_amm::amm_math{
     const PRECISION: u256 = 1_000_000_000_000_000_000;
 
     const ERR_INVALD_FEE:u64 = 001;
+    const ERR_INVALD_TYPE: u64 = 002;
 
     public fun k_(res_x: u64, res_y: u64, scale_x: u64, scale_y: u64): u256 {
         // x^3y + xy^3 = k
@@ -16,7 +17,7 @@ module suiDouBashi_amm::amm_math{
         (_a * _b / PRECISION)
     }
 
-    public fun get_output_<X,_Y,T>(
+    public fun get_output_<X,Y,T>(
         stable: bool,
         dx: u64,
         reserve_x: u64,
@@ -24,7 +25,10 @@ module suiDouBashi_amm::amm_math{
         decimal_x: u8,
         decimal_y: u8
     ):u64{
-        if(type_name::get<X>() == type_name::get<T>()){
+        let type_x = type_name::get<X>();
+        let input = type_name::get<T>();
+        assert!(type_x == input || type_name::get<Y>() == input, ERR_INVALD_TYPE);
+        if(type_x == input){
             if(stable){
             (stable_swap_output(
                     dx,

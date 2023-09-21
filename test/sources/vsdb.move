@@ -7,11 +7,26 @@ module test::vsdb_test{
 
     use test::setup;
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
+    use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry, VSDBCap};
 
 
     public fun vest_(clock: &mut Clock, s: &mut Scenario){
         let (a,_,_) = setup::people();
+
+        next_tx(s,a);{ // add image_url
+            let cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let art = vector[
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+            ];
+            vsdb::add_image_url(&cap, &mut reg, 0, art);
+            test::return_to_sender(s, cap);
+            test::return_shared(reg);
+        };
 
         next_tx(s, a);{ // create lock
             let reg = test::take_shared<VSDBRegistry>(s);

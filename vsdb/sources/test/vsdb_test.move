@@ -1,11 +1,11 @@
 #[test_only]
 module suiDouBashi_vsdb::vsdb_test{
-    use sui::coin::{Self, Coin, mint_for_testing as mint};
+    use sui::coin::{mint_for_testing as mint};
     use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
     use sui::clock::{Self, timestamp_ms as get_time, increment_for_testing as add_time, Clock};
     use suiDouBashi_vsdb::vsdb;
     use suiDouBashi_vsdb::sdb::SDB;
-    use suiDouBashi_vsdb::vsdb::{ VSDBRegistry, Vsdb};
+    use suiDouBashi_vsdb::vsdb::{ VSDBRegistry, Vsdb, VSDBCap};
 
 
     #[test]
@@ -32,6 +32,20 @@ module suiDouBashi_vsdb::vsdb_test{
 
         // main
         vsdb::init_for_testing(ctx(s));
+        next_tx(s,a);{ // add image_url
+            let cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let art = vector[
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+            ];
+            vsdb::add_image_url(&cap, &mut reg, 0, art);
+            test::return_to_sender(s, cap);
+            test::return_shared(reg);
+        };
         next_tx(s, a);{
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::lock(&mut reg, mint<SDB>(sui_100M(), ctx(s)), week(), &clock, ctx(s));
@@ -73,6 +87,20 @@ module suiDouBashi_vsdb::vsdb_test{
         next_tx(s,a);{
             vsdb::init_for_testing(ctx(s));
         };
+        next_tx(s,a);{ // add image_url
+            let cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let art = vector[
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+            ];
+            vsdb::add_image_url(&cap, &mut reg, 0, art);
+            test::return_to_sender(s, cap);
+            test::return_shared(reg);
+        };
         next_tx(s, a);{
             let reg = test::take_shared<VSDBRegistry>(s);
             vsdb::lock(&mut reg, mint<SDB>(sui_100M(), ctx(s)), week(), &clock, ctx(s));
@@ -94,6 +122,21 @@ module suiDouBashi_vsdb::vsdb_test{
 
         next_tx(s,a);{
             vsdb::init_for_testing(ctx(s));
+        };
+
+        next_tx(s,a);{ // add image_url
+            let cap = test::take_from_sender<VSDBCap>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
+            let art = vector[
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+                vector[b"", b"", b"", b"", b"", b""],
+            ];
+            vsdb::add_image_url(&cap, &mut reg, 0, art);
+            test::return_to_sender(s, cap);
+            test::return_shared(reg);
         };
 
          next_tx(s, a);
@@ -176,7 +219,6 @@ module suiDouBashi_vsdb::vsdb_test{
     }
 
     use suiDouBashi_vsdb::test_whitelist::{Self as white, MOCK, Foo};
-    use suiDouBashi_vsdb::vsdb::{VSDBCap};
     fun test_whitelisted_module(clock: &mut Clock, s: &mut Scenario){
         let ( a, _, _ ) = people();
 
@@ -227,11 +269,13 @@ module suiDouBashi_vsdb::vsdb_test{
         };
         next_tx(s,a);{
             let vsdb = test::take_from_sender< Vsdb>(s);
+            let reg = test::take_shared<VSDBRegistry>(s);
             assert!(vsdb::experience(&vsdb) ==25, 404);
             let level = vsdb::level(&vsdb);
             assert!(vsdb::required_xp(level + 1, level) == 25, 404);
-            vsdb::upgrade(&mut vsdb);
+            vsdb::upgrade(&reg, &mut vsdb);
             test::return_to_sender(s, vsdb);
+            test::return_shared(reg);
         };
         next_tx(s,a);{
             let vsdb = test::take_from_sender< Vsdb>(s);
