@@ -17,14 +17,13 @@ module suiDouBashi_vsdb::vsdb{
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use sui::coin::{Self, Coin};
-    use sui::math;
     use sui::clock::{Self, Clock};
     use sui::package;
     use sui::display;
     use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
 
-    use suiDouBashi_vsdb::sdb::{Self, SDB};
+    use suiDouBashi_vsdb::sdb::SDB;
     use suiDouBashi_vsdb::point::{Self, Point};
     use suiDouBashi_vsdb::event;
     use suiDouBashi_vsdb::i128::{Self, I128};
@@ -39,9 +38,7 @@ module suiDouBashi_vsdb::vsdb{
     // ====== Error =======
 
     const E_WRONG_VERSION: u64 = 001;
-
-    const E_INVALID_UNLOCK_TIME: u64 = 100;
-    const E_INSUFFICIENT_AMOUNT: u64 = 101;
+    const E_INVALID_UNLOCK_TIME: u64 = 101;
     const E_LOCK: u64 = 102;
     const E_ALREADY_REGISTERED: u64 = 103;
     const E_ZERO_INPUT: u64 = 104;
@@ -52,8 +49,7 @@ module suiDouBashi_vsdb::vsdb{
     const E_INVALID_RND_LENGTH: u64 = 109;
     const E_ALREADY_EXIST_ARTWORK: u64 = 110;
     const E_NOT_EXIST_ARTWORK: u64 = 111;
-    const E_INCORRECT_FISH_TYPE_COUNT: u64 = 112;
-    const E_INCORRECT_FISH_COLOR_COUNT: u64 = 113;
+    const E_INCORRECT_ART_COUNT: u64 = 112;
 
     // ====== Error =======
 
@@ -70,13 +66,15 @@ module suiDouBashi_vsdb::vsdb{
     struct Vsdb has key, store{
         id: UID,
         // dynamic image for Vsdb NFT
-        image_url: String,
+        img_url: String,
         /// Current level our NFT, corresponding to different images and bonus
         level: u8,
         /// Accrued experiences from interacting with SuiDouBashi ecosystem
         experience: u64,
         /// fish type
         scarcity: u8,
+        /// fish name
+        name: String,
         /// Locked SDB Coin
         balance: Balance<SDB>,
         /// Unlocked date ( week-based )
@@ -198,7 +196,7 @@ module suiDouBashi_vsdb::vsdb{
         ];
         let values = vector[
             utf8(b"https://suidoubashi.io/vest"),
-            utf8(b"{image_url}"),
+            utf8(b"{img_url}"),
             utf8(b"VSDB NFT is used for governance. Any SDB holders can lock their tokens for up to 24 weeks to receive NFTs. NFT holders gain access to the ecosystem and enjoy additional benefits for becoming SuiDouBashi members !"),
             utf8(b"https://suidoubashi.io"),
         ];
@@ -306,6 +304,8 @@ module suiDouBashi_vsdb::vsdb{
         reg.locked_total = reg.locked_total + value;
         checkpoint_(true, reg, locked_bal, locked_end, locked_balance(self), locked_end, clock);
 
+        self.img_url = img_url(&self.id, locked_balance(self), self.level, (self.scarcity as u64), &reg.arts);
+
         event::deposit(object::id(self), locked_balance(self), locked_end);
     }
 
@@ -353,7 +353,7 @@ module suiDouBashi_vsdb::vsdb{
             vsdb.scarcity
         };
         self.scarcity = scarcity;
-        self.image_url = image_url(&self.id, locked_bal + locked_bal_, self.level, (scarcity as u64), &reg.arts);
+        self.img_url = img_url(&self.id, locked_bal + locked_bal_, self.level, (scarcity as u64), &reg.arts);
 
         let coin = withdraw(&mut vsdb, ctx);
         checkpoint_(true, reg, locked_bal_, locked_end_, locked_balance(&vsdb), locked_end(&vsdb), clock);
@@ -502,18 +502,18 @@ module suiDouBashi_vsdb::vsdb{
     // ===== Main =====
     fun new(locked_sdb: Coin<SDB>, unlock_time: u64, urls: &Table<u8, vector<vector<String>>>, clock: &Clock, ctx: &mut TxContext): Vsdb {
         let amount = coin::value(&locked_sdb);
-        assert!(amount >= (math::pow(10, sdb::decimals())), E_INSUFFICIENT_AMOUNT);
-
         let ts = unix_timestamp(clock);
         let player_point_history = table_vec::singleton(point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts), ctx);
         let id = object::new(ctx);
-        let scarcity = pick_scarcity(&id);
-        let image_url = image_url(&id, coin::value(&locked_sdb), 0, scarcity, urls);
+        let val = coin::value(&locked_sdb);
+        let scarcity = pick_scarcity(val, (unlock_time - ts)/ WEEK,&id);
+        let img_url = img_url(&id, coin::value(&locked_sdb), 0, scarcity, urls);
         let vsdb = Vsdb {
             id,
-            image_url,
+            img_url,
             level: 0,
             experience: 0,
+            name: pick_name(scarcity),
             scarcity:(scarcity as u8),
             balance: coin::into_balance(locked_sdb),
             end: unlock_time,
@@ -556,10 +556,11 @@ module suiDouBashi_vsdb::vsdb{
     fun destroy(self: Vsdb){
         let Vsdb{
             id,
-            image_url: _,
+            img_url: _,
             level:_,
             experience: _,
             scarcity: _,
+            name: _,
             balance,
             end: _,
             player_epoch: _,
@@ -758,7 +759,7 @@ module suiDouBashi_vsdb::vsdb{
             self.level = self.level + 1;
             required_xp = required_xp(self.level + 1, self.level);
         };
-        self.image_url = image_url(&self.id, locked_balance(self), self.level, (self.scarcity as u64), &reg.arts);
+        self.img_url = img_url(&self.id, locked_balance(self), self.level, (self.scarcity as u64), &reg.arts);
         event::level_up(object::id(self), self.level);
     }
     /// Required Exp for under each level
@@ -771,7 +772,7 @@ module suiDouBashi_vsdb::vsdb{
         return 25 * (_to * _to - _from * _from)
     }
 
-    public fun image_url(
+    public fun img_url(
         id: &UID,
         locked_bal: u64,
         level: u8,
@@ -791,79 +792,106 @@ module suiDouBashi_vsdb::vsdb{
         *vec::borrow(colors, pick_color(locked_bal, id))
     }
 
-    public fun add_image_url(
+    public entry fun add_art(
         _cap: &VSDBCap,
         reg: &mut VSDBRegistry,
         level: u8,
-        art: vector<vector<vector<u8>>>
+        art: vector<vector<u8>>
     ){
         assert!(!table::contains(&reg.arts, level), E_ALREADY_EXIST_ARTWORK);
 
         let (i, len) = (0, vec::length(&art));
-        assert!(len == 5, E_INCORRECT_FISH_TYPE_COUNT);
+        assert!(len == 30, E_INCORRECT_ART_COUNT);
 
         let res: vector<vector<String>> = vector[];
         while(i < len){
-            let colors = vec::borrow_mut(&mut art, i);
-            let (j, len_) = (0, vec::length(colors));
-            assert!(len_ == 6, E_INCORRECT_FISH_COLOR_COUNT);
             let res_:vector<String> = vector[];
-            while(j < len_){
-                vec::push_back(&mut res_, ascii::string(vec::pop_back(colors)));
+            let j = 0;
+            while(j < 6){
+                vec::push_back(&mut res_, ascii::string(vec::pop_back(&mut art)));
                 j = j + 1;
             };
             vec::reverse(&mut res_);
             vec::push_back(&mut res, res_);
 
-            i = i + 1;
+            i = i + 6;
         };
-
+        vec::reverse(&mut res);
         table::add(&mut reg.arts, level, res);
     }
 
-    public fun edit_image_url(
+    public entry fun edit_art(
         _cap: &VSDBCap,
         reg: &mut VSDBRegistry,
         level: u8,
-        art: vector<vector<vector<u8>>>
+        art: vector<vector<u8>>
     ){
         assert!(table::contains(&reg.arts, level), E_NOT_EXIST_ARTWORK);
 
         let (i, len) = (0, vec::length(&art));
-        assert!(len == 5, E_INCORRECT_FISH_TYPE_COUNT);
+        assert!(len == 30, E_INCORRECT_ART_COUNT);
 
         let res: vector<vector<String>> = vector[];
         while(i < len){
-            let colors = vec::borrow_mut(&mut art, i);
-            let (j, len_) = (0, vec::length(colors));
-            assert!(len_ == 6, E_INCORRECT_FISH_COLOR_COUNT);
             let res_:vector<String> = vector[];
-            while(j < len_){
-                vec::push_back(&mut res_, ascii::string(vec::pop_back(colors)));
+            let j = 0;
+            while(j < 6){
+                vec::push_back(&mut res_, ascii::string(vec::pop_back(&mut art)));
                 j = j + 1;
             };
             vec::reverse(&mut res_);
             vec::push_back(&mut res, res_);
 
-            i = i + 1;
+            i = i + 6;
         };
-
+        vec::reverse(&mut res);
         *table::borrow_mut(&mut reg.arts, level) = res;
     }
 
-    fun pick_scarcity(id: &UID): u64{
+    fun pick_scarcity(locked_bal: u64, week:u64, id: &UID): u64{
+        assert!(week <= 24, E_INVALID_UNLOCK_TIME);
         let percentage = safe_selection(100, &object::uid_to_bytes(id));
 
-        if(percentage < 40){
-            0
-        }else if(percentage < 70){
-            1
-        }else if(percentage < 90){
-            2
-        }else if(percentage < 97){
-            3
+        if(week == 24 && locked_bal > 2_400_000_000_000){
+            if(percentage < 50){
+                0
+            }else if(percentage < 75){
+                1
+            }else if(percentage < 95){
+                2
+            }else if(percentage < 98){
+                3
+            }else{
+                4
+            }
+        }else if (week > 18 && locked_bal > 1_800_000_000_000){
+            if(percentage < 60){
+                0
+            }else if(percentage < 80){
+                1
+            }else if(percentage < 95){
+                2
+            }else if(percentage < 99){
+                3
+            }else{
+                4
+            }
+        }else if(week > 12 && locked_bal > 1_200_000_000_000){
+            if(percentage < 70){
+                0
+            }else if(percentage < 90){
+                1
+            }else if(percentage < 98){
+                2
+            }else{
+                3
+            }
         }else{
-            4
+            if(percentage < 80){
+                0
+            }else{
+                1
+            }
         }
     }
 
@@ -885,6 +913,15 @@ module suiDouBashi_vsdb::vsdb{
             5
         }
     }
+
+    fun pick_name(scarcity: u64): String{
+        if(scarcity == 0) return ascii::string(b"goldfish");
+        if(scarcity == 1) return ascii::string(b"ranchu");
+        if(scarcity == 2) return ascii::string(b"pearlscale");
+        if(scarcity == 3) return ascii::string(b"pop-eyed");
+        return ascii::string(b"ryukin")
+    }
+
      public fun safe_selection(n: u64, rnd: &vector<u8>): u64 {
         assert!(vec::length(rnd) >= 16, E_INVALID_RND_LENGTH);
         let m: u128 = 0;
