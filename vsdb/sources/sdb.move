@@ -6,11 +6,10 @@ module suiDouBashi_vsdb::sdb{
     use sui::url::{Self, Url};
     use sui::tx_context;
 
-
     struct SDB has drop {}
 
     const DECIMALS: u8 = 9;
-    const SDB_SVG: vector<u8> = b"https://ucarecdn.com/0b5e3467-eaeb-411b-a232-53f523bcfb6b/Coin_SDB.svg";
+    const SDB_SVG: vector<u8> = b"https://ipfs.io/ipfs/bafkreihbfhpb2x5ysavna4oa7noodydda3f3y5w6krhgq4e5fwb46wlbya";
 
     fun init(otw: SDB, ctx: &mut TxContext){
         let (treasury, metadata) = coin::create_currency(
