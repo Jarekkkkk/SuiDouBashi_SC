@@ -1,7 +1,7 @@
 [package]
 name = "suiDouBashiAmm"
 version = "0.0.1"
-published-at = "0x1a2769b0a8974491d466733632a944d801a9a5984dd081a41a467ebf7e825445"
+published-at = "0x16c33410a4a10cc1b1df3b14ed623f0139108fae434c57b66fe7f834db75d0f7"
 
 
 [dependencies]
@@ -13,4 +13,4 @@ suiDouBashiVSDB = {local = "../vsdb"}
 coin_list = {local = "../coin_list"}
 
 [addresses]
-suiDouBashi_amm =  "0x1a2769b0a8974491d466733632a944d801a9a5984dd081a41a467ebf7e825445"
+suiDouBashi_amm =  "0x16c33410a4a10cc1b1df3b14ed623f0139108fae434c57b66fe7f834db75d0f7"

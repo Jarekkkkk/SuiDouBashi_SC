@@ -137,10 +137,10 @@ module test::bribe_test{
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
             let pool = test::take_shared<Pool<USDC, USDT>>(s);
 
-            gauge::get_reward(&mut gauge, &lp, clock, ctx(s));
+            gauge::get_reward(&mut gauge, clock, ctx(s));
             gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
             add_time(clock, 1);
-            let prev_earned = gauge::pending_sdb(&gauge, &lp, clock);
+            let prev_earned = gauge::pending_sdb(&gauge, a, clock);
             assert!(prev_earned == 0, 404);
 
             test::return_shared(gauge);
@@ -160,44 +160,44 @@ module test::bribe_test{
 
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };
             // stake back
             {
                 gauge::stake(&mut gauge, &pool, &mut lp, setup::stake_1(), clock, ctx(s));
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 add_time(clock, 1);
             };
 
@@ -337,7 +337,7 @@ module test::bribe_test{
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
             {
-                voter::claim_rewards(&mut voter, &mut gauge, &lp, clock, ctx(s));
+                voter::claim_rewards(&mut voter, &mut gauge, clock, ctx(s));
                 gauge::unstake(&mut gauge ,&pool, &mut lp, setup::stake_1(), clock, ctx(s));
                 add_time(clock, 1);
             };

@@ -40,7 +40,7 @@ module test::gauge_test{
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 assert!(pool::lp_balance(&lp) == 1999000 - setup::stake_1(), 0);
                 // LP position record in Gauge
-                assert!(gauge::lp_stakes(&gauge, &lp) == setup::stake_1(), 0);
+                assert!(gauge::lp_stakes(&gauge, a) == setup::stake_1(), 0);
                 // total staked lp
                 assert!(pool::lp_balance(gauge::total_stakes(&gauge)) ==  setup::stake_1() , 1);
                 test::return_shared(gauge);
@@ -51,7 +51,7 @@ module test::gauge_test{
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
                 assert!(pool::lp_balance(&lp) ==  63244552 - setup::stake_1(), 0);
                 // LP position record in Gauge
-                assert!(gauge::lp_stakes(&gauge, &lp) == setup::stake_1(), 0);
+                assert!(gauge::lp_stakes(&gauge, a) == setup::stake_1(), 0);
                 // total staked lp
                 assert!(pool::lp_balance(gauge::total_stakes(&gauge)) ==  setup::stake_1() , 1);
                 test::return_shared(gauge);
@@ -86,7 +86,7 @@ module test::gauge_test{
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 assert!(pool::lp_balance(&lp) == 1000000 - setup::stake_1(), 0);
                 // LP position record in Gauge
-                assert!(gauge::lp_stakes(&gauge, &lp) == setup::stake_1(), 0);
+                assert!(gauge::lp_stakes(&gauge, b) == setup::stake_1(), 0);
                 // total staked lp
                 assert!(pool::lp_balance(gauge::total_stakes(&gauge)) ==  2 * setup::stake_1() , 1);
                 test::return_shared(gauge);
@@ -97,7 +97,7 @@ module test::gauge_test{
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
                 assert!(pool::lp_balance(&lp) ==  31622776 - setup::stake_1(), 0);
                 // LP position record in Gauge
-                assert!(gauge::lp_stakes(&gauge, &lp) == setup::stake_1(), 0);
+                assert!(gauge::lp_stakes(&gauge, b) == setup::stake_1(), 0);
                 // total staked lp
                 assert!(pool::lp_balance(gauge::total_stakes(&gauge)) == 2 * setup::stake_1() , 1);
                 test::return_shared(gauge);
@@ -131,7 +131,7 @@ module test::gauge_test{
                 let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
                 assert!(pool::lp_balance(&lp) == 1000000 , 404);
                 // LP position record in Gauge
-                assert!(gauge::lp_stakes(&gauge, &lp) == 0, 404);
+                assert!(gauge::lp_stakes(&gauge, b) == 0, 404);
                 // index at 1
                 // total staked lp
                 assert!(pool::lp_balance(gauge::total_stakes(&gauge)) ==  setup::stake_1() , 404);
@@ -143,7 +143,7 @@ module test::gauge_test{
                 let gauge = test::take_shared<Gauge<SDB, USDC>>(s);
                 assert!(pool::lp_balance(&lp) ==  31622776 , 404);
                 // LP position record in Gauge
-                assert!(gauge::lp_stakes(&gauge, &lp) == 0, 404);
+                assert!(gauge::lp_stakes(&gauge, b) == 0, 404);
                 // index at 1
                 // total staked lp
                 assert!(pool::lp_balance(gauge::total_stakes(&gauge)) == setup::stake_1() , 404);
@@ -220,17 +220,17 @@ module test::gauge_test{
             let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
             let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
 
-            assert!(gauge::pending_sdb(&gauge_a, &lp_a, clock) == idx * setup::day() , 404);
-            assert!(gauge::pending_sdb(&gauge_b, &lp_b, clock) == idx * setup::day() , 404);
+            assert!(gauge::pending_sdb(&gauge_a, a, clock) == idx * setup::day() , 404);
+            assert!(gauge::pending_sdb(&gauge_b, a, clock) == idx * setup::day() , 404);
 
             gauge::unstake(&mut gauge_a, &pool_a, &mut lp_a, setup::stake_1(), clock, ctx(s));
             gauge::unstake(&mut gauge_b, &pool_b, &mut lp_b, setup::stake_1(), clock, ctx(s));
 
-            gauge::get_reward(&mut gauge_a, &lp_a, clock, ctx(s));
-            gauge::get_reward(&mut gauge_b, &lp_b, clock, ctx(s));
+            gauge::get_reward(&mut gauge_a, clock, ctx(s));
+            gauge::get_reward(&mut gauge_b, clock, ctx(s));
 
-            assert!(gauge::pending_sdb(&gauge_a, &lp_a, clock) == 0 , 404);
-            assert!(gauge::pending_sdb(&gauge_b, &lp_b, clock) == 0 , 404);
+            assert!(gauge::pending_sdb(&gauge_a, a, clock) == 0 , 404);
+            assert!(gauge::pending_sdb(&gauge_b, a, clock) == 0 , 404);
 
             test::return_shared(gauge_a);
             test::return_shared(gauge_b);
@@ -361,12 +361,10 @@ module test::gauge_test{
 
         next_tx(s,a);{ // Action: staker A withdraw weekly emissions
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
-            let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
-            gauge::get_reward(&mut gauge, &lp, clock, ctx(s));
+            gauge::get_reward(&mut gauge, clock, ctx(s));
 
             test::return_shared(gauge);
-            test::return_to_sender(s, lp);
         };
 
         next_tx(s,a);{ // Assertion:
@@ -392,8 +390,8 @@ module test::gauge_test{
             let gauge = test::take_shared<Gauge<USDC, USDT>>(s);
             let lp = test::take_from_sender<LP<USDC, USDT>>(s);
 
-            let earned = gauge::pending_sdb(&gauge, &lp, clock);
-            gauge::get_reward(&mut gauge, &lp, clock, ctx(s));
+            let earned = gauge::pending_sdb(&gauge, a, clock);
+            gauge::get_reward(&mut gauge, clock, ctx(s));
 
             test::return_to_sender(s, lp);
             test::return_shared(gauge);

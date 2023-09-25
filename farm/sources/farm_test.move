@@ -53,14 +53,8 @@ module suiDouBashi_farm::farm_test{
         next_tx(s,a);{ // add image_url
             let cap = test::take_from_sender<VSDBCap>(s);
             let reg = test::take_shared<VSDBRegistry>(s);
-            let art = vector[
-                vector[b"", b"", b"", b"", b"", b""],
-                vector[b"", b"", b"", b"", b"", b""],
-                vector[b"", b"", b"", b"", b"", b""],
-                vector[b"", b"", b"", b"", b"", b""],
-                vector[b"", b"", b"", b"", b"", b""],
-            ];
-            vsdb::add_image_url(&cap, &mut reg, 0, art);
+            let art = vector[b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b"",b""];
+            vsdb::add_art(&cap, &mut reg, 0, art);
             test::return_to_sender(s, cap);
             test::return_shared(reg);
         };

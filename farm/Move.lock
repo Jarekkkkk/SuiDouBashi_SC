@@ -2,8 +2,7 @@
 
 [move]
 version = 0
-manifest_digest = "8ADE6C330DD87FC9D5A8D3CFEE9153CB0F105109319D505C4547F67DBF006274"
-deps_digest = "7069B34591FC2A987AD3B5476A194F0764DB643A1ABC7326DBD2654D0101CFAC"
+manifest_digest = "BD4BE535077D90B1102FEC2FCDF643161A7B55E85922C9558502C2F7ECB1197C"
 
 dependencies = [
   { name = "MoveStdlib" },
@@ -11,6 +10,7 @@ dependencies = [
   { name = "SuiSystem" },
   { name = "coin_list" },
   { name = "suiDouBashiAmm" },
+  { name = "test" },
 ]
 
 [[move.package]]
@@ -62,4 +62,29 @@ dependencies = [
   { name = "MoveStdlib" },
   { name = "Sui" },
   { name = "SuiSystem" },
+]
+
+[[move.package]]
+name = "suiDouBashiVote"
+source = { local = "../vote" }
+
+dependencies = [
+  { name = "MoveStdlib" },
+  { name = "Sui" },
+  { name = "SuiSystem" },
+  { name = "suiDouBashiAmm" },
+  { name = "suiDouBashiVSDB" },
+]
+
+[[move.package]]
+name = "test"
+source = { local = "../test" }
+
+dependencies = [
+  { name = "MoveStdlib" },
+  { name = "Sui" },
+  { name = "SuiSystem" },
+  { name = "suiDouBashiAmm" },
+  { name = "suiDouBashiVSDB" },
+  { name = "suiDouBashiVote" },
 ]

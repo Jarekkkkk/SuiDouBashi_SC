@@ -2,14 +2,13 @@
 
 [move]
 version = 0
-manifest_digest = "4BC6564238611A046B32165F1F4A8650BBFF9372896A5D864015BDBB0CE16D0D"
-deps_digest = "A1BC4557672656D54EDAA80517F7E705EA4AEE61C6D5268982F3F52C19FFF2EA"
+manifest_digest = "92D553F86E34DA60F58D792A8E8727DF48E0EEBA3727E3AC29FCAC484AE99915"
+deps_digest = "E4DA716718683EB2BC6CCE5E2F6F0A98945D77144BC7F9BD948286F75DF249CD"
 
 dependencies = [
   { name = "MoveStdlib" },
   { name = "Sui" },
   { name = "SuiSystem" },
-  { name = "coin_list" },
   { name = "suiDouBashiVSDB" },
 ]
 
@@ -31,14 +30,6 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "devnet", subdir
 
 dependencies = [
   { name = "MoveStdlib" },
-  { name = "Sui" },
-]
-
-[[move.package]]
-name = "coin_list"
-source = { local = "../coin_list" }
-
-dependencies = [
   { name = "Sui" },
 ]
 

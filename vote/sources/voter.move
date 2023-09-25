@@ -15,7 +15,7 @@ module suiDouBashi_vote::voter{
 
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
-    use suiDouBashi_amm::pool::{Pool, LP};
+    use suiDouBashi_amm::pool::Pool;
     use suiDouBashi_vote::gauge::{Self, Gauge};
     use suiDouBashi_vote::event;
     use suiDouBashi_vote::minter::{Self, Minter, package_version};
@@ -324,7 +324,7 @@ module suiDouBashi_vote::voter{
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
         assert!(potato.reset, E_NOT_VOTE);
-        assert!(gauge::is_alive(), E_DEAD_GAUGE);
+        assert!(gauge::is_alive(gauge), E_DEAD_GAUGE);
         let pool_id = gauge::pool_id(gauge);
 
         if(vec_map::contains(&potato.weights, &pool_id)){
@@ -374,13 +374,14 @@ module suiDouBashi_vote::voter{
         event::gauge_created<X,Y>(object::id(pool), gauge_id, bribe, rewards);
     }
 
-    public fun kill_gauge(
+    entry public fun kill_gauge<X,Y>(
         _cap: &VoterCap,
-        &mut Gauge<X,Y>,
-        &mut Minter
+        self: &mut Voter,
+        gauge: &mut Gauge<X,Y>,
+        minter: &mut Minter
     ){
-        assert!(gauge::is_alive(), E_DEAD_GAUGE);
-        gauge::update_is_alive(gauge, is_alive);
+        assert!(gauge::is_alive(gauge), E_DEAD_GAUGE);
+        gauge::update_is_alive(gauge, false);
         let claimable = gauge::claimable(gauge);
         if(claimable > 0){
             gauge::update_claimable(gauge, 0);
@@ -389,10 +390,11 @@ module suiDouBashi_vote::voter{
         gauge::update_is_alive(gauge, false);
     }
 
-    public fun revive_gauge(
-        _cap: &VoterCap
+    entry public fun revive_gauge<X,Y>(
+        _cap: &VoterCap,
+        gauge: &mut Gauge<X,Y>
     ){
-        assert!(gauge::is_alive(), E_ALIVE_GAUGE);
+        assert!(gauge::is_alive(gauge), E_ALIVE_GAUGE);
         gauge::update_is_alive(gauge, true);
     }
 
@@ -405,13 +407,12 @@ module suiDouBashi_vote::voter{
     public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         gauge: &mut Gauge<X,Y>,
-        lp: &LP<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        gauge::get_reward<X,Y>(gauge, lp, clock, ctx);
+        gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
 
     /// External Bribe --> voter
@@ -427,7 +428,7 @@ module suiDouBashi_vote::voter{
 
     // ===== Entry =====
 
-    public fun distribute<X,Y>(
+    entry public fun distribute<X,Y>(
         self: &mut Voter,
         minter: &mut Minter,
         gauge: &mut Gauge<X,Y>,
@@ -456,7 +457,7 @@ module suiDouBashi_vote::voter{
         }
     }
 
-    public fun update_for<X,Y>(self: &mut Voter, gauge: &mut Gauge<X,Y>, minter: &mut Minter){
+    entry public fun update_for<X,Y>(self: &mut Voter, gauge: &mut Gauge<X,Y>, minter: &mut Minter){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
         let gauge_weights = *table::borrow(&self.pool_weights, gauge::pool_id(gauge));
@@ -478,7 +479,7 @@ module suiDouBashi_vote::voter{
         gauge::update_voting_index(gauge, self.index);
     }
 
-    public fun deposit_sdb(self: &mut Voter, sdb: Coin<SDB>){
+    entry public fun deposit_sdb(self: &mut Voter, sdb: Coin<SDB>){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
         let value = coin::value(&sdb);

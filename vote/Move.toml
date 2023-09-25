@@ -9,10 +9,11 @@ SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-
 
 suiDouBashiAmm = {local = "../amm"}
 suiDouBashiVSDB = {local = "../vsdb"}
+coin_list = {local = "../coin_list"}
 
 
 [addresses]
-suiDouBashi_vote =  "0xabcd"
+suiDouBashi_vote =  "0x00"
 std = "0x1"
 sui =  "0x2"
 sui_system = "0x3"

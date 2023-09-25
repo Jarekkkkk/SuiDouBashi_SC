@@ -1,10 +1,12 @@
 [package]
 name = "coin_list"
 version = "0.0.1"
-published-at = "0x65a1f3a119cdfb8b5904067604bba6c17073bb2f2a40d7c087e76664d9a9297e"
+published-at = "0x697bd5ac5934f7d74d171bb42df05654458c8dfc846081d29ae56101567ee012"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
+suiDouBashiVSDB = {local = "../vsdb"}
 
 [addresses]
-coin_list = "0x65a1f3a119cdfb8b5904067604bba6c17073bb2f2a40d7c087e76664d9a9297e"
+coin_list = "0x697bd5ac5934f7d74d171bb42df05654458c8dfc846081d29ae56101567ee012"
+

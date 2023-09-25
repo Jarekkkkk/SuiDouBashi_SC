@@ -63,7 +63,7 @@ module suiDouBashi_vote::minter{
     }
 
     // consume treasury to trigger one time initialize
-    public fun initialize(
+    entry public fun initialize(
         treasury: TreasuryCap<SDB>,
         vsdb_reg: &mut VSDBRegistry,
         initial_amount: u64,
