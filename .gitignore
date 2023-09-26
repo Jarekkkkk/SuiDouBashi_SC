@@ -6,6 +6,5 @@ coni_flip.move
 
 sui.log*
 *.svg
-*.yaml
 *.md
 !deployment.md

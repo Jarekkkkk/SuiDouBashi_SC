@@ -3,7 +3,7 @@
 [move]
 version = 0
 manifest_digest = "47FED39362B8FFA171AD514C7F853F5A72199B33D78B429CD2DB12F63316F9F7"
-deps_digest = "84511A2C0E2FC6BDB2FC242A9980753DFB7BE63DEA17DDE205B73C6E5DB996C1"
+deps_digest = "75892DFAB3C27E316D45F99919CB7B5EF299E86AEF9BDEE5A27CC97B931C9E23"
 
 dependencies = [
   { name = "MoveStdlib" },
@@ -35,6 +35,15 @@ dependencies = [
 ]
 
 [[move.package]]
+name = "coin_list"
+source = { local = "../coin_list" }
+
+dependencies = [
+  { name = "Sui" },
+  { name = "suiDouBashiVSDB" },
+]
+
+[[move.package]]
 name = "suiDouBashiAmm"
 source = { local = "../amm" }
 
@@ -42,6 +51,7 @@ dependencies = [
   { name = "MoveStdlib" },
   { name = "Sui" },
   { name = "SuiSystem" },
+  { name = "coin_list" },
   { name = "suiDouBashiVSDB" },
 ]
 

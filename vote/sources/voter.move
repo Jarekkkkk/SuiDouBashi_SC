@@ -2,6 +2,7 @@
 module suiDouBashi_vote::voter{
     use std::option;
     use std::vector as vec;
+    use std::type_name::{Self, TypeName};
 
     use sui::balance::{Self, Balance};
     use sui::object::{Self, UID, ID};
@@ -67,7 +68,7 @@ module suiDouBashi_vote::voter{
         /// voted weights for each pool
         pool_weights: Table<ID, u64>,
         /// registered members [gauge, bribe, rewards] for each pool
-        registry: Table<ID, VecSet<ID>>,
+        registry: Table<ID, ID>,
         /// accumulating distribution of weekly SDB emissions
         index: u256
     }
@@ -87,7 +88,9 @@ module suiDouBashi_vote::voter{
         /// used weights for voting
         used_weights: u64,
         /// last time VSDB votes
-        last_voted: u64
+        last_voted: u64,
+        /// unclaimed rewards & its corresponding types
+        unclaimed_rewards: VecMap<ID, VecSet<TypeName>>
     }
 
     public fun is_initialized(vsdb: &Vsdb): bool{
@@ -99,7 +102,8 @@ module suiDouBashi_vote::voter{
             pool_votes: vec_map::empty(),
             voted: false,
             used_weights: 0,
-            last_voted: 0
+            last_voted: 0,
+            unclaimed_rewards: vec_map::empty<ID, VecSet<TypeName>>()
         };
         vsdb::df_add(VSDB{}, reg, vsdb, value);
     }
@@ -110,7 +114,8 @@ module suiDouBashi_vote::voter{
             pool_votes,
             voted,
             used_weights: _,
-            last_voted: _
+            last_voted: _,
+            unclaimed_rewards: _
         } = voting_state;
         assert!(!voted, E_NOT_RESET);
         vec_map::destroy_empty(pool_votes);
@@ -155,10 +160,10 @@ module suiDouBashi_vote::voter{
         *table::borrow(&self.pool_weights, object::id(pool))
     }
 
-    public fun registry_members<X,Y>(self:&Voter, pool: &Pool<X,Y>):vector<ID>{
-        let vec_set = *table::borrow(&self.registry, object::id(pool));
-        vec_set::into_keys(vec_set)
-    }
+    // public fun registry_members<X,Y>(self:&Voter, pool: &Pool<X,Y>):vector<ID>{
+    //     let vec_set = *table::borrow(&self.registry, object::id(pool));
+    //     vec_set::into_keys(vec_set)
+    // }
 
     public fun is_registry<X,Y>(self: &Voter, pool: &Pool<X,Y>):bool {
         table::contains(&self.registry, object::id(pool))
@@ -172,7 +177,7 @@ module suiDouBashi_vote::voter{
             version: package_version(),
             balance: balance::zero<SDB>(),
             total_weight: 0,
-            registry: table::new<ID, VecSet<ID>>(ctx),
+            registry: table::new<ID, ID>(ctx),
             pool_weights: table::new<ID, u64>(ctx),
             index: 0
         };
@@ -319,6 +324,7 @@ module suiDouBashi_vote::voter{
         vsdb: &mut Vsdb,
         gauge: &mut Gauge<X,Y>,
         bribe: &mut Bribe<X,Y>,
+        rewards: &Rewards<X,Y>,
         clock: &Clock
     ): Potato{
         assert!(self.version == package_version(), E_WRONG_VERSION);
@@ -340,6 +346,12 @@ module suiDouBashi_vote::voter{
             vec_map::insert(&mut voting_state_mut.pool_votes, pool_id, pool_weight);
             *table::borrow_mut(&mut self.pool_weights, pool_id) = *table::borrow(&self.pool_weights, pool_id) + pool_weight;
 
+            let rewards_id = gauge::rewards_id(gauge);
+            if(vec_map::contains(&voting_state_mut.unclaimed_rewards, &rewards_id)){
+               vec_map::remove(&mut voting_state_mut.unclaimed_rewards, &rewards_id);
+            };
+            vec_map::insert(&mut voting_state_mut.unclaimed_rewards, rewards_id, bribe::rewards_type(rewards));
+
             bribe::cast<X,Y>(bribe, vsdb, pool_weight, clock);
 
             potato.used_weight = potato.used_weight + pool_weight;
@@ -358,20 +370,17 @@ module suiDouBashi_vote::voter{
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        let (gauge, bribe, rewards) = gauge::new(pool, ctx);
+        let gauge= gauge::new(pool, ctx);
         let gauge_id = object::id(&gauge);
-        let created = vec_set::singleton(gauge_id);
-        vec_set::insert(&mut created, bribe);
-        vec_set::insert(&mut created, rewards);
 
-        table::add(&mut self.registry, object::id(pool), created);
+        table::add(&mut self.registry, object::id(pool), gauge_id);
         table::add(&mut self.pool_weights, object::id(pool), 0);
 
         gauge::update_voting_index(&mut gauge, self.index);
 
-        transfer::public_share_object(gauge);
+        event::gauge_created<X,Y>(object::id(pool), gauge_id, gauge::bribe_id(&gauge), gauge::rewards_id(&gauge));
 
-        event::gauge_created<X,Y>(object::id(pool), gauge_id, bribe, rewards);
+        transfer::public_share_object(gauge);
     }
 
     entry public fun kill_gauge<X,Y>(
@@ -415,15 +424,35 @@ module suiDouBashi_vote::voter{
         gauge::get_reward<X,Y>(gauge, clock, ctx);
     }
 
-    /// External Bribe --> voter
-    public entry fun claim_bribes<X,Y>(
+    // /// External Bribe --> voter
+    // public entry fun claim_bribes<X,Y>(
+    //     bribe: &mut Bribe<X,Y>,
+    //     rewards: &mut Rewards<X,Y>,
+    //     vsdb: &mut Vsdb,
+    //     clock: &Clock,
+    //     ctx: &mut TxContext
+    // ){
+    //     bribe::get_all_rewards<X,Y>(bribe, rewards, vsdb, clock, ctx);
+
+    //     let voting_state_mut = voting_state_borrow_mut(vsdb);
+    //     let unclaimed_rewards = vec_map::get_mut(&mut voting_state_mut.unclaimed_rewards, &object::id(rewards));
+    // }
+
+    public entry fun claim_bribes<X,Y,T>(
         bribe: &mut Bribe<X,Y>,
         rewards: &mut Rewards<X,Y>,
-        vsdb: &Vsdb,
+        vsdb: &mut Vsdb,
         clock: &Clock,
         ctx: &mut TxContext
     ){
-        bribe::get_all_rewards<X,Y>(bribe, rewards, vsdb, clock, ctx);
+        bribe::get_reward<X,Y,T>(bribe, rewards, vsdb, clock, ctx);
+        let voting_state_mut = voting_state_borrow_mut(vsdb);
+        let unclaimed_rewards = vec_map::get_mut(&mut voting_state_mut.unclaimed_rewards, &object::id(rewards));
+        vec_set::remove(unclaimed_rewards, &type_name::get<T>());
+
+        if(vec_set::is_empty(unclaimed_rewards)){
+            vec_map::remove(&mut voting_state_mut.unclaimed_rewards, &object::id(rewards));
+        };
     }
 
     // ===== Entry =====

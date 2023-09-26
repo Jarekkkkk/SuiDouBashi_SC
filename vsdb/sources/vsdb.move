@@ -317,7 +317,8 @@ module suiDouBashi_vsdb::vsdb{
         ctx: &mut TxContext
     ){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
-        assert!(vec_map::is_empty(&self.modules), E_NOT_PURE);
+        let (_, values) = vec_map::into_keys_values(self.modules);
+        assert!(!vec::contains(&values, &true), E_NOT_PURE);
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let level = level(&vsdb);

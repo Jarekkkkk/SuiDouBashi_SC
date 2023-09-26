@@ -1,0 +1,1208 @@
+openapi: 3.0.3
+info:
+  title: SuiDouBashi - OpenAPI 3.0
+  description: |-
+    SuiDouBashi on the OpenAPI 3.0 specification.
+  termsOfService: http://swagger.io/terms/
+  contact:
+    email: apiteam@swagger.io
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.11
+externalDocs:
+  description: Find out more about Swagger
+  url: http://swagger.io
+servers:
+  - url: https://fullnode.mainnet.sui.io:443
+  - url: https://fullnode.devnet.sui.io:443
+  - url: http://127.0.0.1:9000
+tags:
+  - name: Minter
+    description: Responsible for Monetary regulation of SDB
+  - name: Voter
+    description: Functionality of Ve(3,3) model
+  - name: Gauge
+    description: Distribute weekly SDB emissions based on received votes
+  - name: InternalBribe
+    description: Pool Fees from Staking LP for bribes
+  - name: ExternalBribe
+    description: Protocol Brbies for acquiring liquidity
+
+paths:
+  /minter/{Minter_id}:
+    get:
+      tags:
+        - Minter
+      summary: Get Minter Object
+      description: Get Minter Object
+      parameters:
+        - name: Minter
+          in: query
+          description: Get Minter Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Minter"
+  /voter/{Voter_id}:
+    get:
+      tags:
+        - Voter
+      summary: Get Voter Object
+      description: Get Voter Object
+      parameters:
+        - name: Voter
+          in: query
+          description: Get Voter Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voter"
+  /voter/create_gauge:
+    post:
+      tags:
+        - "Voter"
+      summary: Create Gauge for Pool
+      description: Create Gauge for Pool
+      requestBody:
+        description: Create Gauge for Pool
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  voter:
+                    type: string
+                  pool:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: GaugeCreated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pool:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  external_bribe:
+                    type: string
+  /voter/get_total_weight:
+    get:
+      tags:
+        - Voter
+      summary: Get Total Voted Voting weights
+      description: Get Total Voted Voting weights
+      parameters:
+        - name: Voter
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+  /voter/get_weights_by_pool:
+    get:
+      tags:
+        - Voter
+      summary: Get Pool Weights
+      description: Get Pool Weights
+      parameters:
+        - name: Voter
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: Pool
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+  /voter/get_gauge_and_bribes_by_pool:
+    get:
+      tags:
+        - Voter
+      summary: Get Pool's gauge, internal_bribe and external_bribes' ID
+      description: Get Pool's gauge, internal_bribe and external_bribes' ID
+      parameters:
+        - name: Voter
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: Pool
+          in: query
+          description: Voter
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+  /voter/vsdb/initialize:
+    post:
+      tags:
+        - Voter
+      summary: Add Voting State Fields
+      description: Add Voting State Fields
+      parameters:
+        - name: VSDBRegistry
+          in: query
+          description: VSDBRegistry
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: VSDB
+          in: query
+          description: VSDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+  /voter/vsdb/is_initialized:
+    get:
+      tags:
+        - Voter
+      summary: Check if VSDB initialized
+      description: Check if VSDB initialized
+      parameters:
+        - name: VSDB
+          in: query
+          description: VSDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /voter/vsdb/pool_votes_by_pool:
+    get:
+      tags:
+        - Voter
+      summary: Get Voted Voting for Pool
+      description: Get Voted Voting for Pool
+      parameters:
+        - name: VSDB
+          in: query
+          description: VSDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: Pool
+          in: query
+          description: Pool
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+  /voter/vsdb/voted:
+    get:
+      tags:
+        - Voter
+      summary: Check if VSDB voted
+      description: Check Voted Voting for Pool
+      parameters:
+        - name: VSDB
+          in: query
+          description: VSDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /voter/vsdb/used_weights:
+    get:
+      tags:
+        - Voter
+      summary: Get VSDB used weights
+      description: Get VSDB used weights
+      parameters:
+        - name: VSDB
+          in: query
+          description: VSDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+  /voter/vsdb/clear:
+    delete:
+      tags:
+        - "Voter"
+      summary: Clear Voting State
+      description: Clear Voting State
+      requestBody:
+        description: Clear Voting State
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  voter:
+                    type: string
+                  pool:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: GaugeCreated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pool:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  external_bribe:
+                    type: string
+  /voter/reset_:
+    put:
+      tags:
+        - "Voter"
+      summary: Reset Voting State
+      description: Reset Voting State
+      requestBody:
+        description: Reset Voting State
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  potato:
+                    type: string
+                  voter:
+                    type: string
+                  vsdb:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  external_bribe:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Abstain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vsdb:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /voter/vote_:
+    put:
+      tags:
+        - "Voter"
+      summary: Vote Pool
+      description: Vote Pool
+      requestBody:
+        description: Vote Pool
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  potato:
+                    type: string
+                  voter:
+                    type: string
+                  vsdb:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  external_bribe:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Abstain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vsdb:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /voter/claim_rewards:
+    put:
+      tags:
+        - "Voter"
+      summary: Claim Weekly SDB emissions
+      description: Claim Weekly SDB emissions
+      requestBody:
+        description: Claim Weekly SDB emissions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  voter:
+                    type: string
+                  minter:
+                    type: string
+                  distributor:
+                    type: string
+                  gauge:
+                    type: string
+                  internal_bribe:
+                    type: string
+                  pool:
+                    type: string
+                  vsdb_reg:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimer:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+  /voter/claim_bribes:
+    put:
+      tags:
+        - "Voter"
+      summary: Claim Pool Bribes
+      description: Claim Pool Bribes
+      requestBody:
+        description: Claim Pool Bribes
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  external_bribe:
+                    type: string
+                  vsdb:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimer:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+  /voter/claim_fees:
+    put:
+      tags:
+        - "Voter"
+      summary: Claim Pool Fees
+      description: Claim Pool Fees
+      requestBody:
+        description: Claim Pool Fees
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  internal_bribe:
+                    type: string
+                  vsdb:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimer:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+
+  /gauge/{Gauge_id}:
+    get:
+      tags:
+        - Gauge
+      summary: Get Gauge Object
+      description: Get Gauge Object
+      parameters:
+        - name: Gauge
+          in: query
+          description: Get Gauge Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gauge"
+  /gauge/stake:
+    put:
+      tags:
+        - "Gauge"
+      summary: LP stake LP
+      description: LP stake LP
+      requestBody:
+        description: LP stake LP
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  gauge:
+                    type: string
+                  pool:
+                    type: string
+                  lp_position:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: WithdrawLP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /gauge/unstake:
+    put:
+      tags:
+        - "Gauge"
+      summary: LP unstake LP
+      description: LP unstake LP
+      requestBody:
+        description: LP unstake LP
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  gauge:
+                    type: string
+                  pool:
+                    type: string
+                  lp_position:
+                    type: string
+                  value:
+                    type: integer
+                    format: int64
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: DepositLP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /gauge/get_reward:
+    put:
+      tags:
+        - "Gauge"
+      summary: LP Claim SDB
+      description: LP Claim SDB
+      requestBody:
+        description: LP Claim SDB
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  gauge:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /gauge/earned:
+    get:
+      tags:
+        - Gauge
+      summary: Get LP accrued SDB
+      description: Get LP accrued SDB
+      parameters:
+        - name: Gauge
+          in: query
+          description: Get LP accrued SDB
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /internal_bribe/{InternalBribe_id}:
+    get:
+      tags:
+        - InternalBribe
+      summary: Get InternalBribe Object
+      description: Get InternalBribe Object
+      parameters:
+        - name: InternalBribe
+          in: query
+          description: Get InternalBribe Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalBribe"
+  /internal_bribe/get_reward_balance:
+    get:
+      tags:
+        - InternalBribe
+      summary: Reward's accrued Pool Fees
+      description: Reward's accrued Pool Fees
+      parameters:
+        - name: InternalBribe
+          in: query
+          description: Reward's accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /internal_bribe/get_reward:
+    put:
+      tags:
+        - "InternalBribe"
+      summary: Voter Claim Pool Fees
+      description: Voter Claim Pool Fees
+      requestBody:
+        description: Voter Claim Pool Fees
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  internal_bribe:
+                    type: string
+                  vsdb:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /internal_bribe/earned:
+    get:
+      tags:
+        - InternalBribe
+      summary: Voter accrued Pool Fees
+      description: Voter accrued Pool Fees
+      parameters:
+        - name: InternalBribe
+          in: query
+          description: Voter accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /external_bribe/{ExternalBribe_id}:
+    get:
+      tags:
+        - ExternalBribe
+      summary: Get ExternalBribe Object
+      description: Get ExternalBribe Object
+      parameters:
+        - name: ExternalBribe
+          in: query
+          description: Get ExternalBribe Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalBribe"
+  /external_bribe/get_reward_balance:
+    get:
+      tags:
+        - ExternalBribe
+      summary: Reward's accrued Pool Fees
+      description: Reward's accrued Pool Fees
+      parameters:
+        - name: ExternalBribe
+          in: query
+          description: Reward's accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+  /external_bribe/get_reward:
+    put:
+      tags:
+        - "ExternalBribe"
+      summary: Voter Claim Pool Fees
+      description: Voter Claim Pool Fees
+      requestBody:
+        description: Voter Claim Pool Fees
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  external_bribe:
+                    type: string
+                  vsdb:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: ClaimReward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from:
+                    type: string
+                  amount:
+                    type: integer
+                    format: int64
+  /external_bribe/earned:
+    get:
+      tags:
+        - ExternalBribe
+      summary: Voter accrued Pool Fees
+      description: Voter accrued Pool Fees
+      parameters:
+        - name: ExternalBribe
+          in: query
+          description: Voter accrued Pool Fees
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type:  integer
+                format: int64
+components:
+  schemas:
+    Minter:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        supply:
+          type: integer
+          format: int64
+        balance:
+          type: integer
+          format: int64
+        team:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        team_rate:
+          type: integer
+          format: int64
+        active_period:
+          type: integer
+          format: int64
+        weekly :
+          type:  integer
+          format: int64
+    Voter:
+      type:  object
+      properties:
+        id:
+          type:  string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        balance:
+          type:  integer
+          format: int64
+        governor:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        emergency:
+          type:  string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        weights:
+          type:  integer
+          format: int64
+        registry:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+            additionalProperties:
+              type: string
+        index:
+          type: integer
+          format: int64
+    Gauge:
+      type: object
+      properties:
+        id:
+          type:  string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        is_alive:
+          type:  boolean
+        pool:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        total_supply:
+          type: integer
+          format: int64
+        balance_of:
+          type: array
+          items:
+            type: integer
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        fees_x:
+          type: integer
+          format: int64
+        fees_y:
+          type: integer
+          format: int64
+        supply_checkpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupplyCheckpoint"
+        checkpoints:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/Checkpoint"
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        supply_index:
+          type: integer
+          format: int64
+        claimable:
+          type:  integer
+          format: int64
+        reward:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+            balance:
+              type:  integer
+              format: int64
+            reward_rate:
+              type: integer
+              format: int64
+            period_finish:
+              type:  integer
+              format: int64
+            last_update_time:
+              type:  integer
+              format: int64
+            reward_per_token_stored:
+              type:  integer
+              format: int64
+            user_reward_per_token_stored:
+              type: array
+              items:
+                type:  integer
+                format: int64
+                additionalProperties:
+                  type: string
+                  example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+            last_earn:
+              type: array
+              items:
+                type:  integer
+                format: int64
+                additionalProperties:
+                  type: string
+                  example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+            reward_per_token_checkpoints:
+              type:  array
+              items:
+                $ref: "#/components/schemas/Checkpoint"
+    InternalBribe:
+      type: object
+      properties:
+        id:
+          type:  string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        total_supply:
+          type: integer
+          format: int64
+        balance_of:
+          type: array
+          items:
+            type: integer
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        supply_checkpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupplyCheckpoint"
+        checkpoints:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/Checkpoint"
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        supply_index:
+          type: integer
+          format: int64
+        claimable:
+          type:  integer
+          format: int64
+        reward:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+              balance:
+                type:  integer
+                format: int64
+              reward_rate:
+                type: integer
+                format: int64
+              period_finish:
+                type:  integer
+                format: int64
+              last_update_time:
+                type:  integer
+                format: int64
+              reward_per_token_stored:
+                type:  integer
+                format: int64
+              user_reward_per_token_stored:
+                type: array
+                items:
+                  type:  integer
+                  format: int64
+                  additionalProperties:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+              last_earn:
+                type: array
+                items:
+                  type:  integer
+                  format: int64
+                  additionalProperties:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+              reward_per_token_checkpoints:
+                type:  array
+                items:
+                $ref: "#/components/schemas/Checkpoint"
+    ExternalBribe:
+      type: object
+      properties:
+        id:
+          type:  string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        total_supply:
+          type: integer
+          format: int64
+        balance_of:
+          type: array
+          items:
+            type: integer
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        supply_checkpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupplyCheckpoint"
+        checkpoints:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: "#/components/schemas/Checkpoint"
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        supply_index:
+          type: integer
+          format: int64
+        claimable:
+          type:  integer
+          format: int64
+        reward:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+              balance:
+                type:  integer
+                format: int64
+              token_rewards_per_epoch:
+                type: integer
+                format: int64
+              period_finish:
+                type:  integer
+                format: int64
+              last_earn:
+                type: array
+                items:
+                  type:  integer
+                  format: int64
+                  additionalProperties:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+    Checkpoint:
+      type: object
+      properties:
+        timestamp:
+          type:  integer
+          format: int64
+        balance:
+          type:  integer
+          format: int64
+    SupplyCheckpoint:
+      type: object
+      properties:
+        timestamp:
+          type:  integer
+          format: int64
+        balance:
+          type:  integer
+          format: int64
+    RewardPerTokenCheckpoint:
+      type: object
+      properties:
+        timestamp:
+          type:  integer
+          format: int64
+        balance:
+          type:  integer
+          format: int64

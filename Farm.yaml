@@ -1,0 +1,367 @@
+openapi: 3.0.3
+info:
+  title: SuiDouBashi - OpenAPI 3.0
+  description: |-
+    SuiDouBashi on the OpenAPI 3.0 specification.
+  termsOfService: http://swagger.io/terms/
+  contact:
+    email: apiteam@swagger.io
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.11
+externalDocs:
+  description: Find out more about Swagger
+  url: http://swagger.io
+servers:
+  - url: https://fullnode.mainnet.sui.io:443
+  - url: https://fullnode.devnet.sui.io:443
+  - url: http://127.0.0.1:9000
+tags:
+  - name: FarmReg
+    description: Registry for Farms
+  - name: Farm
+    description: Incentive liquidity Farming for VSDB rewards
+paths:
+  /farm_reg/{farmReg_id}:
+    get:
+      tags:
+        - pool_reg
+      summary: Get Pool Registry Object
+      description: Get Pool Registry Object
+      parameters:
+        - name: PoolReg id
+          in: query
+          description: Liqudity Provider Position
+          required: true
+          explode: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FarmReg"
+  /farm_reg/add_farm:
+    post:
+      tags:
+        - "FarmReg"
+      summary: Add Incentive Farm for pool
+      description: Add Incentive Farm for pool
+      requestBody:
+        description: Add Incentive Farm for pool
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  farm_reg:
+                    type: string
+                  pool:
+                    type: string
+                  alloc_point:
+                    type: integer
+                    format: int64
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: successful operation
+  /farm_reg/total_pending:
+    get:
+      tags:
+        - FarmReg
+      summary: Get Player's total SDB rewards
+      description: Get Player's total SDB rewards
+      parameters:
+        - name: Farmreg
+          in: query
+          description: Get FarmRegistry Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: player
+          in: query
+          description: LP
+          required: true
+          explode: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+  /farm/claim_vsdb:
+    put:
+      tags:
+        - "FarmReg"
+      summary: LP claim pending rewards in VSDB
+      description: LP claim pending rewards in VSDB
+      requestBody:
+        description: LP claim pending rewards in VSDB
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  farm_reg:
+                    type: string
+                  vsdb_reg:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Deposite
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  player:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+                  amount:
+                    type: integer
+  /farm/stake:
+    put:
+      tags:
+        - "Farm"
+      summary: LP stake into farms
+      description: LP stake into farms
+      requestBody:
+        description: LP stake into farms
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  vsdb_reg:
+                    type: string
+                  sdb:
+                    type: string
+                  duration:
+                    type: integer
+                    format: int64
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Stake
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  player:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+                  amount:
+                    type: integer
+                    format: int64
+  /farm/unstake:
+    put:
+      tags:
+        - "Farm"
+      summary: LP unstake into farms
+      description: LP unstake into farms
+      requestBody:
+        description: LP unstake into farms
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  vsdb_reg:
+                    type: string
+                  sdb:
+                    type: string
+                  duration:
+                    type: integer
+                    format: int64
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Deposite
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  player:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+                  amount:
+                    type: integer
+                    format: int64
+  /farm/pending_rewards:
+    get:
+      tags:
+        - Farm
+      summary: Get LP's accrued awards
+      description: Get LP's accrued awards
+      parameters:
+        - name: Farm
+          in: query
+          description: Get Farm Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: Farmreg
+          in: query
+          description: Get FarmRegistry Object
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        - name: player
+          in: query
+          description: LP
+          required: true
+          explode: true
+          schema:
+            type: integer
+            format: int64
+        - name: Clock
+          in: query
+          description: LP
+          required: true
+          explode: true
+          schema:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: integer
+                format: int64
+  /farm/harvest:
+    put:
+      tags:
+        - "Farm"
+      summary: LP harvest accrued reward
+      description: LP harvest accrued rewards
+      requestBody:
+        description: LP harvest accrued rewards
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                  farm_reg:
+                    type: string
+                  farm:
+                    type: string
+                  clock:
+                    type: string
+        required: true
+      responses:
+        '200':
+          description: Harvest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  player:
+                    type: string
+                    example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+                  reward:
+                    type: integer
+                    format: int64
+components:
+  schemas:
+    FarmReg:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        intialized:
+          type: boolean
+        governor:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        sdb_balance:
+          type: integer
+          format: int64
+        start_time:
+          type: integer
+          format: int64
+        end_time:
+          type: integer
+          format: int64
+        sdb_per_second:
+          type: integer
+          format: int64
+        farms:
+          type: array
+          items:
+            type: string
+            example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        total_pending:
+            type: integer
+            format: int64
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+    Farm:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+        lp_balance:
+          type: integer
+          format: int64
+        alloc_point:
+          type: integer
+          format: int64
+        last_reward_time:
+          type: integer
+          format: int64
+        index:
+          type: integer
+          format: int64
+        player_infos:
+          type: array
+          items:
+            $ref : "#/components/schemas/PlayerInfo"
+            additionalProperties:
+              type: string
+              example: "0x0b3fc768f8bb3c772321e3e7781cac4a45585b4bc64043686beb634d65341798"
+    PlayerInfo:
+      type: object
+      properties:
+        amount:
+          type: integer
+          format: int64
+        index:
+          type: integer
+          format: int64
+        pending_rewards:
+          type: integer
+          format: int64

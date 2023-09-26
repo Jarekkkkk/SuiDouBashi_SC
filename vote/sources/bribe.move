@@ -1,6 +1,6 @@
 module suiDouBashi_vote::bribe{
     use std::vector as vec;
-    use std::type_name;
+    use std::type_name::{Self, TypeName};
 
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
@@ -13,6 +13,7 @@ module suiDouBashi_vote::bribe{
     use sui::table::{Self, Table};
     use sui::table_vec::{Self, TableVec};
     use sui::dynamic_field as df;
+    use sui::vec_set::{Self, VecSet};
 
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb};
     use suiDouBashi_vsdb::sdb::SDB;
@@ -67,6 +68,7 @@ module suiDouBashi_vote::bribe{
     struct Rewards<phantom X, phantom Y> has key{
         id: UID,
         version: u64,
+        rewards_type: VecSet<TypeName>
     }
 
     /// store in dynamic fields to prevent generic type assertion
@@ -87,7 +89,9 @@ module suiDouBashi_vote::bribe{
             rewards_per_epoch: table::new<u64, u64>(ctx),
             last_earn: table::new<ID, u64>(ctx)
         };
-        df::add(&mut rewards.id, type_name::get<T>(), reward);
+        let type = type_name::get<T>();
+        vec_set::insert(&mut rewards.rewards_type, type);
+        df::add(&mut rewards.id, type, reward);
     }
 
     public fun borrow_reward<X,Y,T>(rewards: &Rewards<X,Y>):&Reward<X,Y,T>{
@@ -98,6 +102,10 @@ module suiDouBashi_vote::bribe{
     fun borrow_reward_mut<X,Y,T>(rewards: &mut Rewards<X,Y>):&mut Reward<X, Y, T>{
         assert_rewards_type<X,Y,T>();
         df::borrow_mut(&mut rewards.id, type_name::get<T>())
+    }
+
+    public fun rewards_type<X,Y>(rewards: &Rewards<X,Y>):VecSet<TypeName>{
+        rewards.rewards_type
     }
 
     public fun reward_balance<X,Y,T>(rewards: &Rewards<X,Y>): u64{
@@ -150,7 +158,8 @@ module suiDouBashi_vote::bribe{
 
         let rewards = Rewards{
             id: object::new(ctx),
-            version: package_version()
+            version: package_version(),
+            rewards_type: vec_set::empty<TypeName>()
         };
         new_reward_<X,Y,X>(&mut rewards, ctx);
         new_reward_<X,Y,Y>(&mut rewards, ctx);
@@ -389,7 +398,7 @@ module suiDouBashi_vote::bribe{
         event::notify_reward<T>(value);
     }
 
-    public entry fun get_all_rewards<X,Y>(
+    public (friend) fun get_all_rewards<X,Y>(
         self: &mut Bribe<X,Y>,
         rewards: &mut Rewards<X,Y>,
         vsdb: &Vsdb,
@@ -414,7 +423,7 @@ module suiDouBashi_vote::bribe{
         };
     }
 
-    public entry fun get_reward<X,Y,T>(
+    public (friend) fun get_reward<X,Y,T>(
         self: &mut Bribe<X,Y>,
         rewards: &mut Rewards<X,Y>,
         vsdb: &Vsdb,

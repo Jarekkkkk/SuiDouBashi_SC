@@ -61,7 +61,10 @@ module test::bribe_test{
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
             assert!( bribe::rewards_per_epoch<USDC, USDT, USDC>(&rewards, get_time(clock)) == 0, 404);
             assert!( bribe::rewards_per_epoch<USDC, USDT, USDT>(&rewards, get_time(clock)) == 0, 404);
-            bribe::get_all_rewards(&mut bribe, &mut rewards, &vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, SDB>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, SUI>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, USDT>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, USDC>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
 
             test::return_to_sender(s, vsdb);
             test::return_shared(bribe);
@@ -269,10 +272,12 @@ module test::bribe_test{
                 let gauge_a = test::take_shared<Gauge<USDC, USDT>>(s);
                 let pool_id_a = gauge::pool_id(&gauge_a);
                 let bribe_a = test::take_shared<Bribe<USDC, USDT>>(s);
+                let rewards_a = test::take_shared<Rewards<USDC, USDT>>(s);
                 // pool_b
                 let gauge_b = test::take_shared<Gauge<SDB, USDC>>(s);
                 let pool_id_b = gauge::pool_id(&gauge_b);
                 let bribe_b = test::take_shared<Bribe<SDB, USDC>>(s);
+                let rewards_b = test::take_shared<Rewards<SDB, USDC>>(s);
 
                 {   // Potato
                     assert!(vsdb::voting_weight(&vsdb, clock) == 755952312048497141, 404);
@@ -285,16 +290,18 @@ module test::bribe_test{
                     potato = voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
                     potato =  voter::reset_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
                     potato = voter::vote_entry(potato,&mut voter, &vsdb, pools, weights);
-                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, clock);
-                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_a, &mut bribe_a, &rewards_a, clock);
+                    potato = voter::vote_(potato, &mut voter, &mut minter, &mut vsdb, &mut gauge_b, &mut bribe_b, &rewards_b, clock);
                     voter::vote_exit(potato, &mut voter, &mut vsdb);
                 };
 
                 test::return_shared(gauge_a);
                 test::return_shared(bribe_a);
+                test::return_shared(rewards_a);
 
                 test::return_shared(gauge_b);
                 test::return_shared(bribe_b);
+                test::return_shared(rewards_b);
             };
             test::return_shared(voter);
             test::return_shared(minter);
@@ -362,7 +369,10 @@ module test::bribe_test{
             assert!(bribe::earned<USDC, USDT, USDT>(&bribe, &rewards, &vsdb, clock) == 8790284582, 404);
             assert!(bribe::earned<USDC, USDT, SDB>(&bribe, &rewards, &vsdb, clock) == 7878411871378, 404);
             assert!(bribe::earned<USDC, USDT, SUI>(&bribe, &rewards, &vsdb, clock) == 7878411871378, 404);
-            voter::claim_bribes(&mut bribe, &mut rewards, &vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, SUI>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, SDB>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, USDC>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, USDT>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
 
             test::return_to_sender<Vsdb>(s, vsdb);
             test::return_shared(bribe);
@@ -431,7 +441,10 @@ module test::bribe_test{
             let bribe = test::take_shared<Bribe<USDC, USDT>>(s);
             let rewards = test::take_shared<Rewards<USDC, USDT>>(s);
 
-            voter::claim_bribes(&mut bribe, &mut rewards, &vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, SDB>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, SUI>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, USDT>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
+            voter::claim_bribes<USDC, USDT, USDC>(&mut bribe, &mut rewards, &mut vsdb, clock, ctx(s));
 
             test::return_to_sender<Vsdb>(s, vsdb);
             test::return_to_sender<Vsdb>(s, _vsdb);

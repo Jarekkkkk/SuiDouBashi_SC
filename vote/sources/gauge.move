@@ -57,6 +57,10 @@ module suiDouBashi_vote::gauge{
         is_alive:bool,
         /// ID of DEX pool we are staking with
         pool: ID,
+        /// ID of bribe object,
+        bribe: ID,
+        /// ID of rewards object
+        rewards: ID,
         /// balance of coin X
         fees_x: Balance<X>,
         /// balance of coin Y
@@ -96,6 +100,10 @@ module suiDouBashi_vote::gauge{
 
     public fun pool_id<X,Y>(self: &Gauge<X,Y>):ID{ self.pool }
 
+    public fun bribe_id<X,Y>(self: &Gauge<X,Y>):ID{ self.bribe }
+
+    public fun rewards_id<X,Y>(self: &Gauge<X,Y>):ID{ self.rewards }
+
     public fun reward_rate<X,Y>(self: &Gauge<X,Y>): u64 { self.reward_rate }
 
     public fun period_finish<X,Y>(self: &Gauge<X,Y>): u64 { self.period_finish }
@@ -127,7 +135,7 @@ module suiDouBashi_vote::gauge{
     public (friend) fun new<X,Y>(
         pool: &Pool<X,Y>,
         ctx: &mut TxContext
-    ):(Gauge<X,Y>, ID, ID){
+    ):Gauge<X,Y>{
         let (bribe, rewards) = bribe::new<X,Y>(ctx);
 
         let gauge = Gauge<X,Y>{
@@ -135,6 +143,8 @@ module suiDouBashi_vote::gauge{
             version: package_version(),
             is_alive: true,
             pool: object::id(pool),
+            bribe,
+            rewards,
             fees_x: balance::zero<X>(),
             fees_y: balance::zero<Y>(),
             sdb_balance: balance::zero<SDB>(),
@@ -147,8 +157,7 @@ module suiDouBashi_vote::gauge{
             staking_index: 0,
             lp_stake: table::new<address, Stake>(ctx)
         };
-
-        (gauge, bribe, rewards)
+        gauge
     }
 
     // ====== GETTER ======
@@ -251,6 +260,20 @@ module suiDouBashi_vote::gauge{
     }
 
     /// LP unstake lp
+    public fun unstake_all<X,Y>(
+        self: &mut Gauge<X,Y>,
+        pool: &Pool<X,Y>,
+        lp: &mut LP<X,Y>,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ){
+        assert!(self.version == package_version(), E_WRONG_VERSION);
+
+        let stake = table::borrow(&self.lp_stake, tx_context::sender(ctx));
+        let value = stake.stakes;
+        assert!(value <= stake.stakes, E_INSUFFICENT_BALANCE);
+        unstake(self, pool, lp, value, clock, ctx);
+    }
 
     public fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
