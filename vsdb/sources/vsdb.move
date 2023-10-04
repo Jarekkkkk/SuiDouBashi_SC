@@ -317,8 +317,11 @@ module suiDouBashi_vsdb::vsdb{
         ctx: &mut TxContext
     ){
         assert!(reg.version == VERSION, E_WRONG_VERSION);
-        let (_, values) = vec_map::into_keys_values(self.modules);
+
+        // only check burned NFT needs to revoke its votes
+        let (_, values) = vec_map::into_keys_values(vsdb.modules);
         assert!(!vec::contains(&values, &true), E_NOT_PURE);
+
         let locked_bal = locked_balance(self);
         let locked_end = locked_end(self);
         let level = level(&vsdb);

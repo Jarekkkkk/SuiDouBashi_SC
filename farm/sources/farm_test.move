@@ -477,8 +477,8 @@ module suiDouBashi_farm::farm_test{
                 let pool = test::take_shared<Pool<USDC, USDT>>(s);
                 let farm = test::take_shared<Farm<USDC, USDT>>(s);
                 let farm_lp = farm::farm_lp(&farm);
-
-                assert!( pool::claimable_y(&pool, farm_lp) == 5, 404);
+                let (_, claimable_y) = pool::claimable(&pool, farm_lp);
+                assert!( claimable_y  == 5, 404);
                 farm::claim_pool_fees(&reg, &cap, &mut farm, &mut pool, clock, ctx(s));
 
                 test::return_to_sender(s, cap);

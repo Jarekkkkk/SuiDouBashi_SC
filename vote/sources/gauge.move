@@ -180,6 +180,13 @@ module suiDouBashi_vote::gauge{
         pending_sdb
     }
 
+    public fun pool_bribes<X,Y>(
+        self: &Gauge<X,Y>,
+        pool: &Pool<X,Y>
+    ):(u64, u64){
+        pool::claimable(pool, &self.total_stakes)
+    }
+
     // ====== GETTER ======
 
     // ====== ENTRY ======

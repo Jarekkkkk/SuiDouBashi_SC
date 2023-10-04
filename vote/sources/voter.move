@@ -146,7 +146,7 @@ module suiDouBashi_vote::voter{
 
     public fun last_voted(vsdb: &Vsdb): u64{ voting_state_borrow(vsdb).last_voted }
 
-    // POTATO to realize one-time action ( voting, reset, poke )
+    // POTATO to realize one-time action ( voting, reset )
     struct Potato{
         reset: bool,
         weights: VecMap<ID, u64>,

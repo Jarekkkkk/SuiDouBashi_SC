@@ -252,31 +252,51 @@ module suiDouBashi_amm::pool{
 
     public fun lp_balance<X,Y>(claim: &LP<X,Y>):u64{ balance::value(&claim.lp_balance) }
 
-    public fun claimable_x<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):u64{
+
+    public fun claimable<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):(u64, u64){
         let lp_balance = lp_balance(lp);
         let claimable_x = lp.claimable_x;
-        if(lp_balance > 0){
-            let delta = self.fee.index_x - lp.index_x;
-            if(delta > 0){
-                let share = (lp_balance as u256) * delta / PRECISION;
-                claimable_x = claimable_x + (share as u64);
-            };
-        };
-        claimable_x
-    }
-
-    public fun claimable_y<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):u64{
-        let lp_balance = lp_balance(lp);
         let claimable_y = lp.claimable_y;
         if(lp_balance > 0){
-            let delta = self.fee.index_y - lp.index_y;
-            if(delta > 0){
-                let share = (lp_balance as u256) * delta / PRECISION;
+            let delta_x = self.fee.index_x - lp.index_x;
+            let delta_y = self.fee.index_y - lp.index_y;
+            if(delta_x > 0){
+                let share = (lp_balance as u256) * delta_x / PRECISION;
+                claimable_x = claimable_x + (share as u64);
+            };
+            if(delta_y> 0){
+                let share = (lp_balance as u256) * delta_y / PRECISION;
                 claimable_y = claimable_y + (share as u64);
             };
         };
-        claimable_y
+        (claimable_x, claimable_y)
     }
+
+ //   public fun claimable_x<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):u64{
+ //       let lp_balance = lp_balance(lp);
+ //       let claimable_x = lp.claimable_x;
+ //       if(lp_balance > 0){
+ //           let delta_y = self.fee.index_x - lp.index_x;
+ //           if(delta > 0){
+ //               let share = (lp_balance as u256) * delta / PRECISION;
+ //               claimable_x = claimable_x + (share as u64);
+ //           };
+ //       };
+ //       claimable_x
+ //   }
+
+ //   public fun claimable_y<X,Y>(self: &Pool<X,Y>, lp: &LP<X,Y>):u64{
+ //       let lp_balance = lp_balance(lp);
+ //       let claimable_y = lp.claimable_y;
+ //       if(lp_balance > 0){
+ //           let delta = self.fee.index_y - lp.index_y;
+ //           if(delta > 0){
+ //               let share = (lp_balance as u256) * delta / PRECISION;
+ //               claimable_y = claimable_y + (share as u64);
+ //           };
+ //       };
+ //       claimable_y
+ //   }
 
     public fun calculate_fee(value: u64, fee_percentage: u8): u64{
         value * (fee_percentage as u64) / FEE_SCALING + 1

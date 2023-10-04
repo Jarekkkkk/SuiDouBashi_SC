@@ -92,8 +92,10 @@ module test::pool_test{
             assert!(pool::fee_x(&pool_a) == 301, 1);
             assert!(pool::fee_x(&pool_b) == 5_000_001, 1);
 
-            assert!(pool::claimable_x(&pool_a, &lp_a) == 200, 0);
-            assert!(pool::claimable_x(&pool_b, &lp_b) == 3333281, 0);
+            let (claimable_x, _) = pool::claimable(&pool_a, &lp_a);
+            assert!(claimable_x == 200, 0);
+            let (claimable_x, _) = pool::claimable(&pool_b, &lp_b);
+            assert!(claimable_x == 3333281, 0);
             pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
             pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
 
@@ -114,8 +116,10 @@ module test::pool_test{
             let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
             let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
 
-            assert!(pool::claimable_x(&pool_a, &lp_a) == 0, 0);
-            assert!(pool::claimable_x(&pool_b, &lp_b) == 0, 0);
+            let (claimable_x, _) = pool::claimable(&pool_a, &lp_a);
+            assert!(claimable_x == 0, 0);
+            let (claimable_x, _) = pool::claimable(&pool_b, &lp_b);
+            assert!(claimable_x == 0, 0);
             assert!( pool_a_fee_x == 101, 1);
             assert!( pool_b_fee_x == 1666720, 1);
             assert!(coin::value(&fee_usdc) == 200, 1);
@@ -154,8 +158,10 @@ module test::pool_test{
             assert!(pool::fee_x(&pool_a) == 402, 1);
             assert!(pool::fee_x(&pool_b) == 6_666_721, 1);
 
-            assert!(pool::claimable_x(&pool_a, &lp_a) == 200, 0);
-            assert!(pool::claimable_x(&pool_b, &lp_b) == 3_333_333, 0);
+            let (claimable_x, _) = pool::claimable(&pool_a, &lp_a);
+            assert!(claimable_x == 200, 0);
+            let (claimable_x, _) = pool::claimable(&pool_b, &lp_b);
+            assert!(claimable_x == 3_333_333, 0);
             pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
             pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
 
@@ -173,8 +179,10 @@ module test::pool_test{
             let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
             let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
 
-            assert!(pool::claimable_x(&pool_a, &lp_a) == 0, 0);
-            assert!(pool::claimable_x(&pool_b, &lp_b) == 0, 0);
+            let (claimable_x, _) = pool::claimable(&pool_a, &lp_a);
+            assert!(claimable_x == 0, 0);
+            let (claimable_x, _) = pool::claimable(&pool_b, &lp_b);
+            assert!(claimable_x == 0, 0);
             assert!(pool::fee_x(&pool_a) == 202, 1);
             assert!(pool::fee_x(&pool_b) == 3_333_388, 1);
             assert!(coin::value(&fee_usdc) == 200, 1);
@@ -194,8 +202,10 @@ module test::pool_test{
             let lp_b = test::take_from_sender<LP<SDB, USDC>>(s);
             let ctx = ctx(s);
 
-            assert!(pool::claimable_x(&pool_a, &lp_a) == 200, 0);
-            assert!(pool::claimable_x(&pool_b, &lp_b) == 3333281, 0);
+            let (claimable_x, _) = pool::claimable(&pool_a, &lp_a);
+            assert!(claimable_x == 200, 0);
+            let (claimable_x, _) = pool::claimable(&pool_b, &lp_b);
+            assert!(claimable_x == 3333281, 0);
             pool::claim_fees_player(&mut pool_a, &mut lp_a, ctx);
             pool::claim_fees_player(&mut pool_b, &mut lp_b, ctx);
 
@@ -212,8 +222,11 @@ module test::pool_test{
             let fee_usdc = test::take_from_sender<Coin<USDC>>(s);
             let fee_sdb = test::take_from_sender<Coin<SDB>>(s);
 
-            assert!(pool::claimable_x(&pool_a, &lp_a) == 0, 0);
-            assert!(pool::claimable_x(&pool_b, &lp_b) == 0, 0);
+            let (claimable_x, _) = pool::claimable(&pool_a, &lp_a);
+            assert!(claimable_x == 0, 0);
+            let (claimable_x, _) = pool::claimable(&pool_b, &lp_b);
+            assert!(claimable_x == 0, 0);
+
             assert!(pool::fee_x(&pool_a) == 2, 1);
             assert!(pool::fee_x(&pool_b) == 107, 1);
             assert!(coin::value(&fee_usdc) == 200, 1);
