@@ -1,12 +1,12 @@
 [package]
 name = "suiDouBashiVSDB"
 version = "0.0.1"
-published-at = "0x032828cb98ef08295c02ec7860e6e25304c0f4fb1f6949dec29688448d0f1f08"
+published-at = "0x5335303848afc75af4887d64929283e580ed91b996fd2d4d61ebae243df822c3"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
-MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
-SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "testnet" }
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "testnet" }
+SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "testnet" }
 
 [addresses]
- suiDouBashi_vsdb = "0x032828cb98ef08295c02ec7860e6e25304c0f4fb1f6949dec29688448d0f1f08"
+ suiDouBashi_vsdb = "0x5335303848afc75af4887d64929283e580ed91b996fd2d4d61ebae243df822c3"

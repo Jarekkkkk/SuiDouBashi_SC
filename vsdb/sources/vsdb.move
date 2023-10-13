@@ -510,7 +510,7 @@ module suiDouBashi_vsdb::vsdb{
         let player_point_history = table_vec::singleton(point::new(calculate_bias(amount, unlock_time, ts), calculate_slope(amount), ts), ctx);
         let id = object::new(ctx);
         let val = coin::value(&locked_sdb);
-        let scarcity = pick_scarcity(val, (unlock_time - ts)/ WEEK,&id);
+        let scarcity = pick_scarcity(val, (unlock_time - round_down_week(ts))/ WEEK,&id);
         let img_url = img_url(&id, coin::value(&locked_sdb), 0, scarcity, urls);
         let vsdb = Vsdb {
             id,

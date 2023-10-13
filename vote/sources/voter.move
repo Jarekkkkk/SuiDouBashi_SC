@@ -17,7 +17,7 @@ module suiDouBashi_vote::voter{
     use suiDouBashi_vsdb::vsdb::{Self, Vsdb, VSDBRegistry};
     use suiDouBashi_vsdb::sdb::{SDB};
     use suiDouBashi_amm::pool::Pool;
-    use suiDouBashi_vote::gauge::{Self, Gauge};
+    use suiDouBashi_vote::gauge::{Self, Gauge, Stake};
     use suiDouBashi_vote::event;
     use suiDouBashi_vote::minter::{Self, Minter, package_version};
     use suiDouBashi_vote::bribe::{Self, Bribe, Rewards};
@@ -416,12 +416,13 @@ module suiDouBashi_vote::voter{
     public entry fun claim_rewards<X,Y>(
         self: &mut Voter,
         gauge: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        gauge::get_reward<X,Y>(gauge, clock, ctx);
+        gauge::get_reward<X,Y>(gauge, stake, clock, ctx);
     }
 
     // /// External Bribe --> voter

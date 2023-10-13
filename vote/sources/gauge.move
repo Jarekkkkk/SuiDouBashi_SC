@@ -6,7 +6,6 @@ module suiDouBashi_vote::gauge{
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
-    use sui::table::{Self, Table};
     use sui::transfer;
     use sui::clock::{Self, Clock};
     use sui::math;
@@ -37,6 +36,7 @@ module suiDouBashi_vote::gauge{
     const E_INVALID_REWARD_RATE: u64 = 105;
     const E_MAX_REWARD: u64 = 106;
     const E_UNCLAIMED_REWARD: u64 = 107;
+    const E_REMAINED_STAKES: u64 = 108;
 
     // ====== Error =======
 
@@ -81,14 +81,39 @@ module suiDouBashi_vote::gauge{
         total_stakes: LP<X,Y>,
         /// accumlating distribution SDB rewards per lp balance
         staking_index: u256,
-        /// staking information for LP object
-        lp_stake: Table<address, Stake>
     }
 
-    struct Stake has store{
+    struct Stake<phantom X, phantom Y> has key, store{
+        id: UID,
         stakes: u64,
         staking_index: u256,
         pending_sdb: u64
+    }
+
+    public fun stake_stakes<X,Y>(stake: &Stake<X,Y>): u64{
+        stake.stakes
+    }
+
+    public fun create_stake<X,Y>(self: &Gauge<X,Y>, ctx: &mut TxContext):Stake<X,Y>{
+        assert_pkg_version(self);
+        Stake{
+            id: object::new(ctx),
+            stakes: 0,
+            staking_index: self.staking_index,
+            pending_sdb: 0
+        }
+    }
+
+    public entry fun delete_stake<X,Y>(stake: Stake<X,Y>){
+        let Stake {
+            id,
+            stakes,
+            staking_index: _,
+            pending_sdb
+        } = stake;
+        assert!(pending_sdb == 0 ,E_UNCLAIMED_REWARD);
+        assert!(stakes == 0, E_REMAINED_STAKES);
+        object::delete(id);
     }
 
     public fun is_alive<X,Y>(self: &Gauge<X,Y>):bool{ self.is_alive }
@@ -126,9 +151,6 @@ module suiDouBashi_vote::gauge{
 
     public fun total_stakes<X,Y>(self: &Gauge<X,Y>):&LP<X,Y>{ &self.total_stakes }
 
-    public fun lp_stakes<X,Y>(self: &Gauge<X,Y>, staker: address): u64{
-        table::borrow(&self.lp_stake, staker).stakes
-    }
 
     public fun gauge_staking_index<X,Y>(self: &Gauge<X,Y>): u256{ self.staking_index }
 
@@ -155,17 +177,13 @@ module suiDouBashi_vote::gauge{
             claimable: 0,
             total_stakes: pool::create_lp(pool, ctx),
             staking_index: 0,
-            lp_stake: table::new<address, Stake>(ctx)
         };
         gauge
     }
 
     // ====== GETTER ======
 
-    public fun pending_sdb<X,Y>(self: &Gauge<X,Y>, staker: address, clock: &Clock): u64{
-        if(!table::contains(&self.lp_stake, staker)) return 0;
-
-        let stake = table::borrow(&self.lp_stake, staker);
+    public fun pending_sdb<X,Y>(self: &Gauge<X,Y>, stake: &Stake<X,Y>, clock: &Clock): u64{
         let ts = unix_timestamp(clock);
         let pending_sdb = stake.pending_sdb;
 
@@ -193,18 +211,15 @@ module suiDouBashi_vote::gauge{
 
     public entry fun get_reward<X,Y>(
         self: &mut Gauge<X,Y>,
+        stake: &mut Stake<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.lp_stake, staker), E_INVALID_STAKER);
-
         update_gauge_(self, clock);
-        update_stake_(self, staker);
+        update_stake_(self, stake);
 
-        let stake = table::borrow_mut(&mut self.lp_stake, staker);
         let pending = stake.pending_sdb;
         if(pending > 0){
             transfer::public_transfer(coin::take(&mut self.sdb_balance, pending, ctx), tx_context::sender(ctx));
@@ -219,6 +234,7 @@ module suiDouBashi_vote::gauge{
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
+        stake: &mut Stake<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
@@ -226,39 +242,27 @@ module suiDouBashi_vote::gauge{
 
         let balance = pool::lp_balance(lp);
         assert!(balance > 0, E_EMPTY_VALUE);
-        stake(self, pool, lp, balance, clock, ctx);
+        stake(self, pool, lp, stake, balance, clock, ctx);
     }
 
     public entry fun stake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
+        stake: &mut Stake<X,Y>,
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        let staker = tx_context::sender(ctx);
-        if(!table::contains(&self.lp_stake, staker)){
-            table::add(&mut self.lp_stake,
-                staker,
-                Stake{
-                    stakes: 0,
-                    staking_index: 0,
-                    pending_sdb: 0
-                }
-            )
-        };
-
         let lp_value = pool::lp_balance(lp);
         assert!(lp_value >= value, E_EMPTY_VALUE);
         assert!(value > 0, E_EMPTY_VALUE);
 
         update_gauge_(self, clock);
-        update_stake_(self, staker);
+        update_stake_(self, stake);
 
-        let stake = table::borrow_mut(&mut self.lp_stake, staker);
         pool::join_lp(pool, &mut self.total_stakes, lp, value);
 
         stake.stakes = stake.stakes + value;
@@ -271,34 +275,31 @@ module suiDouBashi_vote::gauge{
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
+        stake: &mut Stake<X,Y>,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        let stake = table::borrow(&self.lp_stake, tx_context::sender(ctx));
         let value = stake.stakes;
         assert!(value <= stake.stakes, E_INSUFFICENT_BALANCE);
-        unstake(self, pool, lp, value, clock, ctx);
+        unstake(self, pool, lp, stake, value, clock, ctx);
     }
 
     public fun unstake<X,Y>(
         self: &mut Gauge<X,Y>,
         pool: &Pool<X,Y>,
         lp: &mut LP<X,Y>,
+        stake: &mut Stake<X,Y>,
         value: u64,
         clock: &Clock,
         ctx: &mut TxContext
     ){
         assert!(self.version == package_version(), E_WRONG_VERSION);
 
-        let staker = tx_context::sender(ctx);
-        assert!(table::contains(&self.lp_stake, staker), E_INVALID_STAKER);
-
         update_gauge_(self, clock);
-        update_stake_(self, staker);
+        update_stake_(self, stake);
 
-        let stake = table::borrow_mut(&mut self.lp_stake, staker);
         assert!(value <= stake.stakes, E_INSUFFICENT_BALANCE);
 
         pool::join_lp(pool, lp, &mut self.total_stakes, value);
@@ -391,9 +392,8 @@ module suiDouBashi_vote::gauge{
 
     fun update_stake_<X,Y>(
         self: &mut Gauge<X,Y>,
-        staker: address
+        stake: &mut Stake<X,Y>
     ){
-        let stake = table::borrow_mut(&mut self.lp_stake, staker);
         let staked = stake.stakes;
         if(staked > 0){
             let delta = self.staking_index - stake.staking_index;

@@ -3,9 +3,9 @@ name = "suiDouBashiVote"
 version = "0.0.1"
 
 [dependencies]
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "devnet" }
-MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "devnet" }
-SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "devnet" }
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-framework/", rev = "testnet" }
+MoveStdlib = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/move-stdlib/", rev = "testnet" }
+SuiSystem = { git = "https://github.com/MystenLabs/sui.git", subdir="crates/sui-framework/packages/sui-system/", rev = "testnet" }
 
 suiDouBashiAmm = {local = "../amm"}
 suiDouBashiVSDB = {local = "../vsdb"}
