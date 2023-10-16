@@ -47,6 +47,7 @@ module suiDouBashi_amm::pool{
     const E_INVALID_REPAY: u64 = 107;
     const E_REMAINED_CLAIMABLE: u64 = 108;
     const E_EXPIRED_VSDB: u64 = 109;
+    const E_STABLE_POOL: u64 = 110;
 
     // ====== Error =======
 
@@ -536,7 +537,7 @@ module suiDouBashi_amm::pool{
     }
 
     // - zap
-    /// zapping to variable pools can promise no additional deposit left, however there might be the mild deopsit returned when zapping into stable pools
+    /// zapping to variable pools can promise no additional deposit left
     /// x: single assets LP hold; y: optimal output assets needed, ( X, Y ) = pool_reserves
     /// holded assumption: ( X + dx ) / ( Y - dy ) = ( x - dx ) / dy
     public entry fun zap_x<X,Y>(
@@ -549,15 +550,12 @@ module suiDouBashi_amm::pool{
         ctx:&mut TxContext
     ){
         assert_pool_unlocked(self);
+        assert!(!self.stable, E_STABLE_POOL);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
         let value_x = coin::value<X>(&coin_x);
         let (res_x, _, _) = get_reserves(self);
-        value_x = if(self.stable){
-            value_x / 2
-        }else{
-            amm_math::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage)
-        };
+        value_x =  amm_math::zap_optimized_input((res_x as u256), (value_x as u256), self.fee.fee_percentage);
         let output_min = get_output<X,Y,X>(self, value_x);
         let coin_y = swap_for_y_<X,Y>(self, option::none<u8>(), coin::split<X>(&mut coin_x, value_x, ctx), output_min, clock, ctx);
         add_liquidity<X,Y>(self, coin_x, coin_y, lp, deposit_x_min, deposit_y_min, clock, ctx);
@@ -572,15 +570,12 @@ module suiDouBashi_amm::pool{
         ctx:&mut TxContext
     ){
         assert_pool_unlocked(self);
+        assert!(!self.stable, E_STABLE_POOL);
         assert!(self.version == VERSION, E_WRONG_VERSION);
 
         let value_y = coin::value<Y>(&coin_y);
         let (_, res_y, _) = get_reserves(self);
-        value_y = if(self.stable){
-            value_y / 2
-        }else{
-            amm_math::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage)
-        };
+        value_y = amm_math::zap_optimized_input((res_y as u256), (value_y as u256), self.fee.fee_percentage);
         let output_min = get_output<X,Y,Y>(self, value_y);
         let coin_x = swap_for_x_<X,Y>(self, option::none<u8>(),coin::split<Y>(&mut coin_y, value_y, ctx), output_min, clock, ctx);
         add_liquidity<X,Y>(self, coin_x, coin_y, lp, deposit_x_min, deposit_y_min,  clock, ctx);

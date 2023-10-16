@@ -83,7 +83,7 @@ module suiDouBashi_amm::pool_reg{
         pool::udpate_lock(pool, locked);
     }
 
-    entry fun update_fee<X,Y>(
+    entry public fun update_fee<X,Y>(
         _cap: &PoolCap,
         pool: &mut Pool<X,Y>,
         fee: u8
@@ -92,7 +92,7 @@ module suiDouBashi_amm::pool_reg{
         pool::update_fee(pool, fee);
     }
 
-    entry fun update_stable<X,Y>(
+    entry public fun update_stable<X,Y>(
         _cap: &PoolCap,
         pool: &mut Pool<X,Y>,
         stable: bool

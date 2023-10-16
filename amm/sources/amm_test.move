@@ -11,6 +11,7 @@ module suiDouBashi_amm::amm_test{
     use suiDouBashi_amm::pool_reg::{Self, PoolReg, PoolCap};
     use coin_list::mock_usdt::{Self as usdt, MOCK_USDT as USDT};
     use coin_list::mock_usdc::{Self as usdc, MOCK_USDC as USDC};
+    use coin_list::mock_eth::{Self as eth, MOCK_ETH as ETH};
 
     const USDT_AMT:u64 = 9_000_000_000_000;
     const USDC_AMT: u64 = 10_000_000_000_000;
@@ -79,8 +80,8 @@ module suiDouBashi_amm::amm_test{
         let scenario = test::begin(@0x1);
         let clock = clock::create_for_testing(ctx(&mut scenario));
         usdt::deploy_coin(ctx(&mut scenario));
-        usdc::deploy_coin(ctx(&mut scenario));
-        zap_x_<USDC, USDT>(USDT_AMT, USDC_AMT,&mut  clock, &mut scenario);
+        eth::deploy_coin(ctx(&mut scenario));
+        zap_x_<ETH, USDT>(USDT_AMT, USDC_AMT,&mut  clock, &mut scenario);
 
         clock::destroy_for_testing(clock);
         test::end(scenario);
@@ -90,8 +91,8 @@ module suiDouBashi_amm::amm_test{
         let scenario = test::begin(@0x1);
         let clock = clock::create_for_testing(ctx(&mut scenario));
         usdt::deploy_coin(ctx(&mut scenario));
-        usdc::deploy_coin(ctx(&mut scenario));
-        zap_y_<USDC, USDT>(USDT_AMT, USDC_AMT, &mut clock, &mut scenario);
+        eth::deploy_coin(ctx(&mut scenario));
+        zap_y_<ETH, USDT>(USDT_AMT, USDC_AMT, &mut clock, &mut scenario);
 
         clock::destroy_for_testing(clock);
         test::end(scenario);
@@ -315,6 +316,14 @@ module suiDouBashi_amm::amm_test{
             let coin_x = mint<X>(deposit_x, ctx(test));
             sui::transfer::public_transfer(coin_x, trader);
         };
+        next_tx(test, creator);{
+            let pool_cap = test::take_from_sender<PoolCap>(test);
+            let pool = test::take_shared<Pool<X, Y>>(test);
+            pool_reg::update_stable(&pool_cap, &mut pool, false);
+            pool_reg::update_fee(&pool_cap, &mut pool, 50);
+            test::return_to_sender(test,pool_cap);
+            test::return_shared(pool);
+        };
         next_tx(test, trader);{// single zap
             let pool = test::take_shared<Pool< X, Y>>(test);
             let coin_x = test::take_from_sender<Coin<X>>(test);
@@ -350,6 +359,15 @@ module suiDouBashi_amm::amm_test{
         };
 
         add_time(clock, ( 1800 + 1 )* 1000 );
+
+        next_tx(test, creator);{
+            let pool_cap = test::take_from_sender<PoolCap>(test);
+            let pool = test::take_shared<Pool<X, Y>>(test);
+            pool_reg::update_stable(&pool_cap, &mut pool, false);
+            pool_reg::update_fee(&pool_cap, &mut pool, 50);
+            test::return_to_sender(test,pool_cap);
+            test::return_shared(pool);
+        };
 
         next_tx(test, creator);{// single zap
             let pool = test::take_shared<Pool<X, Y>>(test);
@@ -391,10 +409,10 @@ module suiDouBashi_amm::amm_test{
         next_tx(test, trader);{
             let pool = test::take_shared<Pool<X,Y>>(test);
             let input = 1_000_000_000;
-            assert!(pool::current<X,Y,Y>(&pool, input, clock) == 999711070, 404);
-            assert!(pool::current<X,Y,X>(&pool, input, clock) == 1000287277, 404);
-            assert!(pool::quote_TWAP<X,Y,X>(&pool, input, 1) == 1000290756, 404);
-            assert!(pool::quote_TWAP<X,Y,Y>(&pool, input, 1) == 999707579, 404);
+            assert!(pool::current<X,Y,Y>(&pool, input, clock) == 900327915, 404);
+            assert!(pool::current<X,Y,X>(&pool, input, clock) == 1110471981, 404);
+            assert!(pool::quote_TWAP<X,Y,X>(&pool, input, 1) == 1110987668, 404);
+            assert!(pool::quote_TWAP<X,Y,Y>(&pool, input, 1) == 899910008, 404);
             test::return_shared(pool);
         }
     }
